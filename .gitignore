@@ -1,0 +1,14 @@
+node_modules/
+dist/
+out/
+release/
+artifacts/
+coverage/
+.vite/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+.smoke-data/

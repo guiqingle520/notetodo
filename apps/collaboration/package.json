@@ -1,0 +1,22 @@
+{
+  "name": "@notetodo/collaboration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ws": "^8.18.3",
+    "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.5",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

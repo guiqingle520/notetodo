@@ -1,0 +1,73 @@
+{
+  "name": "@notetodo/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first, AI-native notes and structured workspace desktop app.",
+  "author": "NoteTodo",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && electron .\"",
+    "build": "vite build",
+    "package:dir": "npm run build && electron-builder --dir",
+    "package:win": "npm run build && electron-builder --win nsis",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@notetodo/database-core": "*",
+    "@notetodo/sync-core": "*",
+    "@fontsource/dm-mono": "^5.1.1",
+    "@fontsource/gelasio": "^5.1.1",
+    "@fontsource/manrope": "^5.1.1",
+    "@tiptap/extension-placeholder": "^3.29.2",
+    "@tiptap/extension-task-item": "^3.29.2",
+    "@tiptap/extension-task-list": "^3.29.2",
+    "@tiptap/pm": "^3.29.2",
+    "@tiptap/react": "^3.29.2",
+    "@tiptap/starter-kit": "^3.29.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.1.2",
+    "electron": "43.3.0",
+    "electron-builder": "^26.0.12",
+    "jsdom": "^25.0.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "dev.notetodo.desktop",
+    "productName": "NoteTodo",
+    "directories": {
+      "output": "artifacts"
+    },
+    "electronDist": "../../node_modules/electron/dist",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "shared/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

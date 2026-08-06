@@ -1,0 +1,50 @@
+{
+  "activePageId": "welcome",
+  "pages": [
+    {
+      "id": "welcome",
+      "title": "从这里开始",
+      "icon": "spark",
+      "parentId": null,
+      "favorite": true,
+      "updatedAt": "2026-08-06T00:00:00.000Z",
+      "lastVisitedAt": "2026-08-06T00:00:00.000Z",
+      "archivedAt": null,
+      "content": "<h1>把想法放在它该在的位置。</h1><p>NoteTodo 是你的本地优先工作台。文档、任务和知识不再散落在不同工具里。</p><h2>今天的焦点</h2><ul data-type=\"taskList\"><li data-type=\"taskItem\" data-checked=\"true\"><label><input type=\"checkbox\" checked=\"checked\"><span></span></label><div><p>建立第一块安静的工作空间</p></div></li><li data-type=\"taskItem\" data-checked=\"false\"><label><input type=\"checkbox\"><span></span></label><div><p>写下这周最重要的三个结果</p></div></li></ul><blockquote><p>输入 <code>/</code> 可以插入内容块。选中文字，可以让 AI 改写、总结或翻译。</p></blockquote>"
+    },
+    {
+      "id": "projects",
+      "title": "产品路线",
+      "icon": "grid",
+      "parentId": null,
+      "favorite": false,
+      "updatedAt": "2026-08-06T00:00:00.000Z",
+      "lastVisitedAt": "2026-08-05T00:00:00.000Z",
+      "archivedAt": null,
+      "content": "<h1>产品路线</h1><p>从编辑器基座开始，逐步连接数据库、协作与 AI。</p>"
+    },
+    {
+      "id": "weekly",
+      "title": "本周计划",
+      "icon": "check",
+      "parentId": "projects",
+      "favorite": false,
+      "updatedAt": "2026-08-06T00:00:00.000Z",
+      "lastVisitedAt": "2026-08-04T00:00:00.000Z",
+      "archivedAt": null,
+      "content": "<h1>本周计划</h1><p>用结果，而不是忙碌，定义这一周。</p>"
+    },
+    {
+      "id": "knowledge",
+      "title": "知识库",
+      "icon": "book",
+      "parentId": null,
+      "favorite": true,
+      "updatedAt": "2026-08-06T00:00:00.000Z",
+      "lastVisitedAt": "2026-08-03T00:00:00.000Z",
+      "archivedAt": null,
+      "content": "<h1>知识库</h1><p>被可靠保存、能够重新找到的内容，才会成为知识。</p>"
+    }
+  ]
+}
+

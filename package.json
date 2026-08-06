@@ -1,0 +1,22 @@
+{
+  "name": "notetodo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first, AI-native workspace for notes, databases and collaborative work.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @notetodo/desktop",
+    "build": "npm run build --workspace @notetodo/desktop",
+    "package:dir": "npm run package:dir --workspace @notetodo/desktop",
+    "package:win": "npm run package:win --workspace @notetodo/desktop",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
