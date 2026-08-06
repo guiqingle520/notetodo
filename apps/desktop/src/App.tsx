@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
+  AlertTriangle,
   BookOpen,
   Bot,
   CheckSquare2,
@@ -14,6 +15,7 @@ import {
   Command,
   Cpu,
   FileText,
+  FileArchive,
   Grid2X2,
   Heading1,
   Heading2,
@@ -42,6 +44,7 @@ import {
   X,
   Wifi,
   Users,
+  Upload,
 } from 'lucide-react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -62,6 +65,7 @@ type PageComment = { id: string; authorName: string; body: string; anchor: null 
 type WorkspaceNotification = { id: string; type: 'mention' | 'comment'; readAt: string | null; createdAt: string; pageId: string; pageTitle: string; authorName: string; body: string }
 type SelectionContext = { from: number; to: number; text: string }
 type AIPatchProposal = { text: string; operation: 'insert-paragraphs' | 'replace-selection'; range?: { from: number; to: number } }
+type ImportInspection = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['pickAndInspect']>>>
 
 const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
   spark: Sparkles,
@@ -139,6 +143,7 @@ function Sidebar({
   onArchive,
   onSettings,
   onNotifications,
+  onImport,
   notificationCount,
 }: {
   collapsed: boolean
@@ -147,6 +152,7 @@ function Sidebar({
   onArchive: () => void
   onSettings: () => void
   onNotifications: () => void
+  onImport: () => void
   notificationCount: number
 }) {
   const { pages, addPage, setActivePage } = useWorkspace()
@@ -194,6 +200,7 @@ function Sidebar({
       </div>
 
       <nav className="secondary-nav">
+        <button onClick={onImport}><Upload size={16} /><span>导入工作区</span></button>
         <button onClick={onArchive}><Archive size={16} /><span>归档与回收站</span></button>
         <button onClick={onSettings}><Settings size={16} /><span>设置</span></button>
         <button><CircleHelp size={16} /><span>帮助与快捷键</span></button>
@@ -201,6 +208,89 @@ function Sidebar({
     </aside>
   )
 }
+
+function ImportPanel({ onClose }: { onClose: () => void }) {
+  const [inspection, setInspection] = useState<ImportInspection | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [error, setError] = useState('')
+
+  const pickArchive = async () => {
+    if (!window.notetodo?.imports) {
+      setError('导入功能需要在 NoteTodo 桌面应用中使用。')
+      setStatus('error')
+      return
+    }
+    setStatus('loading')
+    setError('')
+    try {
+      const result = await window.notetodo.imports.pickAndInspect()
+      if (!result) { setStatus(inspection ? 'ready' : 'idle'); return }
+      setInspection(result)
+      setStatus('ready')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '无法读取这个导出档案。')
+      setStatus('error')
+    }
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  }
+
+  return (
+    <div className="modal-backdrop import-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="import-panel" role="dialog" aria-modal="true" aria-label="导入工作区" onMouseDown={(event) => event.stopPropagation()}>
+        <header>
+          <div><FileArchive size={19} /><span><strong>迁入你的知识库</strong><small>NOTION ARCHIVE · LOCAL PREFLIGHT</small></span></div>
+          <button className="icon-button" onClick={onClose} aria-label="关闭"><X size={16} /></button>
+        </header>
+
+        {!inspection && status !== 'error' && (
+          <div className="import-landing">
+            <div className="import-seal"><FileArchive size={28} /><span>ZIP</span></div>
+            <p className="import-kicker">从原处带走你的内容</p>
+            <h2>先检查，<em>再落库。</em></h2>
+            <p>选择 Notion 导出的 ZIP。NoteTodo 只读取目录元数据完成安全预检，此阶段不会解压或改动当前工作区。</p>
+            <button className="import-primary" onClick={() => void pickArchive()} disabled={status === 'loading'}>
+              <Upload size={15} />{status === 'loading' ? '正在读取目录…' : '选择 Notion 导出包'}
+            </button>
+            <div className="import-footnote"><ShieldCheck size={13} />路径逃逸、重复文件和解压体积会在写入前被拦截</div>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="import-error"><AlertTriangle size={24} /><strong>无法完成预检</strong><p>{error}</p><button onClick={() => void pickArchive()}>重新选择</button></div>
+        )}
+
+        {inspection && status !== 'error' && (
+          <div className="import-report">
+            <div className="import-report-title">
+              <span className={inspection.rejected ? 'is-rejected' : 'is-safe'}>{inspection.rejected ? '需要处理' : '安全可导入'}</span>
+              <h2>{inspection.fileName}</h2>
+              <p>{formatSize(inspection.compressedBytes)} 压缩 · {formatSize(inspection.acceptedBytes)} 展开后</p>
+            </div>
+            <div className="import-metrics">
+              <div><FileText size={15} /><strong>{inspection.summary.page}</strong><span>页面</span></div>
+              <div><Grid2X2 size={15} /><strong>{inspection.summary.database}</strong><span>数据库</span></div>
+              <div><FileArchive size={15} /><strong>{inspection.summary.asset}</strong><span>附件</span></div>
+              <div><LayersIcon /><strong>{inspection.summary.unsupported}</strong><span>跳过</span></div>
+            </div>
+            {inspection.issues.length > 0 && <div className="import-issues">{inspection.issues.slice(0, 4).map((issue, index) => <p key={`${issue.code}-${index}`}><AlertTriangle size={13} /><span><strong>{issue.code}</strong>{issue.path ? ` · ${issue.path}` : ''}<small>{issue.message}</small></span></p>)}</div>}
+            <div className="import-file-sample">
+              <header><span>档案清单</span><small>显示前 {Math.min(inspection.entries.length, 6)} / {inspection.entries.length} 项</small></header>
+              {inspection.entries.slice(0, 6).map((entry) => <div key={entry.path}><span data-kind={entry.kind}>{entry.kind.slice(0, 1).toUpperCase()}</span><p>{entry.path}</p><small>{formatSize(entry.size)}</small></div>)}
+            </div>
+            <footer><button className="import-secondary" onClick={() => void pickArchive()}>更换档案</button><span>{inspection.rejected ? '修复导出包中的问题后才能继续' : '预检完成 · 下一步将配置页面映射'}</span></footer>
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function LayersIcon() { return <span className="layers-icon" aria-hidden="true">×</span> }
 
 function SearchPalette({ onClose }: { onClose: () => void }) {
   const { searchResults, search, setActivePage } = useWorkspace()
@@ -745,6 +835,7 @@ export function App() {
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [notificationCount, setNotificationCount] = useState(0)
   const [selectionContext, setSelectionContext] = useState<SelectionContext | null>(null)
   const hydrate = useWorkspace((state) => state.hydrate)
@@ -777,6 +868,7 @@ export function App() {
         setArchiveOpen(false)
         setSettingsOpen(false)
         setNotificationsOpen(false)
+        setImportOpen(false)
       }
     }
     window.addEventListener('keydown', handleGlobalShortcut)
@@ -794,6 +886,7 @@ export function App() {
           onArchive={() => setArchiveOpen(true)}
           onSettings={() => setSettingsOpen(true)}
           onNotifications={() => setNotificationsOpen(true)}
+          onImport={() => setImportOpen(true)}
           notificationCount={notificationCount}
         />
         {sidebarCollapsed && <button className="floating-menu" onClick={() => setSidebarCollapsed(false)}><Menu size={17} /></button>}
@@ -803,6 +896,7 @@ export function App() {
         {archiveOpen && <ArchivePanel onClose={() => setArchiveOpen(false)} />}
         {settingsOpen && <ModelSettingsPanel onClose={() => setSettingsOpen(false)} />}
         {notificationsOpen && <NotificationPanel onClose={() => setNotificationsOpen(false)} onCountChange={setNotificationCount} />}
+        {importOpen && <ImportPanel onClose={() => setImportOpen(false)} />}
       </div>
     </div>
   )

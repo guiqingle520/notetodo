@@ -43,6 +43,17 @@ interface Window {
       list: () => Promise<Array<{ id: string; type: 'mention' | 'comment'; readAt: string | null; createdAt: string; pageId: string; pageTitle: string; authorName: string; body: string }>>
       markRead: (id: string) => Promise<void>
     }
+    imports: {
+      pickAndInspect: () => Promise<null | {
+        fileName: string
+        compressedBytes: number
+        acceptedBytes: number
+        rejected: boolean
+        summary: { page: number; database: number; asset: number; sitemap: number; unsupported: number }
+        entries: Array<{ path: string; kind: 'page' | 'database' | 'asset' | 'sitemap' | 'unsupported'; size: number }>
+        issues: Array<{ code: string; path?: string; message: string }>
+      }>
+    }
     model: {
       getConfig: () => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>
       saveConfig: (config: { provider: string; baseUrl: string; model: string; apiKey?: string }) => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>

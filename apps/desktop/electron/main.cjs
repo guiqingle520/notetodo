@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron')
 const path = require('node:path')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { ModelService } = require('./model-service.cjs')
 const { signRoomTicket } = require('@notetodo/auth-core')
+const { inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomUUID } = require('node:crypto')
 
 const isDev = !app.isPackaged
@@ -55,6 +56,16 @@ function registerWorkspaceIpc(database) {
   ipcMain.handle('workspace:search', (_event, query) => {
     if (typeof query !== 'string' || query.length > 500) throw new TypeError('Invalid search query.')
     return database.searchPages(query)
+  })
+  ipcMain.handle('import:pick-and-inspect', async () => {
+    const selected = await dialog.showOpenDialog({
+      title: '导入 Notion 工作区',
+      buttonLabel: '检查档案',
+      properties: ['openFile'],
+      filters: [{ name: 'Notion 导出档案', extensions: ['zip'] }],
+    })
+    if (selected.canceled || !selected.filePaths[0]) return null
+    return inspectZipArchive(selected.filePaths[0])
   })
   ipcMain.handle('database:load-by-page', (_event, pageId) => {
     assertId(pageId)

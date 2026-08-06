@@ -3,13 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./node.cjs"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "yauzl": "^3.2.0"
+  },
   "devDependencies": {
+    "@types/yauzl": "^2.10.3",
+    "@types/node": "^22.10.2",
+    "@types/yauzl": "^3.4.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "yauzl": "^3.4.0"
   }
 }

@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld('notetodo', {
     list: () => ipcRenderer.invoke('notifications:list'),
     markRead: (id) => ipcRenderer.invoke('notifications:mark-read', id),
   },
+  imports: {
+    pickAndInspect: () => ipcRenderer.invoke('import:pick-and-inspect'),
+  },
   model: {
     getConfig: () => ipcRenderer.invoke('model:get-config'),
     saveConfig: (config) => ipcRenderer.invoke('model:save-config', config),
