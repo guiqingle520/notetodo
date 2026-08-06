@@ -22,6 +22,22 @@ interface Window {
       appendUpdate: (pageId: string, clientId: string, data: string) => Promise<number>
       compactDocument: (pageId: string, snapshot: string, throughId: number) => Promise<void>
     }
+    collaboration: {
+      getTicket: (pageId: string) => Promise<null | { endpoint: string; token: string; userId: string; name: string; color: string }>
+    }
+    ai: {
+      createPatchAudit: (pageId: string, operation: 'insert-paragraphs', preview: string) => Promise<string>
+      updatePatchAudit: (id: string, status: 'applied' | 'undone' | 'rejected') => Promise<void>
+    }
+    sharing: {
+      list: (pageId: string) => Promise<Array<{ subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }>>
+      upsert: (pageId: string, subjectId: string, displayName: string, role: 'viewer' | 'commenter' | 'editor') => Promise<void>
+    }
+    comments: {
+      list: (pageId: string) => Promise<Array<{ id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }>>
+      create: (pageId: string, body: string, anchor: null | { from: number; to: number; quote: string }) => Promise<string>
+      resolve: (id: string) => Promise<void>
+    }
     model: {
       getConfig: () => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>
       saveConfig: (config: { provider: string; baseUrl: string; model: string; apiKey?: string }) => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>

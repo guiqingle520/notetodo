@@ -21,6 +21,22 @@ contextBridge.exposeInMainWorld('notetodo', {
     appendUpdate: (pageId, clientId, data) => ipcRenderer.invoke('sync:append-update', pageId, clientId, data),
     compactDocument: (pageId, snapshot, throughId) => ipcRenderer.invoke('sync:compact-document', pageId, snapshot, throughId),
   },
+  collaboration: {
+    getTicket: (pageId) => ipcRenderer.invoke('collaboration:get-ticket', pageId),
+  },
+  ai: {
+    createPatchAudit: (pageId, operation, preview) => ipcRenderer.invoke('ai:create-patch-audit', pageId, operation, preview),
+    updatePatchAudit: (id, status) => ipcRenderer.invoke('ai:update-patch-audit', id, status),
+  },
+  sharing: {
+    list: (pageId) => ipcRenderer.invoke('sharing:list', pageId),
+    upsert: (pageId, subjectId, displayName, role) => ipcRenderer.invoke('sharing:upsert', pageId, subjectId, displayName, role),
+  },
+  comments: {
+    list: (pageId) => ipcRenderer.invoke('comments:list', pageId),
+    create: (pageId, body, anchor) => ipcRenderer.invoke('comments:create', pageId, body, anchor),
+    resolve: (id) => ipcRenderer.invoke('comments:resolve', id),
+  },
   model: {
     getConfig: () => ipcRenderer.invoke('model:get-config'),
     saveConfig: (config) => ipcRenderer.invoke('model:save-config', config),

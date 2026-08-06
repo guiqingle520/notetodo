@@ -38,4 +38,27 @@ describe('RoomHub', () => {
     hub.disconnect(first.connection)
     expect(second.messages).toContainEqual({ type: 'presence-left', clientId: 'client-a' })
   })
+
+  it('converges a twenty-client edit burst into the room snapshot', async () => {
+    const hub = new RoomHub(() => true)
+    const clients = Array.from({ length: 20 }, (_, index) => peer(`peer-${index}`))
+    for (let index = 0; index < clients.length; index += 1) {
+      const client = clients[index]!
+      await hub.receive(client.connection, auth(`client-${index}`))
+      const document = new Y.Doc()
+      document.getText('content').insert(0, `[${index}]`)
+      const update = Buffer.from(Y.encodeStateAsUpdate(document)).toString('base64')
+      await hub.receive(client.connection, JSON.stringify({ type: 'sync-update', update }))
+      document.destroy()
+    }
+
+    const observer = peer('observer')
+    await hub.receive(observer.connection, auth('observer'))
+    const state = observer.messages.find((message) => message.type === 'sync-state')
+    const restored = new Y.Doc()
+    if (state?.type === 'sync-state') Y.applyUpdate(restored, Buffer.from(state.update, 'base64'))
+    const content = restored.getText('content').toString()
+    for (let index = 0; index < 20; index += 1) expect(content).toContain(`[${index}]`)
+    restored.destroy()
+  })
 })

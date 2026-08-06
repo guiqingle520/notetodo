@@ -1,10 +1,12 @@
-import { SyncDocument, UpdateBatcher } from '@notetodo/sync-core'
+import { CollaborationClient, SyncDocument, UpdateBatcher, type CollaborationSocket, type CollaborationState, type PresenceState } from '@notetodo/sync-core'
 
 type SyncBridge = NonNullable<Window['notetodo']>['sync']
 type SyncState = 'loading' | 'ready' | 'saving' | 'error'
 
 const HYDRATION_ORIGIN = Symbol('sqlite-hydration')
-const EDITOR_ORIGIN = Symbol('editor-input')
+const NETWORK_ORIGIN = Symbol('collaboration-network')
+
+export interface CollaborationTicket { endpoint: string; token: string; userId: string; name: string; color: string }
 
 function encode(data: Uint8Array) {
   let binary = ''
@@ -26,12 +28,12 @@ function decode(data: string) {
 export class PageSyncSession {
   private readonly sync = new SyncDocument()
   private readonly clientId = crypto.randomUUID()
-  private readonly listeners = new Set<(content: string) => void>()
   private readonly stateListeners = new Set<(state: SyncState) => void>()
   private latestUpdateId = 0
   private persistedBatches = 0
   private state: SyncState = 'loading'
   private readonly batcher: UpdateBatcher
+  private collaboration?: CollaborationClient
 
   private constructor(private readonly pageId: string, private readonly bridge?: SyncBridge) {
     this.batcher = new UpdateBatcher(async (update) => {
@@ -49,10 +51,7 @@ export class PageSyncSession {
 
     this.sync.document.on('update', (update: Uint8Array, origin: unknown) => {
       if (origin !== HYDRATION_ORIGIN) this.batcher.add(update)
-    })
-    this.sync.content.observe(() => {
-      const content = this.sync.content.toString()
-      this.listeners.forEach((listener) => listener(content))
+      if (origin !== HYDRATION_ORIGIN && origin !== NETWORK_ORIGIN) this.collaboration?.sendUpdate(encode(update))
     })
   }
 
@@ -64,34 +63,22 @@ export class PageSyncSession {
       if (stored.snapshot) session.sync.apply(decode(stored.snapshot), HYDRATION_ORIGIN)
       stored.updates.forEach((update) => session.sync.apply(decode(update.data), HYDRATION_ORIGIN))
     }
-    if (!session.sync.content.length && initialContent) session.setContent(initialContent)
     session.setState('ready')
     return session
   }
 
-  getContent() { return this.sync.content.toString() }
+  /** Native Tiptap Collaboration binds to this document's `body` fragment. */
+  get document() { return this.sync.document }
 
-  setContent(next: string) {
-    const current = this.sync.content.toString()
-    if (current === next) return
+  get fragment() { return this.sync.document.getXmlFragment('body') }
 
-    // Restrict the CRDT operation to the changed middle range. Tiptap emits
-    // complete HTML, but a prefix/suffix diff prevents rewriting whole pages.
-    let prefix = 0
-    while (prefix < current.length && prefix < next.length && current[prefix] === next[prefix]) prefix += 1
-    let suffix = 0
-    while (suffix < current.length - prefix && suffix < next.length - prefix && current[current.length - 1 - suffix] === next[next.length - 1 - suffix]) suffix += 1
-    this.sync.document.transact(() => {
-      const deleteLength = current.length - prefix - suffix
-      if (deleteLength) this.sync.content.delete(prefix, deleteLength)
-      const insertion = next.slice(prefix, next.length - suffix)
-      if (insertion) this.sync.content.insert(prefix, insertion)
-    }, EDITOR_ORIGIN)
-  }
-
-  subscribe(listener: (content: string) => void) {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+  /**
+   * Schema v3 stored HTML in Y.Text. During the v4 transition it remains a
+   * read-only migration source until Tiptap writes the first native fragment.
+   */
+  initialContent(fallback: string) {
+    if (this.fragment.length) return undefined
+    return this.sync.content.toString() || fallback
   }
 
   subscribeState(listener: (state: SyncState) => void) {
@@ -100,7 +87,47 @@ export class PageSyncSession {
     return () => this.stateListeners.delete(listener)
   }
 
+  connectCollaboration(
+    ticket: CollaborationTicket,
+    handlers: { onState?: (state: CollaborationState) => void; onPresence?: (presence: PresenceState | { clientId: string; left: true }) => void } = {},
+  ) {
+    this.collaboration?.stop()
+    const client = new CollaborationClient({
+      pageId: this.pageId,
+      clientId: ticket.userId,
+      token: ticket.token,
+      name: ticket.name,
+      color: ticket.color,
+      createSocket: () => new WebSocket(ticket.endpoint) as unknown as CollaborationSocket,
+      onInitialState: (update) => this.sync.apply(decode(update), NETWORK_ORIGIN),
+      onUpdate: (update) => this.sync.apply(decode(update), NETWORK_ORIGIN),
+      onPresence: (message) => {
+        if (message.type === 'presence-left' && typeof message.clientId === 'string') handlers.onPresence?.({ clientId: message.clientId, left: true })
+        else if (message.type === 'presence' && typeof message.clientId === 'string' && typeof message.name === 'string' && typeof message.color === 'string') {
+          const cursor = message.cursor && typeof message.cursor === 'object' && Number.isSafeInteger((message.cursor as { anchor?: number }).anchor) && Number.isSafeInteger((message.cursor as { head?: number }).head)
+            ? message.cursor as { anchor: number; head: number }
+            : undefined
+          handlers.onPresence?.({ clientId: message.clientId, pageId: this.pageId, name: message.name, color: message.color, ...(cursor ? { cursor } : {}) })
+        }
+      },
+      onState: (state) => {
+        handlers.onState?.(state)
+        // A full state update on every authenticated reconnect is idempotent
+        // and repairs any network queue discarded by its bounded RAM limit.
+        if (state === 'online') client.sendUpdate(encode(this.sync.snapshot()))
+      },
+    })
+    this.collaboration = client
+    client.start()
+    return () => { if (this.collaboration === client) this.collaboration = undefined; client.stop() }
+  }
+
+  updatePresence(cursor: { anchor: number; head: number }) {
+    this.collaboration?.sendPresence(cursor)
+  }
+
   async dispose() {
+    this.collaboration?.stop()
     await this.batcher.flush()
     if (this.persistedBatches) await this.compact()
     this.sync.destroy()

@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron')
 const path = require('node:path')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { ModelService } = require('./model-service.cjs')
+const { signRoomTicket } = require('@notetodo/auth-core')
+const { randomUUID } = require('node:crypto')
 
 const isDev = !app.isPackaged
 let workspaceDatabase
@@ -89,6 +91,50 @@ function registerWorkspaceIpc(database) {
     assertId(pageId)
     if (typeof snapshot !== 'string' || snapshot.length > 20_000_000 || !Number.isSafeInteger(throughId)) throw new TypeError('Invalid sync snapshot.')
     database.compactSyncDocument(pageId, snapshot, throughId)
+  })
+  ipcMain.handle('collaboration:get-ticket', (_event, pageId) => {
+    assertId(pageId)
+    const secret = process.env.NOTETODO_COLLAB_TOKEN
+    if (!secret) return null
+    let userId = database.getSetting('collaboration_user_id')
+    if (!userId) { userId = randomUUID(); database.setSetting('collaboration_user_id', userId) }
+    const identity = { userId, name: '本机用户', color: '#c45134' }
+    const role = database.getPageRole(pageId, userId)
+    if (!role) database.upsertPagePermission(pageId, userId, identity.name, 'owner')
+    else if (!['editor', 'owner'].includes(role)) throw new Error('当前用户没有编辑此页面的权限。')
+    return {
+      endpoint: process.env.NOTETODO_COLLAB_URL ?? 'ws://127.0.0.1:4789',
+      ...identity,
+      token: signRoomTicket({ pageId, ...identity, ttlSeconds: 300 }, secret),
+    }
+  })
+  ipcMain.handle('sharing:list', (_event, pageId) => { assertId(pageId); return database.loadPagePermissions(pageId) })
+  ipcMain.handle('sharing:upsert', (_event, pageId, subjectId, displayName, role) => {
+    assertId(pageId); assertId(subjectId)
+    if (typeof displayName !== 'string' || displayName.length < 1 || displayName.length > 80 || !['viewer', 'commenter', 'editor'].includes(role)) throw new TypeError('Invalid page permission.')
+    database.upsertPagePermission(pageId, subjectId, displayName, role)
+  })
+  ipcMain.handle('comments:list', (_event, pageId) => { assertId(pageId); return database.loadComments(pageId) })
+  ipcMain.handle('comments:create', (_event, pageId, body, anchor) => {
+    assertId(pageId)
+    if (typeof body !== 'string' || body.trim().length < 1 || body.length > 10_000) throw new TypeError('Invalid comment body.')
+    let userId = database.getSetting('collaboration_user_id')
+    if (!userId) { userId = randomUUID(); database.setSetting('collaboration_user_id', userId) }
+    if (anchor !== null && anchor !== undefined && (!Number.isSafeInteger(anchor.from) || !Number.isSafeInteger(anchor.to) || anchor.from < 0 || anchor.to < anchor.from || typeof anchor.quote !== 'string' || anchor.quote.length > 1000)) throw new TypeError('Invalid comment anchor.')
+    const comment = { id: randomUUID(), pageId, authorId: userId, authorName: '本机用户', body: body.trim(), anchor: anchor ?? null }
+    database.createComment(comment)
+    return comment.id
+  })
+  ipcMain.handle('comments:resolve', (_event, id) => { assertId(id); database.resolveComment(id) })
+  ipcMain.handle('ai:create-patch-audit', (_event, pageId, operation, preview) => {
+    assertId(pageId)
+    if (operation !== 'insert-paragraphs' || typeof preview !== 'string' || preview.length > 200_000) throw new TypeError('Invalid AI patch proposal.')
+    return database.createAIPatchAudit(randomUUID(), pageId, operation, preview)
+  })
+  ipcMain.handle('ai:update-patch-audit', (_event, id, status) => {
+    assertId(id)
+    if (!['applied', 'undone', 'rejected'].includes(status)) throw new TypeError('Invalid AI patch status.')
+    database.updateAIPatchAudit(id, status)
   })
   ipcMain.handle('model:get-config', () => {
     const stored = database.getSetting('model_config')
@@ -227,7 +273,11 @@ function createWindow() {
             }).then(() => window.notetodo.model.getConfig()),
             window.notetodo.sync.appendUpdate('welcome', 'smoke-client', btoa('smoke-update'))
               .then((updateId) => window.notetodo.sync.loadDocument('welcome').then((sync) => ({ updateId, sync }))),
-          ]).then(([workspace, database, model, syncResult]) => ({
+            window.notetodo.collaboration.getTicket('welcome'),
+            window.notetodo.comments.create('welcome', 'smoke comment', null).then(() => window.notetodo.comments.list('welcome')),
+            window.notetodo.ai.createPatchAudit('welcome', 'insert-paragraphs', 'smoke patch').then((id) => window.notetodo.ai.updatePatchAudit(id, 'applied').then(() => id)),
+            new Promise((resolve) => setTimeout(() => resolve(document.querySelector('.collaboration-presence')?.textContent ?? ''), 900)),
+          ]).then(([workspace, database, model, syncResult, ticket, comments, patchId, collaborationLabel]) => ({
             pageCount: workspace.pages.length,
             activePageId: workspace.activePageId,
             databaseRecords: database.records.length,
@@ -236,6 +286,10 @@ function createWindow() {
             keyExposed: Object.hasOwn(model, 'apiKey'),
             syncUpdateId: syncResult.updateId,
             syncUpdateCount: syncResult.sync.updates.length,
+            scopedTicketIssued: Boolean(ticket && ticket.token && !ticket.token.includes('smoke-collaboration-secret')),
+            commentCount: comments.length,
+            patchAuditId: patchId,
+            collaborationLabel,
           }))
         `)
         console.log(`NOTETODO_SMOKE_OK ${JSON.stringify(result)}`)

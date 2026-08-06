@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Sync Foundation & AI Execution Alpha — **完成**
+Collaboration UX & Safe AI Actions Beta — **开发中（核心链路完成）**
 
 ### 已交付
 
@@ -38,11 +38,17 @@ Sync Foundation & AI Execution Alpha — **完成**
 - AI 面板真实携带当前页面标题与正文上下文，Renderer 永不取得 API Key。
 - 浏览器预览使用确定性本地流，视觉测试不会意外把工作区内容发给外部服务。
 - 协作客户端状态机：认证握手、离线发送队列、500ms～15s 指数退避重连。
+- Tiptap 原生 `Y.XmlFragment` 协作文档，以及 Schema v3 HTML/Y.Text 无损迁移。
+- ProseMirror 远端光标、选区 Decoration 和协作者头像 Presence。
+- 页面级角色权限、5 分钟 HS256 房间票据和服务端签名/页面/过期校验。
+- 锚定选区的页面评论、@提及文本和解决状态。
+- AI 结构化 `insert-paragraphs` Patch 预览、确认、协作撤销和 Schema v4 审计日志。
+- SQLite Schema v5：AI 审计、页面权限和评论。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：9 个测试文件、22 个测试通过。
+- Vitest：10 个测试文件、28 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -55,23 +61,24 @@ Sync Foundation & AI Execution Alpha — **完成**
 - 隔离桌面烟雾测试：Schema v3、5 条记录、3 个视图、系统加密密钥和同步快照全部通过。
 - 协作协议：未认证拒绝、更新广播、离线 Presence 清理全部通过。
 - AI SSE：中文 UTF-8 跨字节分片恢复与取消语义通过。
-- 全工作区：9 个测试文件、22 项测试通过。
+- 20 客户端协作编辑突发更新最终收敛：通过。
+- 原生 Fragment 双客户端 round-trip 与恶意光标标签注入测试：通过。
+- AI Patch 提议/应用审计、页面角色和锚定评论持久化：通过。
+- 真实 Electron + WebSocket：Schema v5、短期票据、同步更新、评论与 Patch 审计通过。
+- 全工作区：10 个测试文件、28 项测试通过。
 
-## 下一里程碑
+## 本里程碑剩余
 
-Collaboration UX & Safe AI Actions Beta
-
-1. 将桌面会话连接 WebSocket，加入指数退避重连和离线队列确认游标。
-2. 将 HTML 文本 CRDT 升级为 ProseMirror 原生 Yjs Fragment，实现块级多人光标。
-3. 增加协作者头像、Presence、评论、@提及和页面分享设置。
-4. 为 AI 增加上下文选择、引用卡片、结构化 Patch 预览、确认和撤销。
-5. 建立页面 ACL、协作短期 JWT、刷新令牌和房间级权限校验。
-6. 完成 20 人同页压力测试、断网重连测试与 AI 工具安全审计。
+1. 在协作断线重连前自动刷新过期房间票据。
+2. 将 @提及解析为结构化 mention 与本机通知，而不只保留评论文本。
+3. 增加权限撤销、只读 Editor enforcement 和在线成员角色显示。
+4. 完成两个真实 Electron 客户端的断网—编辑—重连回归。
+5. 为 AI Patch 增加选择性上下文、引用卡片和多操作 diff。
 
 ## 已知技术债
 
 - 浏览器开发预览仍使用版本化浏览器存储；正式 Electron 路径已使用 SQLite。
-- 当前编辑器以 HTML 字符串做最小范围 Y.Text 差分；需升级为 ProseMirror 原生 Fragment，才能提供完善的块级并发语义与多人选区。
-- 协作服务当前使用开发期共享密钥且房间仅驻内存；生产版需要短期作用域 JWT、服务端持久化和横向扩展广播。
-- AI 已可流式问答，但写入仍缺少结构化 Patch 预览、权限确认、引用和审计记录。
+- 协作房间仍驻内存；生产版需要服务端持久化和横向扩展广播。
+- 房间票据已短期化但尚未自动续签；长时间离线后重连需要刷新。
+- AI 安全写入目前只支持纯文本段落插入，尚未开放删除、替换和数据库修改。
 - Windows 开发包已生成，但系统应用控制策略会拦截未签名的新二进制；正式发布需要代码签名证书。

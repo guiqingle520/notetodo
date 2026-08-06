@@ -1,7 +1,7 @@
 const { DatabaseSync } = require('node:sqlite')
 const seedWorkspace = require('../shared/seed-workspace.json')
 
-const LATEST_SCHEMA_VERSION = 3
+const LATEST_SCHEMA_VERSION = 5
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -170,6 +170,53 @@ class WorkspaceDatabase {
         );
         CREATE INDEX sync_updates_page_sequence ON sync_updates(page_id, id);
         INSERT INTO app_meta(key, value) VALUES ('schema_version', '3')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
+    if (currentVersion < 4) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE ai_patch_audit (
+          id TEXT PRIMARY KEY,
+          page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+          operation TEXT NOT NULL,
+          preview TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('proposed', 'applied', 'undone', 'rejected')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX ai_patch_audit_page_time ON ai_patch_audit(page_id, created_at DESC);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '4')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
+    if (currentVersion < 5) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE page_permissions (
+          page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+          subject_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('viewer', 'commenter', 'editor', 'owner')),
+          created_at TEXT NOT NULL,
+          PRIMARY KEY(page_id, subject_id)
+        );
+        CREATE TABLE comments (
+          id TEXT PRIMARY KEY,
+          page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+          author_id TEXT NOT NULL,
+          author_name TEXT NOT NULL,
+          body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 10000),
+          anchor_json TEXT,
+          resolved_at TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX comments_page_time ON comments(page_id, resolved_at, created_at DESC);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '5')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value;
         COMMIT;
       `)
@@ -491,6 +538,49 @@ class WorkspaceDatabase {
       this.database.exec('ROLLBACK')
       throw error
     }
+  }
+
+  createAIPatchAudit(id, pageId, operation, preview) {
+    const now = new Date().toISOString()
+    this.database.prepare('INSERT INTO ai_patch_audit(id, page_id, operation, preview, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, pageId, operation, preview, 'proposed', now, now)
+    return id
+  }
+
+  updateAIPatchAudit(id, status) {
+    this.database.prepare('UPDATE ai_patch_audit SET status = ?, updated_at = ? WHERE id = ?').run(status, new Date().toISOString(), id)
+  }
+
+  loadAIPatchAudit(pageId) {
+    return this.database.prepare('SELECT id, operation, preview, status FROM ai_patch_audit WHERE page_id = ? ORDER BY created_at DESC').all(pageId)
+  }
+
+  upsertPagePermission(pageId, subjectId, displayName, role) {
+    this.database.prepare(`INSERT INTO page_permissions(page_id, subject_id, display_name, role, created_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(page_id, subject_id) DO UPDATE SET display_name=excluded.display_name, role=excluded.role`)
+      .run(pageId, subjectId, displayName, role, new Date().toISOString())
+  }
+
+  loadPagePermissions(pageId) {
+    return this.database.prepare('SELECT subject_id AS subjectId, display_name AS displayName, role FROM page_permissions WHERE page_id = ? ORDER BY role DESC, display_name').all(pageId)
+  }
+
+  getPageRole(pageId, subjectId) {
+    return this.database.prepare('SELECT role FROM page_permissions WHERE page_id = ? AND subject_id = ?').get(pageId, subjectId)?.role ?? null
+  }
+
+  createComment(comment) {
+    this.database.prepare('INSERT INTO comments(id, page_id, author_id, author_name, body, anchor_json, resolved_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
+      .run(comment.id, comment.pageId, comment.authorId, comment.authorName, comment.body, comment.anchor ? JSON.stringify(comment.anchor) : null, new Date().toISOString())
+  }
+
+  loadComments(pageId) {
+    return this.database.prepare('SELECT id, author_name AS authorName, body, anchor_json AS anchor, resolved_at AS resolvedAt, created_at AS createdAt FROM comments WHERE page_id = ? ORDER BY created_at DESC').all(pageId)
+      .map((comment) => ({ ...comment, anchor: comment.anchor ? JSON.parse(comment.anchor) : null }))
+  }
+
+  resolveComment(id) {
+    this.database.prepare('UPDATE comments SET resolved_at = ? WHERE id = ?').run(new Date().toISOString(), id)
   }
 
   close() {

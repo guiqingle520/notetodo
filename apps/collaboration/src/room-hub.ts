@@ -25,12 +25,15 @@ interface Session {
   clientId: string
   name: string
   color: string
+  cursor?: { anchor: number; head: number }
 }
 
 interface Room {
   document: Y.Doc
   sessions: Set<Session>
 }
+
+interface VerifiedIdentity { userId: string; name: string; color: string }
 
 const MAX_MESSAGE_BYTES = 2 * 1024 * 1024
 const ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/u
@@ -44,7 +47,7 @@ export class RoomHub {
   private readonly rooms = new Map<string, Room>()
   private readonly sessions = new Map<RoomPeer, Session>()
 
-  constructor(private readonly verifyToken: (token: string, pageId: string) => boolean | Promise<boolean>) {}
+  constructor(private readonly verifyToken: (token: string, pageId: string) => boolean | VerifiedIdentity | Promise<boolean | VerifiedIdentity>) {}
 
   async receive(peer: RoomPeer, raw: string) {
     if (Buffer.byteLength(raw, 'utf8') > MAX_MESSAGE_BYTES) return peer.close(1009, 'Message too large')
@@ -80,15 +83,27 @@ export class RoomHub {
     if (!ID_PATTERN.test(message.pageId) || !ID_PATTERN.test(message.clientId) || message.name.length > 80 || !COLOR_PATTERN.test(message.color)) {
       return peer.close(1008, 'Invalid identity')
     }
-    if (!await this.verifyToken(message.token, message.pageId)) return peer.close(1008, 'Unauthorized')
+    const verified = await this.verifyToken(message.token, message.pageId)
+    if (!verified) return peer.close(1008, 'Unauthorized')
 
     const room = this.rooms.get(message.pageId) ?? { document: new Y.Doc(), sessions: new Set<Session>() }
     this.rooms.set(message.pageId, room)
-    const session = { peer, pageId: message.pageId, clientId: message.clientId, name: message.name, color: message.color }
+    // Signed identity wins over renderer-provided presentation fields. The
+    // latter remain useful for tests and trusted local development only.
+    const session = {
+      peer,
+      pageId: message.pageId,
+      clientId: typeof verified === 'object' ? verified.userId : message.clientId,
+      name: typeof verified === 'object' ? verified.name : message.name,
+      color: typeof verified === 'object' ? verified.color : message.color,
+    }
     room.sessions.add(session)
     this.sessions.set(peer, session)
     peer.send({ type: 'auth-ok', clientId: session.clientId })
     peer.send({ type: 'sync-state', update: Buffer.from(Y.encodeStateAsUpdate(room.document)).toString('base64') })
+    room.sessions.forEach((existing) => {
+      if (existing !== session) peer.send({ type: 'presence', clientId: existing.clientId, name: existing.name, color: existing.color, ...(existing.cursor ? { cursor: existing.cursor } : {}) })
+    })
     this.broadcastPresence(session)
   }
 
@@ -108,6 +123,7 @@ export class RoomHub {
   private broadcastPresence(session: Session, cursor?: { anchor: number; head: number }) {
     const room = this.rooms.get(session.pageId)
     if (cursor && (!Number.isSafeInteger(cursor.anchor) || !Number.isSafeInteger(cursor.head))) return
+    session.cursor = cursor
     this.broadcast(room, { type: 'presence', clientId: session.clientId, name: session.name, color: session.color, ...(cursor ? { cursor } : {}) })
   }
 

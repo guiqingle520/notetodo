@@ -24,6 +24,14 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     }
     appendSyncUpdate(pageId: string, clientId: string, data: string): number
     compactSyncDocument(pageId: string, snapshot: string, throughId: number): void
+    createAIPatchAudit(id: string, pageId: string, operation: string, preview: string): string
+    updateAIPatchAudit(id: string, status: string): void
+    loadAIPatchAudit(pageId: string): Array<{ id: string; operation: string; preview: string; status: string }>
+    upsertPagePermission(pageId: string, subjectId: string, displayName: string, role: string): void
+    loadPagePermissions(pageId: string): Array<{ subjectId: string; displayName: string; role: string }>
+    createComment(comment: { id: string; pageId: string; authorId: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string } }): void
+    loadComments(pageId: string): Array<{ id: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null }>
+    resolveComment(id: string): void
     close(): void
   }
 }
@@ -100,5 +108,23 @@ describe('WorkspaceDatabase', () => {
       updates: [],
       latestUpdateId: secondId,
     })
+  })
+
+  it('keeps an auditable lifecycle for AI-proposed page writes', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.createAIPatchAudit('patch-1', 'welcome', 'insert-paragraphs', '建议写入内容')
+    expect(database.loadAIPatchAudit('welcome')[0]?.status).toBe('proposed')
+    database.updateAIPatchAudit('patch-1', 'applied')
+    expect(database.loadAIPatchAudit('welcome')[0]).toMatchObject({ id: 'patch-1', operation: 'insert-paragraphs', preview: '建议写入内容', status: 'applied' })
+  })
+
+  it('persists page roles and anchored comment resolution', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.upsertPagePermission('welcome', 'member-1', 'Ming', 'commenter')
+    expect(database.loadPagePermissions('welcome')).toContainEqual({ subjectId: 'member-1', displayName: 'Ming', role: 'commenter' })
+    database.createComment({ id: 'comment-1', pageId: 'welcome', authorId: 'member-1', authorName: 'Ming', body: '@Lin 请确认这里', anchor: { from: 2, to: 6, quote: '关键内容' } })
+    expect(database.loadComments('welcome')[0]).toMatchObject({ id: 'comment-1', anchor: { from: 2, to: 6, quote: '关键内容' }, resolvedAt: null })
+    database.resolveComment('comment-1')
+    expect(database.loadComments('welcome')[0]?.resolvedAt).not.toBeNull()
   })
 })

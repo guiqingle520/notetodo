@@ -1,19 +1,13 @@
 import { createServer } from 'node:http'
-import { timingSafeEqual } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import { RoomHub, type RoomPeer } from './room-hub.js'
+import { verifyRoomTicket } from '@notetodo/auth-core'
 
 const port = Number(process.env.NOTETODO_COLLAB_PORT ?? 4789)
 const sharedToken = process.env.NOTETODO_COLLAB_TOKEN
 if (!sharedToken) throw new Error('NOTETODO_COLLAB_TOKEN is required.')
 
-// Constant-time comparison avoids leaking how much of a shared development
-// token was correct. Production deployments will replace this with scoped JWTs.
-const hub = new RoomHub((token) => {
-  const expected = Buffer.from(sharedToken)
-  const candidate = Buffer.from(token)
-  return expected.length === candidate.length && timingSafeEqual(expected, candidate)
-})
+const hub = new RoomHub((token, pageId) => verifyRoomTicket(token, pageId, sharedToken) ?? false)
 
 const server = createServer((_request, response) => {
   response.writeHead(200, { 'content-type': 'application/json' })

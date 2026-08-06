@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@notetodo/auth-core": "*",
     "ws": "^8.18.3",
     "yjs": "^13.6.27"
   },
