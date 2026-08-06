@@ -1,5 +1,5 @@
 import * as Y from 'yjs'
-export * from './collaboration-client'
+export * from './collaboration-client.js'
 
 export interface PresenceState {
   clientId: string

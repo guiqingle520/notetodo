@@ -59,6 +59,9 @@ import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/re
 
 type PagePermission = { subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
 type PageComment = { id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }
+type WorkspaceNotification = { id: string; type: 'mention' | 'comment'; readAt: string | null; createdAt: string; pageId: string; pageTitle: string; authorName: string; body: string }
+type SelectionContext = { from: number; to: number; text: string }
+type AIPatchProposal = { text: string; operation: 'insert-paragraphs' | 'replace-selection'; range?: { from: number; to: number } }
 
 const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
   spark: Sparkles,
@@ -135,12 +138,16 @@ function Sidebar({
   onSearch,
   onArchive,
   onSettings,
+  onNotifications,
+  notificationCount,
 }: {
   collapsed: boolean
   onToggle: () => void
   onSearch: () => void
   onArchive: () => void
   onSettings: () => void
+  onNotifications: () => void
+  notificationCount: number
 }) {
   const { pages, addPage, setActivePage } = useWorkspace()
   const topLevel = pages.filter((page) => page.parentId === null && !page.archivedAt)
@@ -151,7 +158,7 @@ function Sidebar({
       <aside className="sidebar sidebar-collapsed">
         <button className="icon-button brand-mark" onClick={onToggle} aria-label="展开侧栏">N</button>
         <button className="icon-button" onClick={onSearch}><Search size={17} /></button>
-        <button className="icon-button"><Inbox size={17} /></button>
+        <button className="icon-button" onClick={onNotifications}><Inbox size={17} /></button>
       </aside>
     )
   }
@@ -167,7 +174,7 @@ function Sidebar({
       <nav className="primary-nav">
         <button onClick={onSearch}><Search size={16} /><span>搜索</span><kbd>Ctrl K</kbd></button>
         <button><Home size={16} /><span>主页</span></button>
-        <button><Inbox size={16} /><span>收件箱</span><em>3</em></button>
+        <button onClick={onNotifications}><Inbox size={16} /><span>收件箱</span>{notificationCount > 0 && <em>{notificationCount}</em>}</button>
         <button><Bot size={16} /><span>AI 工作台</span><i>Beta</i></button>
       </nav>
 
@@ -251,6 +258,28 @@ function ArchivePanel({ onClose }: { onClose: () => void }) {
       </section>
     </div>
   )
+}
+
+function NotificationPanel({ onClose, onCountChange }: { onClose: () => void; onCountChange: (count: number) => void }) {
+  const { setActivePage } = useWorkspace()
+  const [items, setItems] = useState<WorkspaceNotification[]>([])
+  useEffect(() => {
+    const load = async () => {
+      const notifications = window.notetodo?.notifications ? await window.notetodo.notifications.list() : []
+      setItems(notifications)
+      onCountChange(notifications.filter((item) => !item.readAt).length)
+    }
+    void load()
+  }, [onCountChange])
+
+  const open = async (item: WorkspaceNotification) => {
+    if (!item.readAt && window.notetodo?.notifications) await window.notetodo.notifications.markRead(item.id)
+    setActivePage(item.pageId)
+    onCountChange(Math.max(0, items.filter((entry) => !entry.readAt && entry.id !== item.id).length))
+    onClose()
+  }
+
+  return <div className="modal-backdrop" onMouseDown={onClose}><section className="notification-panel" onMouseDown={(event) => event.stopPropagation()}><header><div><Inbox size={17} /><span><strong>收件箱</strong><small>提及与页面协作动态</small></span></div><button onClick={onClose}><X size={16} /></button></header><div className="notification-list">{items.map((item) => <button className={item.readAt ? 'is-read' : ''} key={item.id} onClick={() => void open(item)}><i>{item.authorName?.slice(0, 1) || '@'}</i><span><strong>{item.authorName} 在「{item.pageTitle}」中提到了你</strong><p>{item.body}</p><small>{new Date(item.createdAt).toLocaleString('zh-CN')}</small></span>{!item.readAt && <em />}</button>)}{!items.length && <div className="empty-state"><Inbox size={25} /><strong>没有新消息</strong><span>评论中的 @提及会出现在这里。</span></div>}</div></section></div>
 }
 
 type ModelForm = { provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; apiKey: string; hasApiKey: boolean }
@@ -337,24 +366,34 @@ function SharePanel({ pageId, onClose }: { pageId: string; onClose: () => void }
     setName('')
   }
 
-  return <div className="modal-backdrop" onMouseDown={onClose}><section className="share-panel" onMouseDown={(event) => event.stopPropagation()}><header><div><Users size={17} /><span><strong>共享此页面</strong><small>权限在加入协作房间前验证</small></span></div><button onClick={onClose}><X size={16} /></button></header><div className="share-invite"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="姓名或团队成员 ID" /><select value={role} onChange={(event) => setRole(event.target.value as typeof role)}><option value="editor">可编辑</option><option value="commenter">可评论</option><option value="viewer">可查看</option></select><button onClick={() => void add()}>邀请</button></div><div className="permission-list"><span>已有访问权限</span>{permissions.map((permission) => <div key={permission.subjectId}><i>{permission.displayName.slice(0, 1)}</i><span><strong>{permission.displayName}</strong><small>{permission.subjectId.slice(0, 8)}</small></span><em>{permission.role === 'owner' ? '所有者' : permission.role === 'editor' ? '可编辑' : permission.role === 'commenter' ? '可评论' : '可查看'}</em></div>)}</div><footer><ShieldCheck size={14} />房间票据仅对当前页面有效，5 分钟后过期</footer></section></div>
+  const remove = async (permission: PagePermission) => {
+    if (permission.role === 'owner') return
+    if (window.notetodo?.sharing) await window.notetodo.sharing.remove(pageId, permission.subjectId)
+    setPermissions((current) => current.filter((item) => item.subjectId !== permission.subjectId))
+  }
+
+  return <div className="modal-backdrop" onMouseDown={onClose}><section className="share-panel" onMouseDown={(event) => event.stopPropagation()}><header><div><Users size={17} /><span><strong>共享此页面</strong><small>权限在加入协作房间前验证</small></span></div><button onClick={onClose}><X size={16} /></button></header><div className="share-invite"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="姓名或团队成员 ID" /><select value={role} onChange={(event) => setRole(event.target.value as typeof role)}><option value="editor">可编辑</option><option value="commenter">可评论</option><option value="viewer">可查看</option></select><button onClick={() => void add()}>邀请</button></div><div className="permission-list"><span>已有访问权限</span>{permissions.map((permission) => <div key={permission.subjectId}><i>{permission.displayName.slice(0, 1)}</i><span><strong>{permission.displayName}</strong><small>{permission.subjectId.slice(0, 8)}</small></span><em>{permission.role === 'owner' ? '所有者' : permission.role === 'editor' ? '可编辑' : permission.role === 'commenter' ? '可评论' : '可查看'}</em>{permission.role !== 'owner' && <button aria-label={`移除 ${permission.displayName}`} onClick={() => void remove(permission)}><X size={12} /></button>}</div>)}</div><footer><ShieldCheck size={14} />房间票据仅对当前页面有效，5 分钟后过期</footer></section></div>
 }
 
 function CommentsPanel({ pageId, editor, onClose }: { pageId: string; editor: Editor | null; onClose: () => void }) {
   const [comments, setComments] = useState<PageComment[]>([])
+  const [members, setMembers] = useState<PagePermission[]>([])
   const [body, setBody] = useState('')
   const selection = editor?.state.selection
   const quote = selection && !selection.empty ? editor?.state.doc.textBetween(selection.from, selection.to, ' ') ?? '' : ''
 
   useEffect(() => {
     if (window.notetodo?.comments) void window.notetodo.comments.list(pageId).then(setComments)
+    if (window.notetodo?.sharing) void window.notetodo.sharing.list(pageId).then(setMembers)
+    else setMembers([{ subjectId: 'preview-ming', displayName: 'Ming', role: 'editor' }])
   }, [pageId])
 
   const create = async () => {
     const value = body.trim()
     if (!value) return
     const anchor = selection && !selection.empty ? { from: selection.from, to: selection.to, quote: quote.slice(0, 1000) } : null
-    const id = window.notetodo?.comments ? await window.notetodo.comments.create(pageId, value, anchor) : crypto.randomUUID()
+    const mentions = members.filter((member) => value.includes(`@${member.displayName}`)).map((member) => member.subjectId)
+    const id = window.notetodo?.comments ? await window.notetodo.comments.create(pageId, value, anchor, mentions) : crypto.randomUUID()
     setComments((current) => [{ id, authorName: '本机用户', body: value, anchor, resolvedAt: null, createdAt: new Date().toISOString() }, ...current])
     setBody('')
   }
@@ -364,10 +403,10 @@ function CommentsPanel({ pageId, editor, onClose }: { pageId: string; editor: Ed
     setComments((current) => current.map((comment) => comment.id === id ? { ...comment, resolvedAt: new Date().toISOString() } : comment))
   }
 
-  return <aside className="comments-panel"><header><div><MessageSquare size={16} /><span><strong>页面讨论</strong><small>{comments.filter((comment) => !comment.resolvedAt).length} 条未解决</small></span></div><button onClick={onClose}><X size={16} /></button></header><div className="comment-composer">{quote && <blockquote>“{quote}”</blockquote>}<textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={quote ? '评论所选内容，支持 @提及…' : '添加页面评论，输入 @ 提及成员…'} /><button onClick={() => void create()} disabled={!body.trim()}>发布评论</button></div><div className="comment-list">{comments.map((comment) => <article className={comment.resolvedAt ? 'is-resolved' : ''} key={comment.id}>{comment.anchor?.quote && <blockquote>“{comment.anchor.quote}”</blockquote>}<header><i>{comment.authorName.slice(0, 1)}</i><span><strong>{comment.authorName}</strong><small>{new Date(comment.createdAt).toLocaleString('zh-CN')}</small></span></header><p>{comment.body}</p>{!comment.resolvedAt && <button onClick={() => void resolve(comment.id)}><CheckCircle2 size={12} />标记已解决</button>}</article>)}</div></aside>
+  return <aside className="comments-panel"><header><div><MessageSquare size={16} /><span><strong>页面讨论</strong><small>{comments.filter((comment) => !comment.resolvedAt).length} 条未解决</small></span></div><button onClick={onClose}><X size={16} /></button></header><div className="comment-composer">{quote && <blockquote>“{quote}”</blockquote>}<textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={quote ? '评论所选内容，支持 @提及…' : '添加页面评论，输入 @ 提及成员…'} />{members.length > 0 && <div className="mention-members"><span>提及</span>{members.slice(0, 5).map((member) => <button key={member.subjectId} onClick={() => setBody((current) => `${current}${current && !current.endsWith(' ') ? ' ' : ''}@${member.displayName} `)}>@{member.displayName}</button>)}</div>}<button onClick={() => void create()} disabled={!body.trim()}>发布评论</button></div><div className="comment-list">{comments.map((comment) => <article className={comment.resolvedAt ? 'is-resolved' : ''} key={comment.id}>{comment.anchor?.quote && <blockquote>“{comment.anchor.quote}”</blockquote>}<header><i>{comment.authorName.slice(0, 1)}</i><span><strong>{comment.authorName}</strong><small>{new Date(comment.createdAt).toLocaleString('zh-CN')}</small></span></header><p>{comment.body}</p>{!comment.resolvedAt && <button onClick={() => void resolve(comment.id)}><CheckCircle2 size={12} />标记已解决</button>}</article>)}</div></aside>
 }
 
-function AIPanel({ onClose, onApplyPatch, onUndoPatch }: { onClose: () => void; onApplyPatch: (text: string) => boolean; onUndoPatch: () => void }) {
+function AIPanel({ onClose, selectionContext, onApplyPatch, onUndoPatch }: { onClose: () => void; selectionContext: SelectionContext | null; onApplyPatch: (patch: AIPatchProposal) => boolean; onUndoPatch: () => void }) {
   const { pages, activePageId } = useWorkspace()
   const activePage = pages.find((page) => page.id === activePageId)
   const [prompt, setPrompt] = useState('')
@@ -376,13 +415,15 @@ function AIPanel({ onClose, onApplyPatch, onUndoPatch }: { onClose: () => void; 
   const [error, setError] = useState('')
   const cancelRef = useRef<null | (() => void)>(null)
   const [modelName, setModelName] = useState('浏览器预览模型')
-  const [patch, setPatch] = useState<null | { id: string; text: string; status: 'proposed' | 'applied' }>(null)
+  const [contextMode, setContextMode] = useState<'page' | 'selection'>('page')
+  const [patch, setPatch] = useState<null | { id: string; text: string; operation: AIPatchProposal['operation']; range?: { from: number; to: number }; status: 'proposed' | 'applied' }>(null)
   const pageContext = useMemo(() => {
     if (!activePage) return { text: '', blocks: 0 }
     const document = new DOMParser().parseFromString(activePage.content, 'text/html')
     const blocks = document.body.querySelectorAll('p,h1,h2,h3,li,blockquote,pre').length
     return { text: (document.body.textContent ?? '').replace(/\s+/gu, ' ').trim().slice(0, 40_000), blocks }
   }, [activePage])
+  const usingSelection = contextMode === 'selection' && selectionContext
 
   useEffect(() => {
     if (window.notetodo?.model) void window.notetodo.model.getConfig().then((config) => setModelName(config.model))
@@ -412,7 +453,9 @@ function AIPanel({ onClose, onApplyPatch, onUndoPatch }: { onClose: () => void; 
       cancelRef.current = window.notetodo.model.streamChat({
         messages: [
           { role: 'system', content: '你是 NoteTodo 工作副驾驶。回答简洁、准确；涉及写入时先说明将要修改的内容。' },
-          ...(activePage ? [{ role: 'system' as const, content: `当前页面标题：${activePage.title}\n当前页面正文：${pageContext.text || '（空页面）'}` }] : []),
+          ...(activePage ? [{ role: 'system' as const, content: usingSelection
+            ? `当前页面标题：${activePage.title}\n用户明确选择的正文：${selectionContext.text}`
+            : `当前页面标题：${activePage.title}\n当前页面正文：${pageContext.text || '（空页面）'}` }] : []),
           ...history,
         ],
       }, onEvent)
@@ -439,10 +482,11 @@ function AIPanel({ onClose, onApplyPatch, onUndoPatch }: { onClose: () => void; 
   useEffect(() => () => cancelRef.current?.(), [])
 
   const proposePatch = async (text: string) => {
+    const operation: AIPatchProposal['operation'] = usingSelection ? 'replace-selection' : 'insert-paragraphs'
     const id = window.notetodo?.ai && activePage
-      ? await window.notetodo.ai.createPatchAudit(activePage.id, 'insert-paragraphs', text)
+      ? await window.notetodo.ai.createPatchAudit(activePage.id, operation, text)
       : crypto.randomUUID()
-    setPatch({ id, text, status: 'proposed' })
+    setPatch({ id, text, operation, ...(usingSelection ? { range: { from: selectionContext.from, to: selectionContext.to } } : {}), status: 'proposed' })
   }
 
   const rejectPatch = () => {
@@ -451,7 +495,7 @@ function AIPanel({ onClose, onApplyPatch, onUndoPatch }: { onClose: () => void; 
   }
 
   const applyPatch = () => {
-    if (!patch || !onApplyPatch(patch.text)) return
+    if (!patch || !onApplyPatch({ text: patch.text, operation: patch.operation, range: patch.range })) return
     if (window.notetodo?.ai) void window.notetodo.ai.updatePatchAudit(patch.id, 'applied')
     setPatch({ ...patch, status: 'applied' })
   }
@@ -469,12 +513,12 @@ function AIPanel({ onClose, onApplyPatch, onUndoPatch }: { onClose: () => void; 
         <div><span className="ai-orbit"><Sparkles size={15} /></span><strong>工作副驾驶</strong></div>
         <button className="icon-button" onClick={onClose}><PanelRightClose size={17} /></button>
       </div>
-      <div className="ai-context"><span>正在阅读</span><strong>{activePage?.title ?? '当前页面'} · {pageContext.blocks} 个内容块</strong></div>
+      <div className="ai-context"><span>上下文范围</span><div className="context-switch"><button className={contextMode === 'page' ? 'is-active' : ''} onClick={() => setContextMode('page')}>整页 · {pageContext.blocks} 块</button><button className={contextMode === 'selection' ? 'is-active' : ''} disabled={!selectionContext} onClick={() => setContextMode('selection')}>所选文本</button></div><strong>{usingSelection ? `“${selectionContext.text.slice(0, 36)}${selectionContext.text.length > 36 ? '…' : ''}”` : activePage?.title ?? '当前页面'}</strong></div>
       <div className="ai-conversation">
         {!messages.length && <div className="ai-message"><span className="ai-orbit"><Sparkles size={14} /></span><div><p>我可以帮你整理这页内容，也可以调用已经授权的工具。</p><div className="quick-actions"><button onClick={() => setPrompt('提取当前页面的待办事项')}>提取待办</button><button onClick={() => setPrompt('总结当前页面')}>生成摘要</button><button onClick={() => setPrompt('根据当前内容继续写')}>继续写</button></div></div></div>}
-        {messages.map((message, index) => <div className={`chat-message is-${message.role}`} key={index}>{message.role === 'assistant' && <span className="ai-orbit"><Sparkles size={13} /></span>}<div><small>{message.role === 'user' ? 'YOU' : 'NOTETODO AI'}</small><p>{message.content || (running && index === messages.length - 1 ? '正在思考…' : '')}</p>{message.role === 'assistant' && message.content && !running && index === messages.length - 1 && <button className="preview-patch" onClick={() => void proposePatch(message.content)}><FileText size={12} />预览写入</button>}</div></div>)}
+        {messages.map((message, index) => <div className={`chat-message is-${message.role}`} key={index}>{message.role === 'assistant' && <span className="ai-orbit"><Sparkles size={13} /></span>}<div><small>{message.role === 'user' ? 'YOU' : 'NOTETODO AI'}</small><p>{message.content || (running && index === messages.length - 1 ? '正在思考…' : '')}</p>{message.role === 'assistant' && message.content && !running && index === messages.length - 1 && <><button className="preview-patch" onClick={() => void proposePatch(message.content)}><FileText size={12} />预览写入</button><div className="ai-citation"><BookOpen size={11} /><span>来源 · {activePage?.title}{usingSelection ? ' / 所选文本' : ' / 当前页面'}</span></div></>}</div></div>)}
         {error && <div className="ai-error"><CircleHelp size={14} />{error}</div>}
-        {patch && <section className={`ai-patch-card is-${patch.status}`}><header><span>AI PATCH / INSERT</span><strong>{patch.status === 'applied' ? '已写入页面' : '待确认变更'}</strong></header><div className="patch-target"><FileText size={13} /><span><small>目标</small>{activePage?.title ?? '当前页面'} · 光标后插入</span></div><pre>{patch.text}</pre><footer>{patch.status === 'proposed' ? <><button onClick={rejectPatch}>取消</button><button className="apply-patch" onClick={applyPatch}>确认写入</button></> : <><span><CheckCircle2 size={13} />已记录到审计日志</span><button onClick={undoPatch}>撤销</button></>}</footer></section>}
+        {patch && <section className={`ai-patch-card is-${patch.status}`}><header><span>AI PATCH / {patch.operation === 'replace-selection' ? 'REPLACE' : 'INSERT'}</span><strong>{patch.status === 'applied' ? '已写入页面' : '待确认变更'}</strong></header><div className="patch-target"><FileText size={13} /><span><small>目标</small>{activePage?.title ?? '当前页面'} · {patch.operation === 'replace-selection' ? '替换所选文本' : '光标后插入'}</span></div>{patch.operation === 'replace-selection' && selectionContext && <del>{selectionContext.text}</del>}<pre>{patch.text}</pre><footer>{patch.status === 'proposed' ? <><button onClick={rejectPatch}>取消</button><button className="apply-patch" onClick={applyPatch}>确认写入</button></> : <><span><CheckCircle2 size={13} />已记录到审计日志</span><button onClick={undoPatch}>撤销</button></>}</footer></section>}
       </div>
       <div className="model-pill"><span className="status-dot" />当前模型 · {modelName}</div>
       <form className="ai-composer" onSubmit={(event) => { event.preventDefault(); submit() }}>
@@ -486,7 +530,7 @@ function AIPanel({ onClose, onApplyPatch, onUndoPatch }: { onClose: () => void; 
   )
 }
 
-function WorkspaceEditor({ onEditorReady }: { onEditorReady: (editor: Editor | null) => void }) {
+function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: (editor: Editor | null) => void; onSelectionChange: (selection: SelectionContext | null) => void }) {
   const { pages, activePageId, updatePage, toggleFavorite, archivePage } = useWorkspace()
   const page = pages.find((candidate) => candidate.id === activePageId) ?? pages[0]
   const breadcrumbs = useMemo(() => pageBreadcrumbs(pages, page.id), [pages, page.id])
@@ -499,6 +543,7 @@ function WorkspaceEditor({ onEditorReady }: { onEditorReady: (editor: Editor | n
   const [collaborators, setCollaborators] = useState<RemoteCursor[]>([])
   const [shareOpen, setShareOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [pageRole, setPageRole] = useState<'viewer' | 'commenter' | 'editor' | 'owner'>('owner')
   slashMenuRef.current = slashMenu
 
   const filteredSlashCommands = useMemo(() => {
@@ -516,7 +561,7 @@ function WorkspaceEditor({ onEditorReady }: { onEditorReady: (editor: Editor | n
       RemoteCursors,
     ],
     content: syncSession?.initialContent(page.content) ?? '',
-    editable: Boolean(syncSession),
+    editable: Boolean(syncSession) && ['editor', 'owner'].includes(pageRole),
     immediatelyRender: false,
     editorProps: {
       handleKeyDown: (view, event) => {
@@ -547,8 +592,12 @@ function WorkspaceEditor({ onEditorReady }: { onEditorReady: (editor: Editor | n
         setSlashMenu(null)
       }
     },
-    onSelectionUpdate: ({ editor: activeEditor }) => syncSession?.updatePresence({ anchor: activeEditor.state.selection.anchor, head: activeEditor.state.selection.head }),
-  }, [page.id, syncSession, loadingDocument])
+    onSelectionUpdate: ({ editor: activeEditor }) => {
+      const selection = activeEditor.state.selection
+      syncSession?.updatePresence({ anchor: selection.anchor, head: selection.head })
+      onSelectionChange(selection.empty ? null : { from: selection.from, to: selection.to, text: activeEditor.state.doc.textBetween(selection.from, selection.to, ' ') })
+    },
+  }, [page.id, syncSession, loadingDocument, pageRole])
 
   const runSlashCommand = (command: SlashCommand) => {
     if (!editor || !slashMenu) return
@@ -592,14 +641,21 @@ function WorkspaceEditor({ onEditorReady }: { onEditorReady: (editor: Editor | n
     void PageSyncSession.open(page.id, page.content).then((opened) => {
       if (!active) return void opened.dispose()
       session = opened
-      migrateHtmlToNativeFragment(opened.document, opened.initialContent(page.content) ?? '')
+      const legacyContent = opened.initialContent(page.content) ?? ''
+      migrateHtmlToNativeFragment(opened.document, legacyContent)
       setSyncSession(opened)
       opened.subscribeState(setSyncState)
       if (window.notetodo?.collaboration) {
         void window.notetodo.collaboration.getTicket(page.id).then((ticket) => {
-          if (!active || !ticket) return
+          if (!active) return
+          if (!ticket) {
+            return
+          }
+          setPageRole(ticket.role)
           setCollaborators([{ clientId: ticket.userId, name: ticket.name, color: ticket.color }])
           disconnectCollaboration = opened.connectCollaboration(ticket, {
+            refreshTicket: () => window.notetodo!.collaboration.getTicket(page.id),
+            onSeedRequired: () => migrateHtmlToNativeFragment(opened.document, legacyContent),
             onState: (state) => setCollaborationState(state === 'online' ? 'online' : state === 'offline' ? 'offline' : 'connecting'),
             onPresence: (presence) => setCollaborators((current) => {
               if (presence.clientId === ticket.userId) return current
@@ -688,18 +744,27 @@ export function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notificationCount, setNotificationCount] = useState(0)
+  const [selectionContext, setSelectionContext] = useState<SelectionContext | null>(null)
   const hydrate = useWorkspace((state) => state.hydrate)
   const activeEditorRef = useRef<Editor | null>(null)
   const setActiveEditor = useMemo(() => (editor: Editor | null) => { activeEditorRef.current = editor }, [])
 
-  const applyAIPatch = (text: string) => {
+  const applyAIPatch = (patch: AIPatchProposal) => {
     const editor = activeEditorRef.current
     if (!editor) return false
-    const paragraphs = text.split(/\n{2,}/u).map((value) => value.trim()).filter(Boolean).map((value) => ({ type: 'paragraph', content: [{ type: 'text', text: value }] }))
-    return paragraphs.length ? editor.chain().focus().insertContent(paragraphs).run() : false
+    const paragraphs = patch.text.split(/\n{2,}/u).map((value) => value.trim()).filter(Boolean).map((value) => ({ type: 'paragraph', content: [{ type: 'text', text: value }] }))
+    if (!paragraphs.length) return false
+    return patch.operation === 'replace-selection' && patch.range
+      ? editor.chain().focus().insertContentAt(patch.range, paragraphs).run()
+      : editor.chain().focus().insertContent(paragraphs).run()
   }
 
   useEffect(() => { void hydrate() }, [hydrate])
+  useEffect(() => {
+    if (window.notetodo?.notifications) void window.notetodo.notifications.list().then((items) => setNotificationCount(items.filter((item) => !item.readAt).length))
+  }, [])
 
   useEffect(() => {
     const handleGlobalShortcut = (event: KeyboardEvent) => {
@@ -711,6 +776,7 @@ export function App() {
         setSearchOpen(false)
         setArchiveOpen(false)
         setSettingsOpen(false)
+        setNotificationsOpen(false)
       }
     }
     window.addEventListener('keydown', handleGlobalShortcut)
@@ -727,13 +793,16 @@ export function App() {
           onSearch={() => setSearchOpen(true)}
           onArchive={() => setArchiveOpen(true)}
           onSettings={() => setSettingsOpen(true)}
+          onNotifications={() => setNotificationsOpen(true)}
+          notificationCount={notificationCount}
         />
         {sidebarCollapsed && <button className="floating-menu" onClick={() => setSidebarCollapsed(false)}><Menu size={17} /></button>}
-        <WorkspaceEditor onEditorReady={setActiveEditor} />
-        {aiOpen ? <AIPanel onClose={() => setAiOpen(false)} onApplyPatch={applyAIPatch} onUndoPatch={() => activeEditorRef.current?.commands.undo()} /> : <button className="open-ai" onClick={() => setAiOpen(true)}><PanelRightOpen size={17} /><Sparkles size={14} /></button>}
+        <WorkspaceEditor onEditorReady={setActiveEditor} onSelectionChange={setSelectionContext} />
+        {aiOpen ? <AIPanel onClose={() => setAiOpen(false)} selectionContext={selectionContext} onApplyPatch={applyAIPatch} onUndoPatch={() => activeEditorRef.current?.commands.undo()} /> : <button className="open-ai" onClick={() => setAiOpen(true)}><PanelRightOpen size={17} /><Sparkles size={14} /></button>}
         {searchOpen && <SearchPalette onClose={() => setSearchOpen(false)} />}
         {archiveOpen && <ArchivePanel onClose={() => setArchiveOpen(false)} />}
         {settingsOpen && <ModelSettingsPanel onClose={() => setSettingsOpen(false)} />}
+        {notificationsOpen && <NotificationPanel onClose={() => setNotificationsOpen(false)} onCountChange={setNotificationCount} />}
       </div>
     </div>
   )

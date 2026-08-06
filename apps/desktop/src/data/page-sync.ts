@@ -6,7 +6,7 @@ type SyncState = 'loading' | 'ready' | 'saving' | 'error'
 const HYDRATION_ORIGIN = Symbol('sqlite-hydration')
 const NETWORK_ORIGIN = Symbol('collaboration-network')
 
-export interface CollaborationTicket { endpoint: string; token: string; userId: string; name: string; color: string }
+export interface CollaborationTicket { endpoint: string; token: string; userId: string; name: string; color: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
 
 function encode(data: Uint8Array) {
   let binary = ''
@@ -89,18 +89,29 @@ export class PageSyncSession {
 
   connectCollaboration(
     ticket: CollaborationTicket,
-    handlers: { onState?: (state: CollaborationState) => void; onPresence?: (presence: PresenceState | { clientId: string; left: true }) => void } = {},
+    handlers: {
+      refreshTicket?: () => Promise<CollaborationTicket | null>
+      onSeedRequired?: () => void
+      onState?: (state: CollaborationState) => void
+      onPresence?: (presence: PresenceState | { clientId: string; left: true }) => void
+    } = {},
   ) {
     this.collaboration?.stop()
     const client = new CollaborationClient({
       pageId: this.pageId,
       clientId: ticket.userId,
       token: ticket.token,
+      refreshToken: handlers.refreshTicket ? async () => {
+        const refreshed = await handlers.refreshTicket?.()
+        if (!refreshed) throw new Error('Collaboration ticket refresh failed.')
+        return refreshed.token
+      } : undefined,
       name: ticket.name,
       color: ticket.color,
       createSocket: () => new WebSocket(ticket.endpoint) as unknown as CollaborationSocket,
       onInitialState: (update) => this.sync.apply(decode(update), NETWORK_ORIGIN),
       onUpdate: (update) => this.sync.apply(decode(update), NETWORK_ORIGIN),
+      onSeedRequired: handlers.onSeedRequired,
       onPresence: (message) => {
         if (message.type === 'presence-left' && typeof message.clientId === 'string') handlers.onPresence?.({ clientId: message.clientId, left: true })
         else if (message.type === 'presence' && typeof message.clientId === 'string' && typeof message.name === 'string' && typeof message.color === 'string') {
@@ -114,7 +125,7 @@ export class PageSyncSession {
         handlers.onState?.(state)
         // A full state update on every authenticated reconnect is idempotent
         // and repairs any network queue discarded by its bounded RAM limit.
-        if (state === 'online') client.sendUpdate(encode(this.sync.snapshot()))
+        if (state === 'online' && ['editor', 'owner'].includes(ticket.role)) client.sendUpdate(encode(this.sync.snapshot()))
       },
     })
     this.collaboration = client

@@ -44,21 +44,30 @@ describe('sync core', () => {
     vi.useFakeTimers()
     const sockets: FakeSocket[] = []
     const states: string[] = []
+    const seedRequired = vi.fn()
+    const refreshToken = vi.fn(async () => 'refreshed-secret')
     const client = new CollaborationClient({
       pageId: 'page-1', clientId: 'client-1', token: 'secret', name: 'Lin', color: '#c45134',
+      refreshToken,
       createSocket: () => { const socket = new FakeSocket(); sockets.push(socket); return socket },
-      onUpdate: vi.fn(), onInitialState: vi.fn(), onState: (state) => states.push(state),
+      onUpdate: vi.fn(), onInitialState: vi.fn(), onSeedRequired: seedRequired, onState: (state) => states.push(state),
     })
     client.start()
     client.sendUpdate('offline-update')
     sockets[0].open()
     expect(JSON.parse(sockets[0].sent[0]).token).toBe('secret')
     sockets[0].message({ type: 'auth-ok', clientId: 'client-1' })
+    sockets[0].message({ type: 'seed-required' })
+    expect(seedRequired).toHaveBeenCalledOnce()
     expect(sockets[0].sent.some((item) => item.includes('offline-update'))).toBe(true)
 
     sockets[0].serverClose()
     await vi.advanceTimersByTimeAsync(500)
     expect(sockets).toHaveLength(2)
+    sockets[1].open()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refreshToken).toHaveBeenCalledOnce()
+    expect(JSON.parse(sockets[1].sent[0]).token).toBe('refreshed-secret')
     expect(states).toContain('offline')
     client.stop()
     vi.useRealTimers()

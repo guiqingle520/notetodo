@@ -14,11 +14,13 @@ export interface CollaborationClientOptions {
   pageId: string
   clientId: string
   token: string
+  refreshToken?: () => Promise<string>
   name: string
   color: string
   createSocket: () => CollaborationSocket
   onUpdate: (update: string) => void
   onInitialState: (update: string) => void
+  onSeedRequired?: () => void
   onPresence?: (message: Record<string, unknown>) => void
   onState?: (state: CollaborationState) => void
 }
@@ -75,10 +77,18 @@ export class CollaborationClient {
     this.setState('connecting')
     const socket = this.options.createSocket()
     this.socket = socket
-    socket.onopen = () => {
+    socket.onopen = async () => {
       this.setState('authenticating')
+      let token = this.options.token
+      try {
+        if (this.retryAttempt > 0 && this.options.refreshToken) token = await this.options.refreshToken()
+      } catch {
+        if (socket === this.socket) socket.close()
+        return
+      }
+      if (!this.running || socket !== this.socket || socket.readyState !== 1) return
       socket.send(JSON.stringify({
-        type: 'auth', token: this.options.token, pageId: this.options.pageId,
+        type: 'auth', token, pageId: this.options.pageId,
         clientId: this.options.clientId, name: this.options.name, color: this.options.color,
       }))
     }
@@ -104,6 +114,8 @@ export class CollaborationClient {
       this.options.onInitialState(message.update)
     } else if (message.type === 'sync-update' && typeof message.update === 'string') {
       this.options.onUpdate(message.update)
+    } else if (message.type === 'seed-required') {
+      this.options.onSeedRequired?.()
     } else if (message.type === 'presence' || message.type === 'presence-left') {
       this.options.onPresence?.(message)
     }

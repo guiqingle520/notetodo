@@ -98,10 +98,10 @@ function registerWorkspaceIpc(database) {
     if (!secret) return null
     let userId = database.getSetting('collaboration_user_id')
     if (!userId) { userId = randomUUID(); database.setSetting('collaboration_user_id', userId) }
-    const identity = { userId, name: '本机用户', color: '#c45134' }
-    const role = database.getPageRole(pageId, userId)
-    if (!role) database.upsertPagePermission(pageId, userId, identity.name, 'owner')
-    else if (!['editor', 'owner'].includes(role)) throw new Error('当前用户没有编辑此页面的权限。')
+    const existingRole = database.getPageRole(pageId, userId)
+    const role = existingRole ?? 'owner'
+    const identity = { userId, name: '本机用户', color: '#c45134', role }
+    if (!existingRole) database.upsertPagePermission(pageId, userId, identity.name, 'owner')
     return {
       endpoint: process.env.NOTETODO_COLLAB_URL ?? 'ws://127.0.0.1:4789',
       ...identity,
@@ -114,21 +114,34 @@ function registerWorkspaceIpc(database) {
     if (typeof displayName !== 'string' || displayName.length < 1 || displayName.length > 80 || !['viewer', 'commenter', 'editor'].includes(role)) throw new TypeError('Invalid page permission.')
     database.upsertPagePermission(pageId, subjectId, displayName, role)
   })
+  ipcMain.handle('sharing:remove', (_event, pageId, subjectId) => { assertId(pageId); assertId(subjectId); database.removePagePermission(pageId, subjectId) })
   ipcMain.handle('comments:list', (_event, pageId) => { assertId(pageId); return database.loadComments(pageId) })
-  ipcMain.handle('comments:create', (_event, pageId, body, anchor) => {
+  ipcMain.handle('comments:create', (_event, pageId, body, anchor, mentions = []) => {
     assertId(pageId)
     if (typeof body !== 'string' || body.trim().length < 1 || body.length > 10_000) throw new TypeError('Invalid comment body.')
     let userId = database.getSetting('collaboration_user_id')
     if (!userId) { userId = randomUUID(); database.setSetting('collaboration_user_id', userId) }
     if (anchor !== null && anchor !== undefined && (!Number.isSafeInteger(anchor.from) || !Number.isSafeInteger(anchor.to) || anchor.from < 0 || anchor.to < anchor.from || typeof anchor.quote !== 'string' || anchor.quote.length > 1000)) throw new TypeError('Invalid comment anchor.')
-    const comment = { id: randomUUID(), pageId, authorId: userId, authorName: '本机用户', body: body.trim(), anchor: anchor ?? null }
+    if (!Array.isArray(mentions) || mentions.length > 20 || mentions.some((id) => typeof id !== 'string' || id.length > 128)) throw new TypeError('Invalid comment mentions.')
+    const allowedSubjects = new Set(database.loadPagePermissions(pageId).map((permission) => permission.subjectId))
+    const validatedMentions = [...new Set(mentions)].filter((id) => allowedSubjects.has(id))
+    const comment = { id: randomUUID(), pageId, authorId: userId, authorName: '本机用户', body: body.trim(), anchor: anchor ?? null, mentions: validatedMentions }
     database.createComment(comment)
     return comment.id
   })
   ipcMain.handle('comments:resolve', (_event, id) => { assertId(id); database.resolveComment(id) })
+  ipcMain.handle('notifications:list', () => {
+    const userId = database.getSetting('collaboration_user_id')
+    return userId ? database.loadNotifications(userId) : []
+  })
+  ipcMain.handle('notifications:mark-read', (_event, id) => {
+    assertId(id)
+    const userId = database.getSetting('collaboration_user_id')
+    if (userId) database.markNotificationRead(id, userId)
+  })
   ipcMain.handle('ai:create-patch-audit', (_event, pageId, operation, preview) => {
     assertId(pageId)
-    if (operation !== 'insert-paragraphs' || typeof preview !== 'string' || preview.length > 200_000) throw new TypeError('Invalid AI patch proposal.')
+    if (!['insert-paragraphs', 'replace-selection'].includes(operation) || typeof preview !== 'string' || preview.length > 200_000) throw new TypeError('Invalid AI patch proposal.')
     return database.createAIPatchAudit(randomUUID(), pageId, operation, preview)
   })
   ipcMain.handle('ai:update-patch-audit', (_event, id, status) => {

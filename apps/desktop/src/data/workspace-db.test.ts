@@ -29,9 +29,12 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     loadAIPatchAudit(pageId: string): Array<{ id: string; operation: string; preview: string; status: string }>
     upsertPagePermission(pageId: string, subjectId: string, displayName: string, role: string): void
     loadPagePermissions(pageId: string): Array<{ subjectId: string; displayName: string; role: string }>
-    createComment(comment: { id: string; pageId: string; authorId: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string } }): void
+    removePagePermission(pageId: string, subjectId: string): void
+    createComment(comment: { id: string; pageId: string; authorId: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; mentions?: string[] }): void
     loadComments(pageId: string): Array<{ id: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null }>
     resolveComment(id: string): void
+    loadNotifications(recipientId: string): Array<{ id: string; readAt: string | null; pageTitle: string; body: string }>
+    markNotificationRead(id: string, recipientId: string): void
     close(): void
   }
 }
@@ -122,9 +125,15 @@ describe('WorkspaceDatabase', () => {
     database = new WorkspaceDatabase(':memory:')
     database.upsertPagePermission('welcome', 'member-1', 'Ming', 'commenter')
     expect(database.loadPagePermissions('welcome')).toContainEqual({ subjectId: 'member-1', displayName: 'Ming', role: 'commenter' })
-    database.createComment({ id: 'comment-1', pageId: 'welcome', authorId: 'member-1', authorName: 'Ming', body: '@Lin 请确认这里', anchor: { from: 2, to: 6, quote: '关键内容' } })
+    database.createComment({ id: 'comment-1', pageId: 'welcome', authorId: 'author-1', authorName: 'Lin', body: '@Ming 请确认这里', anchor: { from: 2, to: 6, quote: '关键内容' }, mentions: ['member-1'] })
     expect(database.loadComments('welcome')[0]).toMatchObject({ id: 'comment-1', anchor: { from: 2, to: 6, quote: '关键内容' }, resolvedAt: null })
+    const notification = database.loadNotifications('member-1')[0]
+    expect(notification).toMatchObject({ readAt: null, pageTitle: '从这里开始', body: '@Ming 请确认这里' })
+    database.markNotificationRead(notification!.id, 'member-1')
+    expect(database.loadNotifications('member-1')[0]?.readAt).not.toBeNull()
     database.resolveComment('comment-1')
     expect(database.loadComments('welcome')[0]?.resolvedAt).not.toBeNull()
+    database.removePagePermission('welcome', 'member-1')
+    expect(database.loadPagePermissions('welcome')).not.toContainEqual(expect.objectContaining({ subjectId: 'member-1' }))
   })
 })

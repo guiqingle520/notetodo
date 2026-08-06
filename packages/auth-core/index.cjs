@@ -7,7 +7,7 @@ function encode(value) {
 function signRoomTicket(claims, secret, now = Date.now()) {
   if (typeof secret !== 'string' || secret.length < 32) throw new Error('Collaboration signing secret must contain at least 32 characters.')
   const header = encode({ alg: 'HS256', typ: 'JWT' })
-  const payload = encode({ aud: 'notetodo-collaboration', pageId: claims.pageId, userId: claims.userId, name: claims.name, color: claims.color, iat: Math.floor(now / 1000), exp: Math.floor(now / 1000) + (claims.ttlSeconds ?? 300) })
+  const payload = encode({ aud: 'notetodo-collaboration', pageId: claims.pageId, userId: claims.userId, name: claims.name, color: claims.color, role: claims.role ?? 'editor', iat: Math.floor(now / 1000), exp: Math.floor(now / 1000) + (claims.ttlSeconds ?? 300) })
   const body = `${header}.${payload}`
   return `${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`
 }

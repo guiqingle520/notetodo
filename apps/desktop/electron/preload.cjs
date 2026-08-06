@@ -31,11 +31,16 @@ contextBridge.exposeInMainWorld('notetodo', {
   sharing: {
     list: (pageId) => ipcRenderer.invoke('sharing:list', pageId),
     upsert: (pageId, subjectId, displayName, role) => ipcRenderer.invoke('sharing:upsert', pageId, subjectId, displayName, role),
+    remove: (pageId, subjectId) => ipcRenderer.invoke('sharing:remove', pageId, subjectId),
   },
   comments: {
     list: (pageId) => ipcRenderer.invoke('comments:list', pageId),
-    create: (pageId, body, anchor) => ipcRenderer.invoke('comments:create', pageId, body, anchor),
+    create: (pageId, body, anchor, mentions) => ipcRenderer.invoke('comments:create', pageId, body, anchor, mentions),
     resolve: (id) => ipcRenderer.invoke('comments:resolve', id),
+  },
+  notifications: {
+    list: () => ipcRenderer.invoke('notifications:list'),
+    markRead: (id) => ipcRenderer.invoke('notifications:mark-read', id),
   },
   model: {
     getConfig: () => ipcRenderer.invoke('model:get-config'),

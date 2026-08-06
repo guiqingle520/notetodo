@@ -41,4 +41,18 @@ describe('native Tiptap collaboration document', () => {
     expect(editor.view.dom.querySelector('.remote-caret img')).toBeNull()
     editor.destroy()
   })
+
+  it('deduplicates identical legacy migrations created independently offline', () => {
+    const first = new Y.Doc()
+    const second = new Y.Doc()
+    const html = '<h1>同一旧页面</h1><p>离线设备分别迁移。</p>'
+    migrateHtmlToNativeFragment(first, html)
+    migrateHtmlToNativeFragment(second, html)
+    const merged = Y.mergeUpdates([Y.encodeStateAsUpdate(first), Y.encodeStateAsUpdate(second)])
+    const restored = new Y.Doc()
+    Y.applyUpdate(restored, merged)
+    const editor = collaborativeEditor(restored)
+    expect(editor.getHTML().match(/同一旧页面/gu)).toHaveLength(1)
+    editor.destroy(); first.destroy(); second.destroy(); restored.destroy()
+  })
 })

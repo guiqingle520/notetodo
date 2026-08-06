@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Collaboration UX & Safe AI Actions Beta — **开发中（核心链路完成）**
+Content Parity, Import & Retrieval Alpha — **进行中**
 
 ### 已交付
 
@@ -44,11 +44,19 @@ Collaboration UX & Safe AI Actions Beta — **开发中（核心链路完成）*
 - 锚定选区的页面评论、@提及文本和解决状态。
 - AI 结构化 `insert-paragraphs` Patch 预览、确认、协作撤销和 Schema v4 审计日志。
 - SQLite Schema v5：AI 审计、页面权限和评论。
+- 断线重连自动刷新页面票据，实际 WebSocket 离线编辑恢复后再次收敛。
+- 空房间唯一播种者协议与确定性离线 HTML seed，双客户端首次同步不重复正文。
+- SQLite Schema v6：结构化 mentions、按接收者隔离的通知与已读状态。
+- 查看/评论角色的 Renderer 只读模式和协作服务端 `READ_ONLY` 强制执行。
+- 成员权限撤销、真实未读收件箱和评论成员提及控件。
+- AI 整页/选区上下文切换、来源引用、插入/替换双操作 Diff。
+- 新增 `import-core`：Notion 混合导出档案预检、页面 ID/层级识别和资源上限。
+- CSV 引号/换行/BOM 解析、保守字段类型推断，以及 Markdown 本地链接解析。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：10 个测试文件、28 个测试通过。
+- Vitest：13 个测试文件、43 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -65,20 +73,26 @@ Collaboration UX & Safe AI Actions Beta — **开发中（核心链路完成）*
 - 原生 Fragment 双客户端 round-trip 与恶意光标标签注入测试：通过。
 - AI Patch 提议/应用审计、页面角色和锚定评论持久化：通过。
 - 真实 Electron + WebSocket：Schema v5、短期票据、同步更新、评论与 Patch 审计通过。
-- 全工作区：10 个测试文件、28 项测试通过。
+- 双 Electron 独立用户目录首次同步：双方 6 个顶层块完全一致，无重复迁移。
+- WebSocket 强制断线：票据刷新、离线编辑补发与双端重新收敛通过。
+- 协作服务不可达：本机旧页面仍立即恢复 6 个原生块。
+- Notion 导入预检：路径逃逸、重复路径、解压大小限制和畸形 CSV 防护通过。
+- 全工作区：13 个测试文件、43 项测试通过。
 
-## 本里程碑剩余
+## 当前里程碑余项
 
-1. 在协作断线重连前自动刷新过期房间票据。
-2. 将 @提及解析为结构化 mention 与本机通知，而不只保留评论文本。
-3. 增加权限撤销、只读 Editor enforcement 和在线成员角色显示。
-4. 完成两个真实 Electron 客户端的断网—编辑—重连回归。
-5. 为 AI Patch 增加选择性上下文、引用卡片和多操作 diff。
+Content Parity, Import & Retrieval Alpha
+
+1. 扩展块 Schema：图片、文件、Callout、Toggle、书签、公式、目录和嵌入。
+2. 建立附件内容寻址存储、缩略图、垃圾回收和上传进度。
+3. 完成 Notion HTML/Markdown/CSV/ZIP 流式读取、事务写入与可恢复导入报告（预检与内容解析已完成）。
+4. 增加页面历史、快照浏览、差异比较与恢复。
+5. 建立权限过滤的全文/向量混合检索和 AI 引用定位。
+6. 增加模板库、数据库关联/Rollup/公式和基础自动化。
 
 ## 已知技术债
 
 - 浏览器开发预览仍使用版本化浏览器存储；正式 Electron 路径已使用 SQLite。
 - 协作房间仍驻内存；生产版需要服务端持久化和横向扩展广播。
-- 房间票据已短期化但尚未自动续签；长时间离线后重连需要刷新。
-- AI 安全写入目前只支持纯文本段落插入，尚未开放删除、替换和数据库修改。
+- AI 安全写入目前支持段落插入和选区替换，尚未开放删除与数据库修改。
 - Windows 开发包已生成，但系统应用控制策略会拦截未签名的新二进制；正式发布需要代码签名证书。

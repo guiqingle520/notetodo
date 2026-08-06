@@ -61,4 +61,32 @@ describe('RoomHub', () => {
     for (let index = 0; index < 20; index += 1) expect(content).toContain(`[${index}]`)
     restored.destroy()
   })
+
+  it('assigns only one legacy-content seeder for an empty room', async () => {
+    const hub = new RoomHub(() => true)
+    const first = peer('first-seeder')
+    const second = peer('second-waits')
+    await hub.receive(first.connection, auth('client-a'))
+    await hub.receive(second.connection, auth('client-b'))
+    expect(first.messages.filter((message) => message.type === 'seed-required')).toHaveLength(1)
+    expect(second.messages.filter((message) => message.type === 'seed-required')).toHaveLength(0)
+
+    const seeded = new Y.Doc()
+    seeded.getXmlFragment('body').insert(0, [new Y.XmlElement('paragraph')])
+    const update = Buffer.from(Y.encodeStateAsUpdate(seeded)).toString('base64')
+    await hub.receive(first.connection, JSON.stringify({ type: 'sync-update', update }))
+    expect(second.messages).toContainEqual({ type: 'sync-update', clientId: 'client-a', update })
+    seeded.destroy()
+  })
+
+  it('enforces signed read-only roles at the room boundary', async () => {
+    const hub = new RoomHub(() => ({ userId: 'viewer', name: '只读成员', color: '#247a68', role: 'viewer' }))
+    const viewer = peer('viewer')
+    await hub.receive(viewer.connection, auth('spoofed-editor'))
+    const document = new Y.Doc()
+    document.getText('content').insert(0, '不允许写入')
+    await hub.receive(viewer.connection, JSON.stringify({ type: 'sync-update', update: Buffer.from(Y.encodeStateAsUpdate(document)).toString('base64') }))
+    expect(viewer.messages).toContainEqual({ type: 'error', code: 'READ_ONLY', message: 'This page is read-only for the current member.' })
+    document.destroy()
+  })
 })

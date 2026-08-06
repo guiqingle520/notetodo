@@ -10,6 +10,7 @@ export type ServerMessage =
   | { type: 'auth-ok'; clientId: string }
   | { type: 'sync-state'; update: string }
   | { type: 'sync-update'; clientId: string; update: string }
+  | { type: 'seed-required' }
   | { type: 'presence'; clientId: string; name: string; color: string; cursor?: { anchor: number; head: number } }
   | { type: 'presence-left'; clientId: string }
   | { type: 'error'; code: string; message: string }
@@ -26,14 +27,16 @@ interface Session {
   name: string
   color: string
   cursor?: { anchor: number; head: number }
+  role: 'viewer' | 'commenter' | 'editor' | 'owner'
 }
 
 interface Room {
   document: Y.Doc
   sessions: Set<Session>
+  seeder?: Session
 }
 
-interface VerifiedIdentity { userId: string; name: string; color: string }
+interface VerifiedIdentity { userId: string; name: string; color: string; role?: 'viewer' | 'commenter' | 'editor' | 'owner' }
 
 const MAX_MESSAGE_BYTES = 2 * 1024 * 1024
 const ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/u
@@ -70,11 +73,14 @@ export class RoomHub {
     if (!session) return
     const room = this.rooms.get(session.pageId)
     room?.sessions.delete(session)
+    if (room?.seeder === session) room.seeder = undefined
     this.sessions.delete(peer)
     this.broadcast(room, { type: 'presence-left', clientId: session.clientId }, session)
     if (room && room.sessions.size === 0) {
       room.document.destroy()
       this.rooms.delete(session.pageId)
+    } else if (room) {
+      this.assignSeeder(room)
     }
   }
 
@@ -96,6 +102,7 @@ export class RoomHub {
       clientId: typeof verified === 'object' ? verified.userId : message.clientId,
       name: typeof verified === 'object' ? verified.name : message.name,
       color: typeof verified === 'object' ? verified.color : message.color,
+      role: typeof verified === 'object' ? verified.role ?? 'editor' : 'editor',
     }
     room.sessions.add(session)
     this.sessions.set(peer, session)
@@ -105,15 +112,21 @@ export class RoomHub {
       if (existing !== session) peer.send({ type: 'presence', clientId: existing.clientId, name: existing.name, color: existing.color, ...(existing.cursor ? { cursor: existing.cursor } : {}) })
     })
     this.broadcastPresence(session)
+    this.assignSeeder(room)
   }
 
   private applyUpdate(session: Session, encoded: string) {
     const room = this.rooms.get(session.pageId)
     if (!room || typeof encoded !== 'string') return
+    if (!['editor', 'owner'].includes(session.role)) {
+      session.peer.send({ type: 'error', code: 'READ_ONLY', message: 'This page is read-only for the current member.' })
+      return
+    }
     try {
       const update = Buffer.from(encoded, 'base64')
       if (update.byteLength > MAX_MESSAGE_BYTES) return session.peer.close(1009, 'Update too large')
       Y.applyUpdate(room.document, update, session.clientId)
+      if (!this.isRoomEmpty(room)) room.seeder = undefined
       this.broadcast(room, { type: 'sync-update', clientId: session.clientId, update: encoded }, session)
     } catch {
       session.peer.send({ type: 'error', code: 'INVALID_UPDATE', message: 'The CRDT update could not be applied.' })
@@ -131,5 +144,18 @@ export class RoomHub {
     room?.sessions.forEach((session) => {
       if (session !== exclude) session.peer.send(message)
     })
+  }
+
+  private isRoomEmpty(room: Room) {
+    return room.document.getXmlFragment('body').length === 0 && room.document.getText('content').length === 0
+  }
+
+  /** Exactly one empty-room client may migrate legacy HTML into Yjs. */
+  private assignSeeder(room: Room) {
+    if (!this.isRoomEmpty(room) || room.seeder) return
+    const candidate = [...room.sessions].find((session) => ['editor', 'owner'].includes(session.role))
+    if (!candidate) return
+    room.seeder = candidate
+    candidate.peer.send({ type: 'seed-required' })
   }
 }

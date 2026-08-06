@@ -1,7 +1,8 @@
 const { DatabaseSync } = require('node:sqlite')
+const { randomUUID } = require('node:crypto')
 const seedWorkspace = require('../shared/seed-workspace.json')
 
-const LATEST_SCHEMA_VERSION = 5
+const LATEST_SCHEMA_VERSION = 6
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -217,6 +218,26 @@ class WorkspaceDatabase {
         );
         CREATE INDEX comments_page_time ON comments(page_id, resolved_at, created_at DESC);
         INSERT INTO app_meta(key, value) VALUES ('schema_version', '5')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
+    if (currentVersion < 6) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        ALTER TABLE comments ADD COLUMN mentions_json TEXT NOT NULL DEFAULT '[]';
+        CREATE TABLE notifications (
+          id TEXT PRIMARY KEY,
+          recipient_id TEXT NOT NULL,
+          page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+          comment_id TEXT REFERENCES comments(id) ON DELETE CASCADE,
+          type TEXT NOT NULL CHECK(type IN ('mention', 'comment')),
+          read_at TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX notifications_recipient_unread ON notifications(recipient_id, read_at, created_at DESC);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '6')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value;
         COMMIT;
       `)
@@ -565,22 +586,48 @@ class WorkspaceDatabase {
     return this.database.prepare('SELECT subject_id AS subjectId, display_name AS displayName, role FROM page_permissions WHERE page_id = ? ORDER BY role DESC, display_name').all(pageId)
   }
 
+  removePagePermission(pageId, subjectId) {
+    this.database.prepare("DELETE FROM page_permissions WHERE page_id=? AND subject_id=? AND role<>'owner'").run(pageId, subjectId)
+  }
+
   getPageRole(pageId, subjectId) {
     return this.database.prepare('SELECT role FROM page_permissions WHERE page_id = ? AND subject_id = ?').get(pageId, subjectId)?.role ?? null
   }
 
   createComment(comment) {
-    this.database.prepare('INSERT INTO comments(id, page_id, author_id, author_name, body, anchor_json, resolved_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
-      .run(comment.id, comment.pageId, comment.authorId, comment.authorName, comment.body, comment.anchor ? JSON.stringify(comment.anchor) : null, new Date().toISOString())
+    const now = new Date().toISOString()
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.database.prepare('INSERT INTO comments(id, page_id, author_id, author_name, body, anchor_json, resolved_at, created_at, mentions_json) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)')
+        .run(comment.id, comment.pageId, comment.authorId, comment.authorName, comment.body, comment.anchor ? JSON.stringify(comment.anchor) : null, now, JSON.stringify(comment.mentions ?? []))
+      const notify = this.database.prepare('INSERT INTO notifications(id, recipient_id, page_id, comment_id, type, read_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?)')
+      for (const recipientId of comment.mentions ?? []) {
+        if (recipientId !== comment.authorId) notify.run(randomUUID(), recipientId, comment.pageId, comment.id, 'mention', now)
+      }
+      this.database.exec('COMMIT')
+    } catch (error) {
+      this.database.exec('ROLLBACK')
+      throw error
+    }
   }
 
   loadComments(pageId) {
-    return this.database.prepare('SELECT id, author_name AS authorName, body, anchor_json AS anchor, resolved_at AS resolvedAt, created_at AS createdAt FROM comments WHERE page_id = ? ORDER BY created_at DESC').all(pageId)
-      .map((comment) => ({ ...comment, anchor: comment.anchor ? JSON.parse(comment.anchor) : null }))
+    return this.database.prepare('SELECT id, author_name AS authorName, body, anchor_json AS anchor, mentions_json AS mentions, resolved_at AS resolvedAt, created_at AS createdAt FROM comments WHERE page_id = ? ORDER BY created_at DESC').all(pageId)
+      .map((comment) => ({ ...comment, anchor: comment.anchor ? JSON.parse(comment.anchor) : null, mentions: JSON.parse(comment.mentions) }))
   }
 
   resolveComment(id) {
     this.database.prepare('UPDATE comments SET resolved_at = ? WHERE id = ?').run(new Date().toISOString(), id)
+  }
+
+  loadNotifications(recipientId) {
+    return this.database.prepare(`SELECT n.id, n.type, n.read_at AS readAt, n.created_at AS createdAt, p.id AS pageId, p.title AS pageTitle,
+      c.author_name AS authorName, c.body FROM notifications n JOIN pages p ON p.id=n.page_id LEFT JOIN comments c ON c.id=n.comment_id
+      WHERE n.recipient_id=? ORDER BY n.created_at DESC LIMIT 100`).all(recipientId)
+  }
+
+  markNotificationRead(id, recipientId) {
+    this.database.prepare('UPDATE notifications SET read_at=? WHERE id=? AND recipient_id=?').run(new Date().toISOString(), id, recipientId)
   }
 
   close() {

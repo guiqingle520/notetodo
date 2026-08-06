@@ -23,20 +23,25 @@ interface Window {
       compactDocument: (pageId: string, snapshot: string, throughId: number) => Promise<void>
     }
     collaboration: {
-      getTicket: (pageId: string) => Promise<null | { endpoint: string; token: string; userId: string; name: string; color: string }>
+      getTicket: (pageId: string) => Promise<null | { endpoint: string; token: string; userId: string; name: string; color: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }>
     }
     ai: {
-      createPatchAudit: (pageId: string, operation: 'insert-paragraphs', preview: string) => Promise<string>
+      createPatchAudit: (pageId: string, operation: 'insert-paragraphs' | 'replace-selection', preview: string) => Promise<string>
       updatePatchAudit: (id: string, status: 'applied' | 'undone' | 'rejected') => Promise<void>
     }
     sharing: {
       list: (pageId: string) => Promise<Array<{ subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }>>
       upsert: (pageId: string, subjectId: string, displayName: string, role: 'viewer' | 'commenter' | 'editor') => Promise<void>
+      remove: (pageId: string, subjectId: string) => Promise<void>
     }
     comments: {
       list: (pageId: string) => Promise<Array<{ id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }>>
-      create: (pageId: string, body: string, anchor: null | { from: number; to: number; quote: string }) => Promise<string>
+      create: (pageId: string, body: string, anchor: null | { from: number; to: number; quote: string }, mentions?: string[]) => Promise<string>
       resolve: (id: string) => Promise<void>
+    }
+    notifications: {
+      list: () => Promise<Array<{ id: string; type: 'mention' | 'comment'; readAt: string | null; createdAt: string; pageId: string; pageTitle: string; authorName: string; body: string }>>
+      markRead: (id: string) => Promise<void>
     }
     model: {
       getConfig: () => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>
