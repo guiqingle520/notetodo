@@ -35,6 +35,7 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     resolveComment(id: string): void
     loadNotifications(recipientId: string): Array<{ id: string; readAt: string | null; pageTitle: string; body: string }>
     markNotificationRead(id: string, recipientId: string): void
+    importWorkspaceBundle(bundle: any): { rootPageId: string; pageCount: number; databaseCount: number }
     close(): void
   }
 }
@@ -88,6 +89,33 @@ describe('WorkspaceDatabase', () => {
     expect(updated?.records.find((record) => record.id === 'task-1')?.values['task-score']).toBe(2)
     expect(updated?.records.find((record) => record.id === 'task-new')?.values['task-title']).toBe('新增记录')
     expect(updated?.activeViewId).toBe('roadmap-board')
+  })
+
+  it('imports page trees and typed CSV databases in one transaction', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const now = new Date().toISOString()
+    const page = (id: string, parentId: string | null, icon: 'book' | 'grid') => ({ id, title: id, icon, parentId, favorite: false, content: '<p>imported</p>', updatedAt: now, lastVisitedAt: now, archivedAt: null })
+    const result = database.importWorkspaceBundle({
+      pages: [page('import-root', null, 'book'), page('import-table', 'import-root', 'grid')],
+      databases: [{ id: 'import-db', pageId: 'import-table', name: 'Tasks', headers: ['Name', 'Score', 'Done'], rows: [{ Name: 'Ship', Score: '3', Done: 'true' }], inferredTypes: { Name: 'text', Score: 'number', Done: 'checkbox' } }],
+      report: {},
+    })
+
+    expect(result).toMatchObject({ rootPageId: 'import-root', pageCount: 2, databaseCount: 1 })
+    expect(database.loadWorkspace().activePageId).toBe('import-root')
+    const imported = database.loadDatabaseByPage('import-table')
+    expect(imported?.records[0]?.values).toEqual({ 'import-db-p0': 'Ship', 'import-db-p1': 3, 'import-db-p2': true })
+  })
+
+  it('rolls back every page when an imported database is invalid', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const now = new Date().toISOString()
+    expect(() => database?.importWorkspaceBundle({
+      pages: [{ id: 'rolled-back-root', title: 'Rollback', icon: 'book', parentId: null, favorite: false, content: '', updatedAt: now, lastVisitedAt: now, archivedAt: null }],
+      databases: [{ id: 'broken-db', pageId: 'missing-page', name: 'Broken', headers: [], rows: [], inferredTypes: {} }],
+      report: {},
+    })).toThrow()
+    expect(database.loadWorkspace().pages.some((page) => page.id === 'rolled-back-root')).toBe(false)
   })
 
   it('replays incremental sync updates and compacts them into one durable snapshot', () => {

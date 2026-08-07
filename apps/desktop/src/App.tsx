@@ -209,10 +209,13 @@ function Sidebar({
   )
 }
 
-function ImportPanel({ onClose }: { onClose: () => void }) {
+function ImportPanel({ onClose, onImported }: { onClose: () => void; onImported: () => Promise<void> }) {
   const [inspection, setInspection] = useState<ImportInspection | null>(null)
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'importing' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
+  const [progress, setProgress] = useState({ phase: 'convert', completed: 0, total: 1, path: '' })
+  const [result, setResult] = useState<{ pageCount: number; databaseCount: number; skippedAssets: number } | null>(null)
+  const cancelImportRef = useRef<null | (() => void)>(null)
 
   const pickArchive = async () => {
     if (!window.notetodo?.imports) {
@@ -230,6 +233,26 @@ function ImportPanel({ onClose }: { onClose: () => void }) {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '无法读取这个导出档案。')
       setStatus('error')
+    }
+  }
+
+  const startImport = async () => {
+    if (!inspection || inspection.rejected || !window.notetodo?.imports) return
+    setStatus('importing')
+    setProgress({ phase: 'convert', completed: 0, total: Math.max(1, inspection.summary.page + inspection.summary.database), path: '' })
+    const task = window.notetodo.imports.start(inspection.importId, (next) => setProgress({ ...next, path: next.path ?? '' }))
+    cancelImportRef.current = task.cancel
+    try {
+      const completed = await task.promise
+      setResult(completed)
+      setStatus('done')
+      await onImported()
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : String(reason)
+      setError(message.includes('IMPORT_CANCELLED') ? '导入已取消，工作区没有发生部分写入。' : message)
+      setStatus('error')
+    } finally {
+      cancelImportRef.current = null
     }
   }
 
@@ -264,7 +287,7 @@ function ImportPanel({ onClose }: { onClose: () => void }) {
           <div className="import-error"><AlertTriangle size={24} /><strong>无法完成预检</strong><p>{error}</p><button onClick={() => void pickArchive()}>重新选择</button></div>
         )}
 
-        {inspection && status !== 'error' && (
+        {inspection && !['error', 'importing', 'done'].includes(status) && (
           <div className="import-report">
             <div className="import-report-title">
               <span className={inspection.rejected ? 'is-rejected' : 'is-safe'}>{inspection.rejected ? '需要处理' : '安全可导入'}</span>
@@ -282,8 +305,21 @@ function ImportPanel({ onClose }: { onClose: () => void }) {
               <header><span>档案清单</span><small>显示前 {Math.min(inspection.entries.length, 6)} / {inspection.entries.length} 项</small></header>
               {inspection.entries.slice(0, 6).map((entry) => <div key={entry.path}><span data-kind={entry.kind}>{entry.kind.slice(0, 1).toUpperCase()}</span><p>{entry.path}</p><small>{formatSize(entry.size)}</small></div>)}
             </div>
-            <footer><button className="import-secondary" onClick={() => void pickArchive()}>更换档案</button><span>{inspection.rejected ? '修复导出包中的问题后才能继续' : '预检完成 · 下一步将配置页面映射'}</span></footer>
+            <footer><button className="import-secondary" onClick={() => void pickArchive()}>更换档案</button><span>{inspection.rejected ? '修复导出包中的问题后才能继续' : '页面将在一次事务中写入，失败时自动回滚'}</span>{!inspection.rejected && <button className="import-primary" onClick={() => void startImport()}>开始导入</button>}</footer>
           </div>
+        )}
+        {inspection && status === 'importing' && (
+          <div className="import-running">
+            <div className="import-orbit"><FileArchive size={25} /><i /></div>
+            <p>{progress.phase === 'commit' ? '正在提交事务' : '正在转换内容'}</p>
+            <h2>{progress.phase === 'commit' ? '即将完成。' : `${progress.completed} / ${progress.total}`}</h2>
+            <div className="import-progress"><span style={{ width: `${progress.phase === 'commit' ? 96 : Math.min(92, progress.completed / Math.max(1, progress.total) * 92)}%` }} /></div>
+            <small>{progress.path || '正在准备安全读取…'}</small>
+            <button className="import-secondary" onClick={() => cancelImportRef.current?.()}>取消导入</button>
+          </div>
+        )}
+        {status === 'done' && result && (
+          <div className="import-complete"><CheckCircle2 size={32} /><p>迁移完成</p><h2>知识已经回到你手中。</h2><div><span><strong>{result.pageCount}</strong>页面</span><span><strong>{result.databaseCount}</strong>数据库</span><span><strong>{result.skippedAssets}</strong>附件待迁移</span></div><button className="import-primary" onClick={onClose}>打开导入空间</button></div>
         )}
       </section>
     </div>
@@ -896,7 +932,7 @@ export function App() {
         {archiveOpen && <ArchivePanel onClose={() => setArchiveOpen(false)} />}
         {settingsOpen && <ModelSettingsPanel onClose={() => setSettingsOpen(false)} />}
         {notificationsOpen && <NotificationPanel onClose={() => setNotificationsOpen(false)} onCountChange={setNotificationCount} />}
-        {importOpen && <ImportPanel onClose={() => setImportOpen(false)} />}
+        {importOpen && <ImportPanel onClose={() => setImportOpen(false)} onImported={hydrate} />}
       </div>
     </div>
   )

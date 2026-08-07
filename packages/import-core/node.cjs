@@ -1,6 +1,9 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const yauzl = require('yauzl')
+const MarkdownIt = require('markdown-it')
+const sanitizeHtml = require('sanitize-html')
+const { createHash, randomUUID } = require('node:crypto')
 
 const DEFAULT_LIMITS = Object.freeze({
   maxEntries: 50_000,
@@ -55,6 +58,156 @@ async function inspectZipArchive(filePath, limits = DEFAULT_LIMITS) {
   })
 }
 
+/**
+ * Sequentially converts textual entries. Only the current entry is buffered;
+ * attachments remain inside the archive until the content-addressed store is
+ * ready, keeping peak memory independent from total archive size.
+ */
+async function convertZipArchive(filePath, options = {}) {
+  const signal = options.signal
+  const onProgress = options.onProgress ?? (() => {})
+  const importId = options.importId ?? randomUUID()
+  if (signal?.aborted) throw new Error('IMPORT_CANCELLED')
+  const inspection = await inspectZipArchive(filePath)
+  if (inspection.rejected) throw new Error('IMPORT_PREFLIGHT_REJECTED')
+  const convertible = inspection.entries.filter((entry) => entry.kind === 'page' || entry.kind === 'database')
+  const plannedByPath = new Map(inspection.entries.map((entry) => [entry.path, entry]))
+  const pageIds = new Map(convertible.map((entry) => [stripExtension(entry.path), `${importId}-${shortHash(entry.path)}`]))
+  const rootId = `${importId}-root`
+  const now = new Date().toISOString()
+  const pages = [{ id: rootId, title: path.basename(inspection.fileName, '.zip'), icon: 'book', parentId: null, favorite: false, content: '<p>从 Notion 导入的工作区。</p>', updatedAt: now, lastVisitedAt: now, archivedAt: null }]
+  const databases = []
+  let completed = 0
+
+  await visitZipEntries(filePath, signal, async (entry, readText) => {
+    const normalized = normalizePath(entry.fileName)
+    const planned = normalized && plannedByPath.get(normalized)
+    if (!planned || (planned.kind !== 'page' && planned.kind !== 'database')) return
+    const raw = await readText()
+    const title = path.basename(stripExtension(normalized)).replace(/(?:\s|_)[0-9a-f]{32}$/i, '').trim() || '无标题'
+    const pageId = pageIds.get(stripExtension(normalized))
+    const parentId = findParentPageId(normalized, pageIds) ?? rootId
+    if (planned.kind === 'page') {
+      const extension = path.extname(normalized).toLowerCase()
+      const rendered = extension === '.md' || extension === '.markdown' ? renderMarkdown(raw) : raw
+      pages.push({ id: pageId, title, icon: 'note', parentId, favorite: false, content: sanitizeImportedHtml(rendered), updatedAt: now, lastVisitedAt: now, archivedAt: null })
+    } else {
+      const table = parseCsv(raw)
+      pages.push({ id: pageId, title, icon: 'grid', parentId, favorite: false, content: '<p></p>', updatedAt: now, lastVisitedAt: now, archivedAt: null })
+      databases.push({ id: `${pageId}-db`, pageId, name: title, headers: table.headers, rows: table.rows, inferredTypes: inferTypes(table.headers, table.rows) })
+    }
+    completed += 1
+    onProgress({ phase: 'convert', completed, total: convertible.length, path: normalized })
+  })
+
+  return { importId, pages, databases, report: { importedPages: pages.length - 1, importedDatabases: databases.length, skippedAssets: inspection.summary.asset, unsupported: inspection.summary.unsupported } }
+}
+
+function visitZipEntries(filePath, signal, visitor) {
+  if (signal?.aborted) return Promise.reject(new Error('IMPORT_CANCELLED'))
+  return new Promise((resolve, reject) => {
+    yauzl.open(filePath, { lazyEntries: true, autoClose: true, validateEntrySizes: true }, (error, archive) => {
+      if (error || !archive) return reject(error ?? new Error('ZIP_OPEN_FAILED'))
+      let settled = false
+      const fail = (reason) => {
+        if (settled) return
+        settled = true
+        archive.close()
+        reject(reason instanceof Error ? reason : new Error(String(reason)))
+      }
+      const abort = () => fail(new Error('IMPORT_CANCELLED'))
+      signal?.addEventListener('abort', abort, { once: true })
+      archive.on('error', fail)
+      archive.on('end', () => {
+        signal?.removeEventListener('abort', abort)
+        if (!settled) { settled = true; resolve() }
+      })
+      archive.on('entry', (entry) => {
+        if (entry.fileName.endsWith('/')) { archive.readEntry(); return }
+        const readText = () => readEntryText(archive, entry, signal)
+        Promise.resolve(visitor(entry, readText)).then(() => archive.readEntry(), fail)
+      })
+      archive.readEntry()
+    })
+  })
+}
+
+function readEntryText(archive, entry, signal) {
+  const maxTextBytes = 20 * 1024 * 1024
+  if (entry.uncompressedSize > maxTextBytes) return Promise.reject(new Error(`TEXT_ENTRY_TOO_LARGE:${entry.fileName}`))
+  return new Promise((resolve, reject) => archive.openReadStream(entry, (error, stream) => {
+    if (error || !stream) return reject(error ?? new Error('ZIP_STREAM_FAILED'))
+    const chunks = []
+    let size = 0
+    const abort = () => stream.destroy(new Error('IMPORT_CANCELLED'))
+    signal?.addEventListener('abort', abort, { once: true })
+    stream.on('data', (chunk) => { size += chunk.length; if (size > maxTextBytes) stream.destroy(new Error('TEXT_ENTRY_TOO_LARGE')); else chunks.push(chunk) })
+    stream.on('error', reject)
+    stream.on('end', () => { signal?.removeEventListener('abort', abort); resolve(Buffer.concat(chunks).toString('utf8').replace(/^\uFEFF/, '')) })
+  }))
+}
+
+function renderMarkdown(markdown) {
+  return new MarkdownIt({ html: true, linkify: true, breaks: false }).render(markdown)
+}
+
+function sanitizeImportedHtml(html) {
+  return sanitizeHtml(html, {
+    allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption'],
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class'], a: ['href', 'name', 'target'], img: ['src', 'alt', 'title', 'width', 'height'] },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
+  })
+}
+
+function parseCsv(input) {
+  const records = []
+  let row = [], field = '', quoted = false
+  for (let index = 0; index < input.length; index += 1) {
+    const character = input[index]
+    if (quoted) {
+      if (character === '"' && input[index + 1] === '"') { field += '"'; index += 1 }
+      else if (character === '"') quoted = false
+      else field += character
+    } else if (character === '"') quoted = true
+    else if (character === ',') { row.push(field); field = '' }
+    else if (character === '\n' || character === '\r') {
+      if (character === '\r' && input[index + 1] === '\n') index += 1
+      row.push(field); field = ''
+      if (row.some(Boolean)) records.push(row)
+      row = []
+    } else field += character
+  }
+  if (quoted) throw new Error('CSV_QUOTE_NOT_CLOSED')
+  if (field || row.length) { row.push(field); if (row.some(Boolean)) records.push(row) }
+  const rawHeaders = records.shift() ?? []
+  const used = new Map()
+  const headers = rawHeaders.map((raw, index) => { const base = raw.trim() || `Column ${index + 1}`; const count = (used.get(base) ?? 0) + 1; used.set(base, count); return count === 1 ? base : `${base} (${count})` })
+  return { headers, rows: records.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? '']))) }
+}
+
+function inferTypes(headers, rows) {
+  return Object.fromEntries(headers.map((header) => {
+    const values = rows.map((row) => row[header].trim()).filter(Boolean)
+    if (values.length && values.every((value) => /^(?:true|false|yes|no)$/i.test(value))) return [header, 'checkbox']
+    if (values.length && values.every((value) => Number.isFinite(Number(value)))) return [header, 'number']
+    if (values.length && values.every((value) => /^\d{4}-\d{2}-\d{2}(?:[T ]|$)/.test(value))) return [header, 'date']
+    return [header, 'text']
+  }))
+}
+
+function stripExtension(value) { return value.replace(/\.(?:md|markdown|html?|csv)$/i, '') }
+function shortHash(value) { return createHash('sha256').update(value).digest('hex').slice(0, 20) }
+function findParentPageId(filePath, pageIds) {
+  let directory = filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/')) : ''
+  while (directory) {
+    const direct = pageIds.get(directory)
+    if (direct) return direct
+    directory = directory.includes('/') ? directory.slice(0, directory.lastIndexOf('/')) : ''
+  }
+  return null
+}
+
 function buildPlan(sourceEntries, limits, fileName, compressedBytes) {
   const issues = []
   const entries = []
@@ -99,4 +252,4 @@ function classify(filePath) {
   return 'unsupported'
 }
 
-module.exports = { DEFAULT_LIMITS, inspectZipArchive }
+module.exports = { DEFAULT_LIMITS, convertZipArchive, inspectZipArchive }

@@ -3,13 +3,16 @@ const path = require('node:path')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { ModelService } = require('./model-service.cjs')
 const { signRoomTicket } = require('@notetodo/auth-core')
-const { inspectZipArchive } = require('@notetodo/import-core/node')
+const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomUUID } = require('node:crypto')
 
 const isDev = !app.isPackaged
 let workspaceDatabase
 const modelService = new ModelService()
 const activeModelRuns = new Map()
+// Renderer receives opaque IDs only; local archive paths never cross preload.
+const importSources = new Map()
+const activeImports = new Map()
 
 // Keep OS folders and taskbar identity stable even though npm uses a scoped
 // workspace package name internally.
@@ -65,7 +68,37 @@ function registerWorkspaceIpc(database) {
       filters: [{ name: 'Notion 导出档案', extensions: ['zip'] }],
     })
     if (selected.canceled || !selected.filePaths[0]) return null
-    return inspectZipArchive(selected.filePaths[0])
+    const inspection = await inspectZipArchive(selected.filePaths[0])
+    const importId = randomUUID()
+    importSources.set(importId, { filePath: selected.filePaths[0], expiresAt: Date.now() + 30 * 60_000 })
+    return { ...inspection, importId }
+  })
+  ipcMain.handle('import:start', async (event, importId, requestId) => {
+    assertId(importId); assertId(requestId)
+    const source = importSources.get(importId)
+    if (!source || source.expiresAt < Date.now()) throw new Error('导入预检已过期，请重新选择档案。')
+    if (activeImports.has(requestId)) throw new Error('导入任务已存在。')
+    const controller = new AbortController()
+    activeImports.set(requestId, controller)
+    const channel = `import:progress:${requestId}`
+    try {
+      const bundle = await convertZipArchive(source.filePath, {
+        importId,
+        signal: controller.signal,
+        onProgress: (progress) => { if (!event.sender.isDestroyed()) event.sender.send(channel, progress) },
+      })
+      if (controller.signal.aborted) throw new Error('IMPORT_CANCELLED')
+      if (!event.sender.isDestroyed()) event.sender.send(channel, { phase: 'commit', completed: 0, total: 1 })
+      const result = database.importWorkspaceBundle(bundle)
+      if (!event.sender.isDestroyed()) event.sender.send(channel, { phase: 'done', completed: 1, total: 1 })
+      importSources.delete(importId)
+      return result
+    } finally {
+      activeImports.delete(requestId)
+    }
+  })
+  ipcMain.on('import:cancel', (_event, requestId) => {
+    if (typeof requestId === 'string') activeImports.get(requestId)?.abort()
   })
   ipcMain.handle('database:load-by-page', (_event, pageId) => {
     assertId(pageId)

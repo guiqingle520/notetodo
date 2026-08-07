@@ -54,11 +54,13 @@ Content Parity, Import & Retrieval Alpha — **进行中**
 - CSV 引号/换行/BOM 解析、保守字段类型推断，以及 Markdown 本地链接解析。
 - ZIP 中央目录懒读取预检：不解压正文即可统计页面、数据库、附件与展开体积。
 - Electron 原生 ZIP 文件选择、安全 IPC 与档案迁移预检界面。
+- Markdown/HTML 条目顺序流式转换、危险 HTML 清洗与 CSV 类型化数据库生成。
+- 页面树和数据库单事务写入、失败整体回滚、进度事件与主动取消。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：14 个测试文件、44 个测试通过。
+- Vitest：14 个测试文件、48 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -81,7 +83,8 @@ Content Parity, Import & Retrieval Alpha — **进行中**
 - Notion 导入预检：路径逃逸、重复路径、解压大小限制和畸形 CSV 防护通过。
 - 真实 ZIP 中央目录懒读取、格式分类和体积统计：通过。
 - 导入预检界面 Chromium 视觉与交互检查：通过。
-- 全工作区：14 个测试文件、44 项测试通过。
+- Markdown/HTML/CSV 顺序转换、脚本清洗、父子层级和导入事务回滚：通过。
+- 全工作区：14 个测试文件、48 项测试通过。
 
 ## 当前里程碑余项
 
@@ -89,7 +92,7 @@ Content Parity, Import & Retrieval Alpha
 
 1. 扩展块 Schema：图片、文件、Callout、Toggle、书签、公式、目录和嵌入。
 2. 建立附件内容寻址存储、缩略图、垃圾回收和上传进度。
-3. 完成 Notion HTML/Markdown/CSV/ZIP 条目流式转换、事务写入与可恢复导入报告（目录预检、内容解析和预检 UI 已完成）。
+3. 完成附件落库、链接重写与可恢复导入报告（ZIP/HTML/Markdown/CSV 转换、事务写入、进度取消和预检 UI 已完成）。
 4. 增加页面历史、快照浏览、差异比较与恢复。
 5. 建立权限过滤的全文/向量混合检索和 AI 引用定位。
 6. 增加模板库、数据库关联/Rollup/公式和基础自动化。

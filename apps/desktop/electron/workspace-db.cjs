@@ -416,6 +416,59 @@ class WorkspaceDatabase {
     return page
   }
 
+  /**
+   * Commits an entire converted archive atomically. Pages are ordered by tree
+   * depth so parent foreign keys exist first; any malformed row rolls back the
+   * root page, databases and values together.
+   */
+  importWorkspaceBundle(bundle) {
+    if (!bundle || !Array.isArray(bundle.pages) || !Array.isArray(bundle.databases) || bundle.pages.length < 1) {
+      throw new TypeError('Invalid import bundle.')
+    }
+    const pages = [...bundle.pages].sort((left, right) => pageDepth(left, bundle.pages) - pageDepth(right, bundle.pages))
+    const insertDatabase = this.database.prepare('INSERT INTO databases(id, page_id, name, active_view_id) VALUES (?, ?, ?, ?)')
+    const insertProperty = this.database.prepare('INSERT INTO database_properties(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+    const insertRecord = this.database.prepare('INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    const insertValue = this.database.prepare('INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    const insertView = this.database.prepare('INSERT INTO database_views(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      for (const page of pages) {
+        if (!page.id || page.id.length > 128 || typeof page.content !== 'string' || page.content.length > 20_000_000) throw new TypeError('Imported page exceeds safety limits.')
+        this.statements.upsertPage.run(page.id, String(page.title).slice(0, 1000), page.icon, page.parentId, page.favorite ? 1 : 0, page.content, page.updatedAt, page.lastVisitedAt, page.archivedAt)
+      }
+      for (const imported of bundle.databases) {
+        const viewId = `${imported.id}-table`
+        insertDatabase.run(imported.id, imported.pageId, imported.name, viewId)
+        imported.headers.forEach((header, index) => {
+          const propertyId = `${imported.id}-p${index}`
+          const type = index === 0 ? 'title' : (imported.inferredTypes[header] ?? 'text')
+          insertProperty.run(propertyId, imported.id, header, type, index, '{}')
+        })
+        imported.rows.forEach((row, rowIndex) => {
+          const recordId = `${imported.id}-r${rowIndex}`
+          const now = new Date().toISOString()
+          insertRecord.run(recordId, imported.id, rowIndex, now, now)
+          imported.headers.forEach((header, propertyIndex) => {
+            const type = propertyIndex === 0 ? 'title' : (imported.inferredTypes[header] ?? 'text')
+            const raw = row[header] ?? ''
+            const numberValue = type === 'number' && raw !== '' ? Number(raw) : null
+            const booleanValue = type === 'checkbox' ? (/^(?:true|yes)$/i.test(raw) ? 1 : 0) : null
+            insertValue.run(recordId, `${imported.id}-p${propertyIndex}`, ['number', 'checkbox'].includes(type) ? null : raw, Number.isFinite(numberValue) ? numberValue : null, booleanValue, null, now)
+          })
+        })
+        insertView.run(viewId, imported.id, '全部', 'table', 0, '{}')
+      }
+      this.statements.setActivePage.run(pages[0].id)
+      this.database.exec('COMMIT')
+      return { rootPageId: pages[0].id, pageCount: pages.length, databaseCount: bundle.databases.length, ...bundle.report }
+    } catch (error) {
+      this.database.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   setActivePage(id) {
     const now = new Date().toISOString()
     this.database.exec('BEGIN IMMEDIATE')
@@ -633,6 +686,19 @@ class WorkspaceDatabase {
   close() {
     this.database.close()
   }
+}
+
+function pageDepth(page, pages) {
+  const byId = new Map(pages.map((candidate) => [candidate.id, candidate]))
+  const visited = new Set([page.id])
+  let depth = 0
+  let parentId = page.parentId
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId)
+    depth += 1
+    parentId = byId.get(parentId)?.parentId
+  }
+  return depth
 }
 
 function mapPageRow(row) {

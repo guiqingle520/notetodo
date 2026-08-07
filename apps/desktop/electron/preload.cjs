@@ -44,6 +44,14 @@ contextBridge.exposeInMainWorld('notetodo', {
   },
   imports: {
     pickAndInspect: () => ipcRenderer.invoke('import:pick-and-inspect'),
+    start: (importId, onProgress) => {
+      const requestId = crypto.randomUUID()
+      const channel = `import:progress:${requestId}`
+      const listener = (_event, progress) => onProgress(progress)
+      ipcRenderer.on(channel, listener)
+      const promise = ipcRenderer.invoke('import:start', importId, requestId).finally(() => ipcRenderer.removeListener(channel, listener))
+      return { promise, cancel: () => ipcRenderer.send('import:cancel', requestId) }
+    },
   },
   model: {
     getConfig: () => ipcRenderer.invoke('model:get-config'),

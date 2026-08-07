@@ -45,6 +45,7 @@ interface Window {
     }
     imports: {
       pickAndInspect: () => Promise<null | {
+        importId: string
         fileName: string
         compressedBytes: number
         acceptedBytes: number
@@ -53,6 +54,13 @@ interface Window {
         entries: Array<{ path: string; kind: 'page' | 'database' | 'asset' | 'sitemap' | 'unsupported'; size: number }>
         issues: Array<{ code: string; path?: string; message: string }>
       }>
+      start: (
+        importId: string,
+        onProgress: (progress: { phase: 'convert' | 'commit' | 'done'; completed: number; total: number; path?: string }) => void,
+      ) => {
+        promise: Promise<{ rootPageId: string; pageCount: number; databaseCount: number; importedPages: number; importedDatabases: number; skippedAssets: number; unsupported: number }>
+        cancel: () => void
+      }
     }
     model: {
       getConfig: () => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>

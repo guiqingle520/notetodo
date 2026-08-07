@@ -5,13 +5,17 @@ import { createRequire } from 'node:module'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { inspectZipArchive } = require('../node.cjs') as {
+const { convertZipArchive, inspectZipArchive } = require('../node.cjs') as {
   inspectZipArchive: (path: string) => Promise<{
     fileName: string
     compressedBytes: number
     acceptedBytes: number
     rejected: boolean
     summary: Record<string, number>
+  }>
+  convertZipArchive: (path: string, options?: { importId?: string; signal?: AbortSignal; onProgress?: (progress: { completed: number }) => void }) => Promise<{
+    pages: Array<{ id: string; title: string; content: string; parentId: string | null }>
+    databases: Array<{ headers: string[]; rows: Array<Record<string, string>> }>
   }>
 }
 const temporaryDirectories: string[] = []
@@ -36,6 +40,38 @@ describe('streaming ZIP preflight', () => {
     expect(result.rejected).toBe(false)
     expect(result.acceptedBytes).toBe(5 + 19 + 10)
     expect(result.summary).toMatchObject({ page: 1, database: 1, asset: 1 })
+  })
+
+  it('converts Markdown, sanitizes HTML and parses CSV sequentially', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'notetodo-convert-'))
+    temporaryDirectories.push(directory)
+    const archivePath = join(directory, 'Workspace.zip')
+    await writeFile(archivePath, createStoredZip([
+      ['Parent.md', '# Parent\n\nSafe'],
+      ['Parent/Child.html', '<h2>Child</h2><script>alert(1)</script>'],
+      ['Parent/Tasks.csv', 'Name,Score,Done\nShip,3,true'],
+    ]))
+    const progress: number[] = []
+    const bundle = await convertZipArchive(archivePath, { importId: 'test-import', onProgress: (event) => progress.push(event.completed) })
+
+    expect(bundle.pages.find((page) => page.title === 'Parent')?.content).toContain('<h1>Parent</h1>')
+    expect(bundle.pages.find((page) => page.title === 'Child')?.content).not.toContain('script')
+    expect(bundle.pages.find((page) => page.title === 'Child')?.parentId).toBe(bundle.pages.find((page) => page.title === 'Parent')?.id)
+    expect(bundle.databases[0]).toMatchObject({ headers: ['Name', 'Score', 'Done'], rows: [{ Name: 'Ship', Score: '3', Done: 'true' }] })
+    expect(progress).toEqual([1, 2, 3])
+  })
+
+  it('stops conversion when the caller cancels', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'notetodo-cancel-'))
+    temporaryDirectories.push(directory)
+    const archivePath = join(directory, 'Cancel.zip')
+    await writeFile(archivePath, createStoredZip([['First.md', 'one'], ['Second.md', 'two']]))
+    const controller = new AbortController()
+
+    await expect(convertZipArchive(archivePath, {
+      signal: controller.signal,
+      onProgress: () => controller.abort(),
+    })).rejects.toThrow('IMPORT_CANCELLED')
   })
 })
 
