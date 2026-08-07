@@ -1,4 +1,4 @@
-import type { DatabaseRecord, DatabaseSnapshot, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
+import type { DatabaseRecord, DatabaseSnapshot, DatabaseView, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
 
 const now = new Date().toISOString()
 const seedSnapshot: DatabaseSnapshot = {
@@ -122,6 +122,35 @@ class DatabaseRepository {
   async updateViewConfig(snapshot: DatabaseSnapshot, viewId: string, config: DatabaseViewConfig) {
     if (window.notetodo?.database) return window.notetodo.database.updateViewConfig(snapshot.schema.id, viewId, config)
     this.write(snapshot)
+  }
+
+  async createView(snapshot: DatabaseSnapshot, view: DatabaseView) {
+    if (window.notetodo?.database) return window.notetodo.database.createView(snapshot.schema.id, view.id, view.name, view.type, view.config)
+    if (snapshot.views.length >= 50) throw new Error('一个数据库最多包含 50 个视图。')
+    const next = { ...snapshot, views: [...snapshot.views, view], activeViewId: view.id }
+    this.write(next); return structuredClone(next)
+  }
+
+  async renameView(snapshot: DatabaseSnapshot, viewId: string, name: string) {
+    if (window.notetodo?.database) return window.notetodo.database.renameView(snapshot.schema.id, viewId, name)
+    const next = { ...snapshot, views: snapshot.views.map((view) => view.id === viewId ? { ...view, name } : view) }
+    this.write(next); return structuredClone(next)
+  }
+
+  async deleteView(snapshot: DatabaseSnapshot, viewId: string) {
+    if (snapshot.views.length <= 1) throw new Error('至少需要保留一个视图。')
+    if (window.notetodo?.database) return window.notetodo.database.deleteView(snapshot.schema.id, viewId)
+    const views = snapshot.views.filter((view) => view.id !== viewId)
+    const next = { ...snapshot, views, activeViewId: snapshot.activeViewId === viewId ? views[0]!.id : snapshot.activeViewId }
+    this.write(next); return structuredClone(next)
+  }
+
+  async setDefaultView(snapshot: DatabaseSnapshot, viewId: string) {
+    if (window.notetodo?.database) return window.notetodo.database.setDefaultView(snapshot.schema.id, viewId)
+    const selected = snapshot.views.find((view) => view.id === viewId)
+    if (!selected) throw new Error('视图不存在。')
+    const next = { ...snapshot, views: [selected, ...snapshot.views.filter((view) => view.id !== viewId)] }
+    this.write(next); return structuredClone(next)
   }
 
   private write(snapshot: DatabaseSnapshot, explicitPageId?: string) {

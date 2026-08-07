@@ -324,6 +324,26 @@ function registerWorkspaceIpc(database) {
     if (serialized.length > 50_000 || (config.filters?.length ?? 0) > 20 || (config.sorts?.length ?? 0) > 10) throw new TypeError('Database view configuration is too large.')
     database.updateDatabaseViewConfig(databaseId, viewId, config)
   })
+  ipcMain.handle('database:create-view', (_event, databaseId, viewId, name, type, config) => {
+    assertId(databaseId); assertId(viewId)
+    if (typeof name !== 'string' || !name.trim() || name.length > 200) throw new TypeError('Invalid database view name.')
+    if (!['table', 'board', 'list', 'calendar', 'timeline', 'gallery'].includes(type)) throw new TypeError('Invalid database view type.')
+    if (!config || typeof config !== 'object' || Array.isArray(config) || JSON.stringify(config).length > 50_000) throw new TypeError('Invalid database view configuration.')
+    return database.createDatabaseView(databaseId, viewId, name.trim(), type, config)
+  })
+  ipcMain.handle('database:rename-view', (_event, databaseId, viewId, name) => {
+    assertId(databaseId); assertId(viewId)
+    if (typeof name !== 'string' || !name.trim() || name.length > 200) throw new TypeError('Invalid database view name.')
+    return database.renameDatabaseView(databaseId, viewId, name.trim())
+  })
+  ipcMain.handle('database:delete-view', (_event, databaseId, viewId) => {
+    assertId(databaseId); assertId(viewId)
+    return database.deleteDatabaseView(databaseId, viewId)
+  })
+  ipcMain.handle('database:set-default-view', (_event, databaseId, viewId) => {
+    assertId(databaseId); assertId(viewId)
+    return database.setDefaultDatabaseView(databaseId, viewId)
+  })
   ipcMain.handle('sync:load-document', (_event, pageId) => {
     assertId(pageId)
     return database.loadSyncDocument(pageId)

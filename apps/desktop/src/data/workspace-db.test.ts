@@ -23,6 +23,10 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     updateDatabaseRecordContent(recordId: string, content: string): void
     setActiveDatabaseView(databaseId: string, viewId: string): void
     updateDatabaseViewConfig(databaseId: string, viewId: string, config: object): void
+    createDatabaseView(databaseId: string, viewId: string, name: string, type: string, config: object): DatabaseSnapshot
+    renameDatabaseView(databaseId: string, viewId: string, name: string): DatabaseSnapshot
+    deleteDatabaseView(databaseId: string, viewId: string): DatabaseSnapshot
+    setDefaultDatabaseView(databaseId: string, viewId: string): DatabaseSnapshot
     loadSyncDocument(pageId: string): {
       snapshot: string | null
       updates: Array<{ id: number; clientId: string; data: string }>
@@ -153,6 +157,25 @@ describe('WorkspaceDatabase', () => {
     expect(database.loadDatabaseByPage('research')?.schema.properties.some((property) => property.id === 'research-notes')).toBe(false)
     expect(() => database!.deleteDatabaseProperty('research-db', 'research-db-title')).toThrow(/cannot be deleted/)
     expect(() => database!.createDatabaseForPage('missing', 'missing-db', '无效')).toThrow('Database page does not exist.')
+  })
+
+  it('creates, renames, reorders and safely deletes persisted views', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const created = database.createDatabaseView('roadmap-db', 'roadmap-review', '评审视图', 'table', { sorts: [{ propertyId: 'task-due', direction: 'asc' }] })
+    expect(created.activeViewId).toBe('roadmap-review')
+    expect(created.views.at(-1)).toMatchObject({ id: 'roadmap-review', name: '评审视图', type: 'table' })
+
+    database.renameDatabaseView('roadmap-db', 'roadmap-review', '发布评审')
+    const reordered = database.setDefaultDatabaseView('roadmap-db', 'roadmap-review')
+    expect(reordered.views[0]).toMatchObject({ id: 'roadmap-review', name: '发布评审' })
+
+    const deleted = database.deleteDatabaseView('roadmap-db', 'roadmap-review')
+    expect(deleted.views.some((view) => view.id === 'roadmap-review')).toBe(false)
+    expect(deleted.activeViewId).toBe('roadmap-table')
+    expect(() => database?.setActiveDatabaseView('roadmap-db', 'missing-view')).toThrow(/does not exist/)
+
+    const isolated = database.createDatabaseForPage('welcome', 'single-view-db', '单视图')
+    expect(() => database?.deleteDatabaseView('single-view-db', isolated.views[0]!.id)).toThrow(/final database view/)
   })
 
   it('persists validated relations while keeping derived properties read-only', () => {

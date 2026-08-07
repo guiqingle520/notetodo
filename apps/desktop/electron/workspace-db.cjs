@@ -1153,13 +1153,67 @@ class WorkspaceDatabase {
   }
 
   setActiveDatabaseView(databaseId, viewId) {
-    this.database.prepare('UPDATE databases SET active_view_id = ? WHERE id = ?').run(viewId, databaseId)
+    const result = this.database.prepare(`
+      UPDATE databases SET active_view_id = ?
+      WHERE id = ? AND EXISTS (SELECT 1 FROM database_views WHERE id = ? AND database_id = ?)
+    `).run(viewId, databaseId, viewId, databaseId)
+    if (result.changes !== 1) throw new Error('Database view does not exist.')
   }
 
   updateDatabaseViewConfig(databaseId, viewId, config) {
     const result = this.database.prepare('UPDATE database_views SET config_json = ? WHERE id = ? AND database_id = ?')
       .run(JSON.stringify(config), viewId, databaseId)
     if (result.changes !== 1) throw new Error('Database view does not exist.')
+  }
+
+  createDatabaseView(databaseId, viewId, name, type, config) {
+    const viewCount = this.database.prepare('SELECT COUNT(*) AS count FROM database_views WHERE database_id = ?').get(databaseId).count
+    if (viewCount >= 50) throw new Error('A database cannot contain more than 50 views.')
+    const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_views WHERE database_id = ?').get(databaseId).position
+    const result = this.database.prepare(`
+      INSERT INTO database_views(id, database_id, name, type, position, config_json)
+      SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)
+    `).run(viewId, databaseId, name, type, position, JSON.stringify(config), databaseId)
+    if (result.changes !== 1) throw new Error('Database does not exist.')
+    this.setActiveDatabaseView(databaseId, viewId)
+    return this.loadDatabaseById(databaseId)
+  }
+
+  renameDatabaseView(databaseId, viewId, name) {
+    const result = this.database.prepare('UPDATE database_views SET name = ? WHERE id = ? AND database_id = ?').run(name, viewId, databaseId)
+    if (result.changes !== 1) throw new Error('Database view does not exist.')
+    return this.loadDatabaseById(databaseId)
+  }
+
+  deleteDatabaseView(databaseId, viewId) {
+    const views = this.database.prepare('SELECT id, position FROM database_views WHERE database_id = ? ORDER BY position, id').all(databaseId)
+    const target = views.find((view) => view.id === viewId)
+    if (!target) throw new Error('Database view does not exist.')
+    if (views.length <= 1) throw new Error('The final database view cannot be deleted.')
+    const fallbackId = views.find((view) => view.id !== viewId).id
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.database.prepare('DELETE FROM database_views WHERE id = ? AND database_id = ?').run(viewId, databaseId)
+      this.database.prepare('UPDATE databases SET active_view_id = ? WHERE id = ? AND active_view_id = ?').run(fallbackId, databaseId, viewId)
+      // Compact positions after deletion so the first row remains the default
+      // view and later reordering never accumulates sparse position values.
+      this.database.prepare('UPDATE database_views SET position = position - 1 WHERE database_id = ? AND position > ?').run(databaseId, target.position)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseById(databaseId)
+  }
+
+  setDefaultDatabaseView(databaseId, viewId) {
+    const views = this.database.prepare('SELECT id FROM database_views WHERE database_id = ? ORDER BY position, id').all(databaseId)
+    if (!views.some((view) => view.id === viewId)) throw new Error('Database view does not exist.')
+    const ordered = [viewId, ...views.map((view) => view.id).filter((id) => id !== viewId)]
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const update = this.database.prepare('UPDATE database_views SET position = ? WHERE id = ? AND database_id = ?')
+      ordered.forEach((id, position) => update.run(position, id, databaseId))
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseById(databaseId)
   }
 
   getSetting(key) {

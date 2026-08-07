@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createEvent, fireEvent, render } from '@testing-library/react'
-import type { DatabaseRecord, DatabaseSchema } from '@notetodo/database-core'
-import { BoardView, DatabaseCreationPrompt, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TimelineView, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { createEvent, fireEvent, render, waitFor } from '@testing-library/react'
+import type { DatabaseRecord, DatabaseSchema, DatabaseView } from '@notetodo/database-core'
+import { BoardView, DatabaseCreationPrompt, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TimelineView, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -151,5 +151,27 @@ describe('database authoring', () => {
     fireEvent.change(container.querySelector('.record-property-field select')!, { target: { value: 'done' } })
     expect(onUpdateCell).toHaveBeenCalledWith('detail-1', 'name', '知识图谱 v2')
     expect(onUpdateCell).toHaveBeenCalledWith('detail-1', 'status', 'done')
+  })
+
+  it('creates and manages database views through the compact view menu', async () => {
+    const activeView: DatabaseView = { id: 'view-table', databaseId: 'research-db', name: '全部资料', type: 'table', config: {} }
+    const onCreate = vi.fn().mockResolvedValue(undefined)
+    const createMenu = render(<ViewManagementMenu mode="create" views={[activeView]} activeView={activeView} defaultViewId={activeView.id} onClose={vi.fn()} onCreate={onCreate} onRename={vi.fn()} onDuplicate={vi.fn()} onDelete={vi.fn()} onSetDefault={vi.fn()} />)
+    fireEvent.change(createMenu.getByRole('textbox', { name: '视图名称' }), { target: { value: '发布日历' } })
+    fireEvent.click(createMenu.getByRole('button', { name: /日历/ }))
+    fireEvent.click(createMenu.getByRole('button', { name: '创建' }))
+    expect(onCreate).toHaveBeenCalledWith('发布日历', 'calendar')
+    createMenu.unmount()
+
+    const onDelete = vi.fn().mockResolvedValue(undefined); const onSetDefault = vi.fn().mockResolvedValue(undefined)
+    const secondView: DatabaseView = { id: 'view-board', databaseId: 'research-db', name: '状态看板', type: 'board', config: {} }
+    const manageMenu = render(<ViewManagementMenu mode="manage" views={[activeView, secondView]} activeView={secondView} defaultViewId={activeView.id} onClose={vi.fn()} onCreate={vi.fn()} onRename={vi.fn()} onDuplicate={vi.fn()} onDelete={onDelete} onSetDefault={onSetDefault} />)
+    fireEvent.click(manageMenu.getByRole('button', { name: '设为默认视图' }))
+    await waitFor(() => expect(onSetDefault).toHaveBeenCalledOnce())
+    await waitFor(() => expect(manageMenu.getByRole('button', { name: '删除视图' })).toBeEnabled())
+    fireEvent.click(manageMenu.getByRole('button', { name: '删除视图' }))
+    expect(onDelete).not.toHaveBeenCalled()
+    fireEvent.click(manageMenu.getByRole('button', { name: '确认删除此视图' }))
+    expect(onDelete).toHaveBeenCalledOnce()
   })
 })

@@ -48,6 +48,10 @@ interface Window {
       updateRecordContent: (recordId: string, content: string) => Promise<void>
       setActiveView: (databaseId: string, viewId: string) => Promise<void>
       updateViewConfig: (databaseId: string, viewId: string, config: import('@notetodo/database-core').DatabaseViewConfig) => Promise<void>
+      createView: (databaseId: string, viewId: string, name: string, type: import('@notetodo/database-core').DatabaseView['type'], config: import('@notetodo/database-core').DatabaseViewConfig) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      renameView: (databaseId: string, viewId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      deleteView: (databaseId: string, viewId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      setDefaultView: (databaseId: string, viewId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
     }
     sync: {
       loadDocument: (pageId: string) => Promise<{ snapshot: string | null; updates: Array<{ id: number; clientId: string; data: string }>; latestUpdateId: number }>

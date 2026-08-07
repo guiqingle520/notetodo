@@ -56,6 +56,10 @@ contextBridge.exposeInMainWorld('notetodo', {
     updateRecordContent: (recordId, content) => ipcRenderer.invoke('database:update-record-content', recordId, content),
     setActiveView: (databaseId, viewId) => ipcRenderer.invoke('database:set-active-view', databaseId, viewId),
     updateViewConfig: (databaseId, viewId, config) => ipcRenderer.invoke('database:update-view-config', databaseId, viewId, config),
+    createView: (databaseId, viewId, name, type, config) => ipcRenderer.invoke('database:create-view', databaseId, viewId, name, type, config),
+    renameView: (databaseId, viewId, name) => ipcRenderer.invoke('database:rename-view', databaseId, viewId, name),
+    deleteView: (databaseId, viewId) => ipcRenderer.invoke('database:delete-view', databaseId, viewId),
+    setDefaultView: (databaseId, viewId) => ipcRenderer.invoke('database:set-default-view', databaseId, viewId),
   },
   sync: {
     loadDocument: (pageId) => ipcRenderer.invoke('sync:load-document', pageId),

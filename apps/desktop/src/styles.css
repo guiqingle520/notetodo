@@ -1121,3 +1121,40 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .calendar-grid > section.is-today { box-shadow: inset 0 0 0 1px var(--notion-blue); }
 .gallery-grid { background: #fff; }
 .gallery-cover, .gallery-generated, .gallery-missing { background: var(--notion-sidebar); }
+
+/* Database view management mirrors Notion's compact view popover. */
+.database-viewbar { position: relative; }
+.database-tabs .database-view-add { width: 28px; flex: 0 0 28px; justify-content: center; padding: 0; color: var(--notion-faint); }
+.database-tabs .database-view-add:hover { color: var(--notion-text); }
+.database-view-menu { position: absolute; z-index: 24; top: 37px; left: 7px; width: 320px; overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px; background: #fff; box-shadow: var(--notion-shadow); animation: menu-rise .12s ease both; }
+.database-view-menu.is-manage { left: auto; right: 7px; width: 270px; }
+.database-view-menu > header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; border-bottom: 1px solid var(--notion-divider); }
+.database-view-menu > header strong { font-size: 12px; font-weight: 600; }
+.database-view-menu > header button { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-muted); border: 0; background: transparent; cursor: pointer; }
+.database-view-menu > header button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-view-menu > label { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 6px; padding: 10px 10px 8px; }
+.database-view-menu > label > span { color: var(--notion-muted); font-size: 12px; }
+.database-view-menu > label input { min-width: 0; height: 32px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); outline: 0; background: #fff; font-size: 13px; }
+.database-view-menu > label input:focus { border-color: var(--notion-blue); box-shadow: 0 0 0 1px var(--notion-blue); }
+.database-view-types { max-height: 254px; overflow-y: auto; padding: 3px 5px 5px; border-top: 1px solid var(--notion-divider); }
+.database-view-types > button { width: 100%; min-height: 40px; display: grid; grid-template-columns: 28px 1fr 20px; align-items: center; gap: 4px; padding: 4px 7px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: pointer; }
+.database-view-types > button:hover, .database-view-types > button.is-selected { background: var(--notion-hover); }
+.database-view-types > button > svg:first-child { color: var(--notion-muted); }
+.database-view-types > button > svg:last-child { color: var(--notion-blue); }
+.database-view-types > button span { display: flex; flex-direction: column; gap: 1px; }
+.database-view-types strong { font-size: 12px; font-weight: 500; }
+.database-view-types small { color: var(--notion-faint); font-size: 10px; }
+.database-view-menu > footer { height: 46px; display: flex; align-items: center; justify-content: flex-end; gap: 7px; padding: 0 10px; border-top: 1px solid var(--notion-divider); }
+.database-view-menu > footer button { height: 30px; padding: 0 11px; color: var(--notion-text); border: 1px solid var(--notion-border); background: #fff; font-size: 12px; cursor: pointer; }
+.database-view-menu > footer button:last-child { color: #fff; border-color: var(--notion-blue); background: var(--notion-blue); }
+.database-view-menu > footer button:last-child:hover { background: var(--notion-blue-hover); }
+.database-view-menu button:disabled { opacity: .42; cursor: default; }
+.database-view-actions { padding: 3px 5px 5px; border-top: 1px solid var(--notion-divider); }
+.database-view-actions > button { width: 100%; height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 8px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; font-size: 12px; text-align: left; cursor: pointer; }
+.database-view-actions > button:hover:not(:disabled) { background: var(--notion-hover); }
+.database-view-actions > button > svg { color: var(--notion-muted); }
+.database-view-actions > button.is-danger { color: #eb5757; }
+.database-view-actions > button.is-danger > svg { color: #eb5757; }
+.database-view-actions > button.is-confirm-delete { color: #fff; background: #eb5757; }
+.database-view-actions > button.is-confirm-delete > svg { color: #fff; }
+.database-view-menu > p { margin: 0; padding: 8px 11px; color: #eb5757; border-top: 1px solid var(--notion-divider); font-size: 11px; line-height: 1.4; }
