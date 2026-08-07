@@ -197,6 +197,12 @@ function rewriteImportedLinks(html, sourcePath, pageId, pageIds, assetsByPath) {
       const asset = assetsByPath.get(resolved)
       if (asset) {
         attribs[attribute] = `notetodo-asset://${asset.hash}/${encodeURIComponent(asset.displayName)}`
+        if (tagName === 'a') {
+          attribs['data-notetodo-file'] = ''
+          attribs['data-name'] = asset.displayName
+          attribs['data-size'] = String(asset.size)
+          attribs['data-mime'] = asset.mimeType
+        }
         if (!asset.referencedBy.includes(pageId)) asset.referencedBy.push(pageId)
       } else unresolved += 1
     }
@@ -205,7 +211,7 @@ function rewriteImportedLinks(html, sourcePath, pageId, pageIds, assetsByPath) {
   return {
     html: sanitizeHtml(html, {
       allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption', 'img', 'source'],
-      allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class'], a: ['href', 'name', 'target'], img: ['src', 'alt', 'title', 'width', 'height'] },
+      allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class', 'data-notetodo-callout', 'data-notetodo-toggle', 'data-tone', 'data-icon'], a: ['href', 'name', 'target', 'data-notetodo-file', 'data-name', 'data-size', 'data-mime'], img: ['src', 'alt', 'title', 'width', 'height'] },
       allowedSchemes: ['http', 'https', 'mailto', 'notetodo-page', 'notetodo-asset'],
       allowProtocolRelative: false,
       transformTags: { a: transform, img: transform, source: transform },
@@ -247,9 +253,13 @@ function renderMarkdown(markdown) {
 function sanitizeImportedHtml(html) {
   return sanitizeHtml(html, {
     allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption', 'img', 'source'],
-    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class'], a: ['href', 'name', 'target'], img: ['src', 'alt', 'title', 'width', 'height'] },
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class', 'data-notetodo-callout', 'data-notetodo-toggle', 'data-tone', 'data-icon'], a: ['href', 'name', 'target', 'data-notetodo-file', 'data-name', 'data-size', 'data-mime'], img: ['src', 'alt', 'title', 'width', 'height'] },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowProtocolRelative: false,
+    transformTags: {
+      aside: (tagName, attribs) => ({ tagName, attribs: { ...attribs, 'data-notetodo-callout': '', 'data-tone': attribs['data-tone'] ?? 'note', 'data-icon': attribs['data-icon'] ?? '✦' } }),
+      details: (tagName, attribs) => ({ tagName, attribs: { ...attribs, 'data-notetodo-toggle': '' } }),
+    },
   })
 }
 

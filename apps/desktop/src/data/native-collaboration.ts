@@ -5,12 +5,14 @@ import TaskList from '@tiptap/extension-task-list'
 import Collaboration from '@tiptap/extension-collaboration'
 import { prosemirrorJSONToYXmlFragment } from '@tiptap/y-tiptap'
 import type * as Y from 'yjs'
+import { richBlockExtensions } from '../editor/rich-blocks'
 
 export function documentSchemaExtensions(): Extensions {
   return [
     StarterKit.configure({ undoRedo: false }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    ...richBlockExtensions(),
   ]
 }
 

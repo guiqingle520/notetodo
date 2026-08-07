@@ -25,7 +25,9 @@ import {
   Menu,
   List,
   ListOrdered,
+  ListCollapse,
   ListTodo,
+  Lightbulb,
   MessageSquare,
   Minus,
   MoreHorizontal,
@@ -47,17 +49,14 @@ import {
   Upload,
 } from 'lucide-react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import TaskItem from '@tiptap/extension-task-item'
-import TaskList from '@tiptap/extension-task-list'
 import Collaboration from '@tiptap/extension-collaboration'
 import * as Y from 'yjs'
 import { pageBreadcrumbs, type PageIcon, type WorkspacePage } from './domain'
 import { useWorkspace } from './store'
 import { DatabaseBlock } from './DatabaseBlock'
 import { PageSyncSession } from './data/page-sync'
-import { migrateHtmlToNativeFragment } from './data/native-collaboration'
+import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 
 type PagePermission = { subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
@@ -93,6 +92,8 @@ const slashCommands: SlashCommand[] = [
   { label: '待办事项', hint: '可以勾选的任务', keywords: 'todo task check 待办 任务', icon: ListTodo, run: (editor) => { editor.chain().focus().toggleTaskList().run() } },
   { label: '引用', hint: '突出一句重要的话', keywords: 'quote blockquote 引用', icon: Quote, run: (editor) => { editor.chain().focus().toggleBlockquote().run() } },
   { label: '代码块', hint: '保留格式的代码', keywords: 'code block 代码', icon: Code2, run: (editor) => { editor.chain().focus().toggleCodeBlock().run() } },
+  { label: '提示框', hint: '突出背景、结论或提醒', keywords: 'callout note 提示 提醒', icon: Lightbulb, run: (editor) => { editor.chain().focus().insertContent({ type: 'callout', attrs: { tone: 'note', icon: '✦' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '输入提示内容…' }] }] }).run() } },
+  { label: '折叠内容', hint: '收纳可展开的详细信息', keywords: 'toggle details 折叠 展开', icon: ListCollapse, run: (editor) => { editor.chain().focus().insertContent({ type: 'toggle', attrs: { title: '展开查看', open: true }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '输入折叠内容…' }] }] }).run() } },
   { label: '分割线', hint: '分隔上下文', keywords: 'divider rule 分割线', icon: Minus, run: (editor) => { editor.chain().focus().setHorizontalRule().run() } },
 ]
 
@@ -687,9 +688,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ undoRedo: false }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
+      ...documentSchemaExtensions(),
       Placeholder.configure({ placeholder: "输入 '/' 插入内容，或直接开始书写…" }),
       Collaboration.configure({ document: syncSession?.document ?? loadingDocument, field: 'body' }),
       RemoteCursors,

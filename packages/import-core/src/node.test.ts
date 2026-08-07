@@ -95,6 +95,22 @@ describe('streaming ZIP preflight', () => {
     expect(asset?.referencedBy).toEqual([home?.id])
     expect(await readFile(join(assetStoreDir, asset!.relativePath), 'utf8')).toBe('same-image-bytes')
   })
+
+  it('normalizes Notion callouts, toggles and file links for native rich blocks', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'notetodo-rich-import-'))
+    temporaryDirectories.push(directory)
+    const archivePath = join(directory, 'Rich.zip')
+    await writeFile(archivePath, createStoredZip([
+      ['Rich.html', '<aside><p>Callout</p></aside><details open><summary>More</summary><p>Body</p></details><a href="files/brief.pdf">Brief</a>'],
+      ['files/brief.pdf', 'pdf-bytes'],
+    ]))
+    const bundle = await convertZipArchive(archivePath, { assetStoreDir: join(directory, 'store') })
+    const html = bundle.pages.find((page) => page.content.includes('Callout'))?.content ?? ''
+    expect(html).toContain('data-notetodo-callout')
+    expect(html).toContain('data-notetodo-toggle')
+    expect(html).toContain('data-notetodo-file')
+    expect(html).toContain('data-name="brief.pdf"')
+  })
 })
 
 /** Creates the smallest useful ZIP fixture using the uncompressed STORE method. */

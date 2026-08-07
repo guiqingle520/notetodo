@@ -55,4 +55,24 @@ describe('native Tiptap collaboration document', () => {
     expect(editor.getHTML().match(/同一旧页面/gu)).toHaveLength(1)
     editor.destroy(); first.destroy(); second.destroy(); restored.destroy()
   })
+
+  it('round-trips image, file, callout and toggle blocks through Yjs', () => {
+    const source = new Y.Doc()
+    migrateHtmlToNativeFragment(source, `
+      <aside data-notetodo-callout data-tone="warning" data-icon="!" class="rich-callout"><p>发布前检查</p></aside>
+      <details data-notetodo-toggle open><summary>技术细节</summary><div><p>离线优先</p></div></details>
+      <img src="notetodo-asset://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cover.png" alt="Cover">
+      <a data-notetodo-file data-name="brief.pdf" data-size="2048" data-mime="application/pdf" href="notetodo-asset://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/brief.pdf">brief.pdf</a>
+    `)
+    const remote = new Y.Doc()
+    Y.applyUpdate(remote, Y.encodeStateAsUpdate(source))
+    const editor = collaborativeEditor(remote)
+    const json = editor.getJSON()
+
+    expect(json.content?.map((node) => node.type).slice(0, 4)).toEqual(['callout', 'toggle', 'image', 'fileAttachment'])
+    expect(json.content?.[0]?.attrs).toMatchObject({ tone: 'warning', icon: '!' })
+    expect(json.content?.[1]?.attrs).toMatchObject({ title: '技术细节', open: true })
+    expect(json.content?.[3]?.attrs).toMatchObject({ name: 'brief.pdf', size: 2048, mimeType: 'application/pdf' })
+    editor.destroy(); source.destroy(); remote.destroy()
+  })
 })

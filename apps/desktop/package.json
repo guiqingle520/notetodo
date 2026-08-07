@@ -15,15 +15,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@notetodo/auth-core": "*",
     "@fontsource/dm-mono": "^5.1.1",
     "@fontsource/gelasio": "^5.1.1",
     "@fontsource/manrope": "^5.1.1",
+    "@notetodo/auth-core": "*",
     "@notetodo/database-core": "*",
     "@notetodo/import-core": "*",
     "@notetodo/sync-core": "*",
     "@tiptap/extension-collaboration": "^3.29.2",
     "@tiptap/extension-collaboration-caret": "^3.29.2",
+    "@tiptap/extension-image": "^3.29.2",
     "@tiptap/extension-placeholder": "^3.29.2",
     "@tiptap/extension-task-item": "^3.29.2",
     "@tiptap/extension-task-list": "^3.29.2",
