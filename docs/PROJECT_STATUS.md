@@ -62,11 +62,13 @@ Content Parity, Import & Retrieval Alpha — **进行中**
 - 应用异常退出后的导入任务自动标记失败，迁移台展示最近导入账本。
 - 富内容块第一批：原生 Image、File、Callout、Toggle 节点进入统一 Tiptap/Yjs Schema。
 - Notion Aside/Details/附件链接规范化为可编辑富内容节点，Callout/Toggle 加入 Slash 菜单。
+- 富内容块第二批：Bookmark、KaTeX Formula、动态 Table of Contents 和安全 Embed 节点。
+- HTTPS 书签白名单、受支持嵌入来源与 iframe sandbox；目录仅在正文变更时增量重建。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：14 个测试文件、52 个测试通过。
+- Vitest：15 个测试文件、56 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -93,14 +95,17 @@ Content Parity, Import & Retrieval Alpha — **进行中**
 - 附件哈希落盘、页面/附件链接重写、Schema v7 导入恢复：通过。
 - Image/File/Callout/Toggle 经 HTML → ProseMirror → Yjs → 远端编辑器往返：通过。
 - Callout Slash 插入、编辑状态和暖纸视觉 Chromium 验收：通过。
+- Bookmark/Formula/TOC/Embed 的 Yjs 往返、URL 协议与嵌入来源安全测试：通过。
+- 富内容装饰 DOM 多次 HTML/Yjs 迁移不重复正文：通过。
+- 动态目录 Slash 插入、标题派生和 Chromium 视觉验收：通过。
 - 隔离 Electron 烟雾测试：Schema v7、CSP、Preload、SQLite 与协作票据链路通过，退出码 0。
-- 全工作区：14 个测试文件、52 项测试通过。
+- 全工作区：15 个测试文件、56 项测试通过。
 
 ## 当前里程碑余项
 
 Content Parity, Import & Retrieval Alpha
 
-1. 扩展块 Schema：图片、文件、Callout、Toggle 已完成；继续书签、公式、目录和嵌入。
+1. 扩展块 Schema：图片、文件、Callout、Toggle、书签、公式、目录和嵌入已完成；继续块级工具栏和上传交互。
 2. 建立附件内容寻址存储、缩略图、垃圾回收和上传进度。
 3. Notion ZIP/HTML/Markdown/CSV、附件、链接重写、事务写入、进度取消和可恢复报告已完成。
 4. 增加页面历史、快照浏览、差异比较与恢复。

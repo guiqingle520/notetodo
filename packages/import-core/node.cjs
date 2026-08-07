@@ -210,8 +210,8 @@ function rewriteImportedLinks(html, sourcePath, pageId, pageIds, assetsByPath) {
   }
   return {
     html: sanitizeHtml(html, {
-      allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption', 'img', 'source'],
-      allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class', 'data-notetodo-callout', 'data-notetodo-toggle', 'data-tone', 'data-icon'], a: ['href', 'name', 'target', 'data-notetodo-file', 'data-name', 'data-size', 'data-mime'], img: ['src', 'alt', 'title', 'width', 'height'] },
+      allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption', 'img', 'source', 'nav', 'iframe'],
+      allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class', 'data-notetodo-callout', 'data-notetodo-toggle', 'data-notetodo-formula', 'data-notetodo-toc', 'data-notetodo-embed', 'data-tone', 'data-icon', 'data-expression', 'data-url', 'data-title'], a: ['href', 'name', 'target', 'data-notetodo-file', 'data-notetodo-bookmark', 'data-name', 'data-size', 'data-mime', 'data-title', 'data-description', 'data-site'], img: ['src', 'alt', 'title', 'width', 'height'], iframe: ['src', 'title', 'loading', 'sandbox', 'referrerpolicy'] },
       allowedSchemes: ['http', 'https', 'mailto', 'notetodo-page', 'notetodo-asset'],
       allowProtocolRelative: false,
       transformTags: { a: transform, img: transform, source: transform },
@@ -252,8 +252,8 @@ function renderMarkdown(markdown) {
 
 function sanitizeImportedHtml(html) {
   return sanitizeHtml(html, {
-    allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption', 'img', 'source'],
-    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class', 'data-notetodo-callout', 'data-notetodo-toggle', 'data-tone', 'data-icon'], a: ['href', 'name', 'target', 'data-notetodo-file', 'data-name', 'data-size', 'data-mime'], img: ['src', 'alt', 'title', 'width', 'height'] },
+    allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption', 'img', 'source', 'nav', 'iframe'],
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class', 'data-notetodo-callout', 'data-notetodo-toggle', 'data-notetodo-formula', 'data-notetodo-toc', 'data-notetodo-embed', 'data-tone', 'data-icon', 'data-expression', 'data-url', 'data-title'], a: ['href', 'name', 'target', 'data-notetodo-file', 'data-notetodo-bookmark', 'data-name', 'data-size', 'data-mime', 'data-title', 'data-description', 'data-site'], img: ['src', 'alt', 'title', 'width', 'height'], iframe: ['src', 'title', 'loading', 'sandbox', 'referrerpolicy'] },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowProtocolRelative: false,
     transformTags: {

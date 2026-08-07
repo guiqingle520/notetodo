@@ -101,7 +101,7 @@ describe('streaming ZIP preflight', () => {
     temporaryDirectories.push(directory)
     const archivePath = join(directory, 'Rich.zip')
     await writeFile(archivePath, createStoredZip([
-      ['Rich.html', '<aside><p>Callout</p></aside><details open><summary>More</summary><p>Body</p></details><a href="files/brief.pdf">Brief</a>'],
+      ['Rich.html', '<aside><p>Callout</p></aside><details open><summary>More</summary><p>Body</p></details><a href="files/brief.pdf">Brief</a><a data-notetodo-bookmark data-title="Docs" href="https://example.com">Docs</a><figure data-notetodo-formula data-expression="x^2"><code>x^2</code></figure><nav data-notetodo-toc>TOC</nav><iframe src="https://www.youtube.com/embed/abc" title="Video"></iframe>'],
       ['files/brief.pdf', 'pdf-bytes'],
     ]))
     const bundle = await convertZipArchive(archivePath, { assetStoreDir: join(directory, 'store') })
@@ -110,6 +110,10 @@ describe('streaming ZIP preflight', () => {
     expect(html).toContain('data-notetodo-toggle')
     expect(html).toContain('data-notetodo-file')
     expect(html).toContain('data-name="brief.pdf"')
+    expect(html).toContain('data-notetodo-bookmark')
+    expect(html).toContain('data-notetodo-formula')
+    expect(html).toContain('data-notetodo-toc')
+    expect(html).toContain('<iframe')
   })
 })
 

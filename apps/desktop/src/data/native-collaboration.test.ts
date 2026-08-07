@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import { Editor, type JSONContent } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import TaskItem from '@tiptap/extension-task-item'
 import TaskList from '@tiptap/extension-task-list'
@@ -14,6 +14,10 @@ function collaborativeEditor(document: Y.Doc, content = '') {
     extensions: [...collaborativeExtensions(document), RemoteCursors],
     content,
   })
+}
+
+function jsonText(node?: JSONContent): string {
+  return node?.text ?? node?.content?.map(jsonText).join('') ?? ''
 }
 
 describe('native Tiptap collaboration document', () => {
@@ -74,5 +78,38 @@ describe('native Tiptap collaboration document', () => {
     expect(json.content?.[1]?.attrs).toMatchObject({ title: '技术细节', open: true })
     expect(json.content?.[3]?.attrs).toMatchObject({ name: 'brief.pdf', size: 2048, mimeType: 'application/pdf' })
     editor.destroy(); source.destroy(); remote.destroy()
+  })
+
+  it('round-trips bookmark, formula, table of contents and embed blocks through Yjs', () => {
+    const source = new Y.Doc()
+    migrateHtmlToNativeFragment(source, `
+      <a data-notetodo-bookmark data-title="Tiptap" data-description="Editor framework" data-site="tiptap.dev" href="https://tiptap.dev/">Tiptap</a>
+      <figure data-notetodo-formula data-expression="c^2 = a^2 + b^2"><code>c^2 = a^2 + b^2</code></figure>
+      <nav data-notetodo-toc><strong>页面目录</strong></nav>
+      <figure data-notetodo-embed data-url="https://www.youtube.com/embed/dQw4w9WgXcQ" data-title="Video"><iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ"></iframe></figure>
+    `)
+    const editor = collaborativeEditor(source)
+    const types = editor.getJSON().content?.map((node) => node.type) ?? []
+    expect(types).toEqual(expect.arrayContaining(['bookmark', 'formula', 'tableOfContents', 'embed']))
+    expect(editor.getJSON().content?.find((node) => node.type === 'formula')?.attrs?.expression).toBe('c^2 = a^2 + b^2')
+    expect(editor.view.dom.querySelector('.rich-formula .katex')).not.toBeNull()
+    editor.destroy(); source.destroy()
+  })
+
+  it('keeps decorative callout and toggle chrome out of content after repeated HTML migration', () => {
+    const firstDocument = new Y.Doc()
+    migrateHtmlToNativeFragment(firstDocument, '<aside data-notetodo-callout data-icon="✦"><p>正文</p></aside><details data-notetodo-toggle open><summary>标题</summary><p>细节</p></details>')
+    const firstEditor = collaborativeEditor(firstDocument)
+    const serialized = firstEditor.getHTML()
+    const secondDocument = new Y.Doc()
+    migrateHtmlToNativeFragment(secondDocument, serialized)
+    const secondEditor = collaborativeEditor(secondDocument)
+
+    const callout = secondEditor.getJSON().content?.find((node) => node.type === 'callout')
+    const toggle = secondEditor.getJSON().content?.find((node) => node.type === 'toggle')
+    expect(jsonText(callout)).toBe('正文')
+    expect(jsonText(toggle)).toBe('细节')
+    expect(secondEditor.getHTML().match(/callout-glyph/g)).toHaveLength(1)
+    firstEditor.destroy(); secondEditor.destroy(); firstDocument.destroy(); secondDocument.destroy()
   })
 })

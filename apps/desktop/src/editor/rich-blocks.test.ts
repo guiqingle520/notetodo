@@ -1,0 +1,17 @@
+// @vitest-environment jsdom
+import { describe, expect, it } from 'vitest'
+import { normalizeEmbedUrl, safeHttpsUrl } from './rich-blocks'
+
+describe('rich block URL safety', () => {
+  it('accepts HTTPS bookmarks and rejects executable or insecure schemes', () => {
+    expect(safeHttpsUrl('https://example.com/path')).toBe('https://example.com/path')
+    expect(safeHttpsUrl('javascript:alert(1)')).toBe('')
+    expect(safeHttpsUrl('http://example.com')).toBe('')
+  })
+
+  it('normalizes supported embeds and rejects arbitrary iframe origins', () => {
+    expect(normalizeEmbedUrl('https://youtu.be/abc123')).toBe('https://www.youtube.com/embed/abc123')
+    expect(normalizeEmbedUrl('https://www.youtube.com/watch?v=abc123')).toBe('https://www.youtube.com/embed/abc123')
+    expect(normalizeEmbedUrl('https://attacker.example/embed')).toBe('')
+  })
+})

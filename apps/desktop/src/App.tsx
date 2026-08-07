@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   BookOpen,
   Bot,
+  Bookmark,
   CheckSquare2,
   CheckCircle2,
   ChevronDown,
@@ -26,6 +27,7 @@ import {
   List,
   ListOrdered,
   ListCollapse,
+  ListTree,
   ListTodo,
   Lightbulb,
   MessageSquare,
@@ -33,6 +35,7 @@ import {
   MoreHorizontal,
   PanelRightClose,
   PanelRightOpen,
+  PanelsTopLeft,
   Plus,
   Quote,
   RotateCcw,
@@ -40,6 +43,7 @@ import {
   ShieldCheck,
   Settings,
   Sparkles,
+  Sigma,
   Star,
   Trash2,
   Type,
@@ -58,6 +62,7 @@ import { DatabaseBlock } from './DatabaseBlock'
 import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
+import { normalizeEmbedUrl, safeHttpsUrl } from './editor/rich-blocks'
 
 type PagePermission = { subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
 type PageComment = { id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }
@@ -94,6 +99,10 @@ const slashCommands: SlashCommand[] = [
   { label: '代码块', hint: '保留格式的代码', keywords: 'code block 代码', icon: Code2, run: (editor) => { editor.chain().focus().toggleCodeBlock().run() } },
   { label: '提示框', hint: '突出背景、结论或提醒', keywords: 'callout note 提示 提醒', icon: Lightbulb, run: (editor) => { editor.chain().focus().insertContent({ type: 'callout', attrs: { tone: 'note', icon: '✦' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '输入提示内容…' }] }] }).run() } },
   { label: '折叠内容', hint: '收纳可展开的详细信息', keywords: 'toggle details 折叠 展开', icon: ListCollapse, run: (editor) => { editor.chain().focus().insertContent({ type: 'toggle', attrs: { title: '展开查看', open: true }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '输入折叠内容…' }] }] }).run() } },
+  { label: '网页书签', hint: '保存带摘要的网址卡片', keywords: 'bookmark url 书签 链接', icon: Bookmark, run: (editor) => { const input = window.prompt('输入 HTTPS 网页地址'); const url = safeHttpsUrl(input?.trim() ?? ''); if (!url) return; const parsed = new URL(url); editor.chain().focus().insertContent({ type: 'bookmark', attrs: { url, title: parsed.hostname.replace(/^www\./, ''), description: url, site: parsed.hostname } }).run() } },
+  { label: '公式', hint: '插入 KaTeX 块公式', keywords: 'formula math latex 公式 数学', icon: Sigma, run: (editor) => { const expression = window.prompt('输入 LaTeX 公式', 'E = mc^2')?.trim(); if (expression) editor.chain().focus().insertContent({ type: 'formula', attrs: { expression: expression.slice(0, 5000) } }).run() } },
+  { label: '页面目录', hint: '自动列出当前页面标题', keywords: 'toc contents 目录 大纲', icon: ListTree, run: (editor) => { editor.chain().focus().insertContent({ type: 'tableOfContents' }).run() } },
+  { label: '嵌入', hint: '嵌入视频、设计稿或地图', keywords: 'embed iframe video 嵌入 视频', icon: PanelsTopLeft, run: (editor) => { const input = window.prompt('输入支持的 HTTPS 嵌入地址'); const url = normalizeEmbedUrl(input?.trim() ?? ''); if (url) editor.chain().focus().insertContent({ type: 'embed', attrs: { url, title: '嵌入内容' } }).run() } },
   { label: '分割线', hint: '分隔上下文', keywords: 'divider rule 分割线', icon: Minus, run: (editor) => { editor.chain().focus().setHorizontalRule().run() } },
 ]
 
