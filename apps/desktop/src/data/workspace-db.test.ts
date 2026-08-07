@@ -48,6 +48,12 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     getPageVersion(pageId: string, versionId: number): null | { id: number; title: string; content: string }
     restorePageVersion(pageId: string, versionId: number): WorkspacePage
     hybridSearch(query: string, userId?: string | null, limit?: number): Array<{ citationId: string; pageId: string; title: string; excerpt: string; score: number }>
+    issueApiToken(name: string, scopes: string[], expiresAt?: string | null): { id: string; rawToken: string; scopes: string[] }
+    listApiTokens(): Array<{ id: string; name: string; prefix: string; scopes: string[]; revokedAt: string | null; lastUsedAt: string | null }>
+    authenticateApiToken(rawToken: string, requiredScope: string): null | { id: string; name: string; scopes: string[] }
+    revokeApiToken(id: string): boolean
+    recordApiAudit(entry: { requestId: string; tokenId: string | null; method: string; path: string; status: number; durationMs: number }): void
+    listApiAudit(limit?: number): Array<{ requestId: string; status: number; durationMs: number }>
     close(): void
   }
 }
@@ -212,6 +218,23 @@ describe('WorkspaceDatabase', () => {
     expect(database.hybridSearch('火星 推进剂', 'member-allowed').map((item) => item.pageId)).toContain('private-retrieval')
     expect(database.hybridSearch('火星 推进剂', 'member-denied').map((item) => item.pageId)).not.toContain('private-retrieval')
     expect(database.hybridSearch('火星 推进剂', 'member-allowed')[0]).toMatchObject({ citationId: 'S1' })
+  })
+
+  it('stores only API token hashes and enforces scopes, expiry and revocation', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const issued = database.issueApiToken('Local integration', ['pages:read', 'databases:read'])
+    expect(database.listApiTokens()[0]).not.toHaveProperty('rawToken')
+    expect(database.authenticateApiToken(issued.rawToken, 'pages:read')).toMatchObject({ id: issued.id, name: 'Local integration' })
+    expect(database.authenticateApiToken(issued.rawToken, 'pages:write')).toBeNull()
+    expect(database.listApiTokens()[0]?.lastUsedAt).toBeTruthy()
+    expect(database.revokeApiToken(issued.id)).toBe(true)
+    expect(database.authenticateApiToken(issued.rawToken, 'pages:read')).toBeNull()
+  })
+
+  it('records bounded API audit entries without credential material', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.recordApiAudit({ requestId: 'request-1', tokenId: null, method: 'GET', path: '/v1/pages', status: 200, durationMs: 4.4 })
+    expect(database.listApiAudit()).toEqual([expect.objectContaining({ requestId: 'request-1', status: 200, durationMs: 4 })])
   })
 
   it('replays incremental sync updates and compacts them into one durable snapshot', () => {

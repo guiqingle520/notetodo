@@ -5,7 +5,7 @@ const { Readable } = require('node:stream')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { ModelService } = require('./model-service.cjs')
 const { collectUnusedAssets, isRenderableImage, safeDisplayName, storeLocalAsset } = require('./asset-store.cjs')
-const { signRoomTicket } = require('@notetodo/auth-core')
+const { API_SCOPES, signRoomTicket } = require('@notetodo/auth-core')
 const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomUUID } = require('node:crypto')
 
@@ -117,6 +117,12 @@ function registerWorkspaceIpc(database) {
     if (typeof query !== 'string' || query.length > 500) throw new TypeError('Invalid search query.')
     return database.searchPages(query)
   })
+  ipcMain.handle('platform:list-tokens', () => database.listApiTokens())
+  ipcMain.handle('platform:issue-token', (_event, name, scopes) => {
+    if (!Array.isArray(scopes) || scopes.some((scope) => !API_SCOPES.includes(scope))) throw new TypeError('Invalid API token scopes.')
+    return database.issueApiToken(name, scopes)
+  })
+  ipcMain.handle('platform:revoke-token', (_event, id) => { assertId(id); return database.revokeApiToken(id) })
   ipcMain.handle('history:list', (_event, pageId) => { assertId(pageId); return database.listPageVersions(pageId) })
   ipcMain.handle('history:get', (_event, pageId, versionId) => {
     assertId(pageId)

@@ -27,6 +27,11 @@ contextBridge.exposeInMainWorld('notetodo', {
   retrieval: {
     search: (query, limit) => ipcRenderer.invoke('retrieval:search', query, limit),
   },
+  platform: {
+    listTokens: () => ipcRenderer.invoke('platform:list-tokens'),
+    issueToken: (name, scopes) => ipcRenderer.invoke('platform:issue-token', name, scopes),
+    revokeToken: (id) => ipcRenderer.invoke('platform:revoke-token', id),
+  },
   database: {
     loadByPage: (pageId) => ipcRenderer.invoke('database:load-by-page', pageId),
     updateCell: (recordId, propertyId, value) => ipcRenderer.invoke('database:update-cell', recordId, propertyId, value),

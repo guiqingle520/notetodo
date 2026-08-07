@@ -414,6 +414,32 @@ button { color: inherit; }
 .settings-card footer .test-model { background: #f4f0e7; }
 .settings-card footer .save-model { color: white; border-color: var(--accent); background: var(--accent); }
 .settings-card footer button:disabled { opacity: .55; cursor: wait; }
+.platform-token-card { margin-top: 16px; }
+.token-issuer { min-height: 55px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 9px 14px; border-bottom: 1px solid rgba(36,39,34,.08); }
+.token-issuer input { height: 34px; border: 1px solid rgba(36,39,34,.16); outline: 0; padding: 0 9px; background: #f7f3ea; font-size: 9px; }
+.token-issuer input:focus { border-color: var(--accent); background: #fffdf7; }
+.token-issuer button { height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 11px; color: #fff8ec; border: 0; background: #343830; font-size: 8px; cursor: pointer; }
+.token-issuer button:disabled { opacity: .45; cursor: default; }
+.token-scopes { display: grid; grid-template-columns: repeat(2, 1fr); border-bottom: 1px solid rgba(36,39,34,.08); }
+.token-scopes label { min-height: 39px; display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 5px; padding: 0 12px; border-right: 1px solid rgba(36,39,34,.07); border-bottom: 1px solid rgba(36,39,34,.055); cursor: pointer; }
+.token-scopes label:nth-child(even) { border-right: 0; }
+.token-scopes input { accent-color: var(--accent); }
+.token-scopes span { color: #555950; font-size: 8px; }
+.token-scopes code { color: #9a9a91; font: 6px 'DM Mono', monospace; }
+.issued-token { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; margin: 10px 12px; padding: 9px; color: #e9e5d9; background: #262a24; box-shadow: 3px 3px 0 rgba(70,77,67,.16); }
+.issued-token > span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.issued-token small { color: #c5654d; font: 6px 'DM Mono', monospace; letter-spacing: .09em; }
+.issued-token code { overflow: hidden; color: #d7ddd1; font: 7px 'DM Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }
+.issued-token button { height: 27px; display: flex; align-items: center; gap: 5px; color: #d4d7cf; border: 1px solid rgba(255,255,255,.1); background: transparent; font-size: 7px; cursor: pointer; }
+.token-ledger > div { min-height: 59px; display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 9px; padding: 8px 13px; border-top: 1px solid rgba(36,39,34,.07); }
+.token-ledger > div > i { width: 28px; height: 28px; display: grid; place-items: center; color: #e6e9df; background: #576355; font: normal 8px 'DM Mono', monospace; }
+.token-ledger > div > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.token-ledger strong { color: #454940; font-size: 9px; }
+.token-ledger code, .token-ledger small { color: #96988e; font: 7px 'DM Mono', monospace; }
+.token-ledger button { width: 28px; height: 28px; display: grid; place-items: center; color: #9b6355; border: 1px solid rgba(155,99,85,.18); background: transparent; cursor: pointer; }
+.token-ledger em { color: #a3a39a; font: normal 7px 'DM Mono', monospace; }
+.token-ledger .is-revoked { opacity: .52; }
+.token-ledger > p { margin: 0; padding: 19px; color: #9a9b92; text-align: center; font: 8px 'DM Mono', monospace; }
 .settings-message { max-width: 690px; min-height: 39px; display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 12px; font: 8px 'DM Mono', monospace; }
 .settings-message.is-success { color: #4f7653; border: 1px solid #c8dbc7; background: #e5efe3; }
 .settings-message.is-error { color: #a04433; border: 1px solid #e2c5ba; background: #f3dfd6; }

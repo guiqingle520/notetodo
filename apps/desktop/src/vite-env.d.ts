@@ -19,6 +19,11 @@ interface Window {
     retrieval: {
       search: (query: string, limit?: number) => Promise<Array<{ citationId: string; pageId: string; chunkIndex: number; title: string; heading: string; excerpt: string; score: number }>>
     }
+    platform: {
+      listTokens: () => Promise<Array<{ id: string; name: string; prefix: string; scopes: import('@notetodo/auth-core').ApiScope[]; expiresAt: string | null; revokedAt: string | null; lastUsedAt: string | null; createdAt: string }>>
+      issueToken: (name: string, scopes: import('@notetodo/auth-core').ApiScope[]) => Promise<{ id: string; name: string; rawToken: string; prefix: string; scopes: import('@notetodo/auth-core').ApiScope[]; createdAt: string }>
+      revokeToken: (id: string) => Promise<boolean>
+    }
     database: {
       loadByPage: (pageId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot | null>
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<void>

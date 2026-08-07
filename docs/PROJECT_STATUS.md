@@ -86,11 +86,15 @@ Content Parity, Import & Retrieval Alpha — **已完成**
 - Relation 目标记录强校验、派生字段只读持久化边界，以及旧工作区幂等数据补齐。
 - 空白页、会议纪要、项目简报和每周计划本地模板库。
 - 确定性基础自动化引擎：属性变更触发、条件匹配、有界动作与派生字段写入拦截。
+- Open Platform Alpha 起步：一次性明文 API 令牌、SHA-256 摘要存储、六类细粒度作用域与撤销。
+- SQLite Schema v10：API 令牌与不含凭据/正文的请求审计账本。
+- 只监听本机的 REST API：页面读写、数据库读取、单元格更新、统一错误、1 MiB 请求上限和每令牌限流。
+- 桌面设置页 API 凭证台账：作用域选择、签发、一次性复制、最近使用与撤销。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：20 个测试文件、82 个测试通过。
+- Vitest：21 个测试文件、90 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -146,7 +150,7 @@ Content Parity, Import & Retrieval Alpha
 
 Open Platform & External Automation Alpha
 
-1. 工作区 REST API 与细粒度令牌权限。
+1. 工作区 REST API 与细粒度令牌权限已交付 Alpha；后续补充分页、ETag 与公开 OpenAPI 文档。
 2. 可签名、可重试、可观测的 Webhook Outbox。
 3. 用户可编辑自动化规则、执行日志和失败重放。
 4. MCP Server 读写工作区与自定义模型工具调用闭环。

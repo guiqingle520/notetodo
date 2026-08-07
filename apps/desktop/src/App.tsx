@@ -74,6 +74,7 @@ import { normalizeEmbedUrl, safeHttpsUrl } from './editor/rich-blocks'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
 import { diffHistoryHtml, historyTextLines } from './data/page-history'
 import { pageTemplates } from './data/page-templates'
+import type { ApiScope } from '@notetodo/auth-core'
 
 type PagePermission = { subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
 type PageComment = { id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }
@@ -450,17 +451,45 @@ function NotificationPanel({ onClose, onCountChange }: { onClose: () => void; on
 }
 
 type ModelForm = { provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; apiKey: string; hasApiKey: boolean }
+type PlatformToken = { id: string; name: string; prefix: string; scopes: ApiScope[]; revokedAt: string | null; lastUsedAt: string | null; createdAt: string }
+const platformScopes: Array<{ id: ApiScope; label: string }> = [
+  { id: 'pages:read', label: '页面读取' }, { id: 'pages:write', label: '页面写入' },
+  { id: 'databases:read', label: '数据库读取' }, { id: 'databases:write', label: '数据库写入' },
+  { id: 'webhooks:manage', label: 'Webhook 管理' }, { id: 'automations:manage', label: '自动化管理' },
+]
 
 function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<ModelForm>({ provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b', apiKey: '', hasApiKey: false })
   const [state, setState] = useState<'idle' | 'saving' | 'testing' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
+  const [tokens, setTokens] = useState<PlatformToken[]>([])
+  const [tokenName, setTokenName] = useState('本地集成')
+  const [tokenScopes, setTokenScopes] = useState<ApiScope[]>(['pages:read'])
+  const [issuedSecret, setIssuedSecret] = useState('')
 
   useEffect(() => {
     if (window.notetodo?.model) {
       void window.notetodo.model.getConfig().then((config) => setForm({ ...config, apiKey: '' }))
     }
+    if (window.notetodo?.platform) void window.notetodo.platform.listTokens().then(setTokens)
   }, [])
+
+  const issueToken = async () => {
+    if (!tokenName.trim() || !tokenScopes.length) return
+    if (!window.notetodo?.platform) { setMessage('访问令牌需要在桌面应用中签发。'); setState('error'); return }
+    try {
+      const issued = await window.notetodo.platform.issueToken(tokenName.trim(), tokenScopes)
+      setIssuedSecret(issued.rawToken)
+      setTokens(await window.notetodo.platform.listTokens())
+      setState('success'); setMessage('令牌已签发。请现在复制，关闭后无法再查看明文。')
+    } catch (error) { setState('error'); setMessage(error instanceof Error ? error.message : '令牌签发失败。') }
+  }
+
+  const revokeToken = async (id: string) => {
+    if (!window.notetodo?.platform) return
+    await window.notetodo.platform.revokeToken(id)
+    setTokens(await window.notetodo.platform.listTokens())
+  }
 
   const save = async () => {
     setState('saving')
@@ -506,6 +535,13 @@ function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
           <label><span>模型名称</span><input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} placeholder="qwen3:8b" /></label>
           <label><span>API Key <small>{form.hasApiKey ? '已有加密密钥' : '本地模型可留空'}</small></span><div className="secret-input"><KeyRound size={14} /><input type="password" value={form.apiKey} onChange={(event) => setForm({ ...form, apiKey: event.target.value })} placeholder={form.hasApiKey ? '输入新值以替换现有密钥' : 'sk-…'} /></div></label>
           <footer><button className="test-model" onClick={() => void test()} disabled={state === 'testing'}><Wifi size={14} />{state === 'testing' ? '连接中…' : '测试连接'}</button><button className="save-model" onClick={() => void save()} disabled={state === 'saving'}>{state === 'saving' ? '保存中…' : '保存配置'}</button></footer>
+        </section>
+        <section className="settings-card platform-token-card">
+          <div className="settings-card-title"><KeyRound size={17} /><span><strong>API 访问令牌</strong><small>为 REST API、MCP 与本地集成授权</small></span><i>LOCAL API</i></div>
+          <div className="token-issuer"><input value={tokenName} maxLength={100} onChange={(event) => setTokenName(event.target.value)} placeholder="令牌名称" /><button disabled={!tokenName.trim() || !tokenScopes.length} onClick={() => void issueToken()}><Plus size={13} />签发令牌</button></div>
+          <div className="token-scopes">{platformScopes.map((scope) => <label key={scope.id}><input type="checkbox" checked={tokenScopes.includes(scope.id)} onChange={(event) => setTokenScopes((current) => event.target.checked ? [...current, scope.id] : current.filter((item) => item !== scope.id))} /><span>{scope.label}</span><code>{scope.id}</code></label>)}</div>
+          {issuedSecret && <div className="issued-token"><span><small>ONLY SHOWN ONCE</small><code>{issuedSecret}</code></span><button onClick={() => void navigator.clipboard.writeText(issuedSecret)}><Copy size={13} />复制</button><button onClick={() => setIssuedSecret('')}><X size={13} /></button></div>}
+          <div className="token-ledger">{tokens.map((token) => <div className={token.revokedAt ? 'is-revoked' : ''} key={token.id}><i>{token.name.slice(0, 1).toLocaleUpperCase()}</i><span><strong>{token.name}</strong><code>{token.prefix}</code><small>{token.lastUsedAt ? `最近使用 ${new Date(token.lastUsedAt).toLocaleString('zh-CN')}` : '尚未使用'} · {token.scopes.length} 项权限</small></span>{token.revokedAt ? <em>已撤销</em> : <button aria-label={`撤销 ${token.name}`} onClick={() => void revokeToken(token.id)}><Trash2 size={13} /></button>}</div>)}{!tokens.length && <p>尚未签发任何访问令牌。</p>}</div>
         </section>
         {message && <div className={`settings-message is-${state}`}>{state === 'success' ? <CheckCircle2 size={15} /> : <CircleHelp size={15} />}{message}</div>}
         <div className="privacy-note"><ShieldCheck size={18} /><div><strong>密钥安全边界</strong><p>桌面端使用 Windows DPAPI / macOS Keychain 对密钥加密。Renderer、页面数据库、日志和错误报告都不会取得明文密钥。</p></div></div>

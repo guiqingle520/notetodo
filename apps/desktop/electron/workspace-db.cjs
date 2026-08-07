@@ -2,8 +2,9 @@ const { DatabaseSync } = require('node:sqlite')
 const { randomUUID } = require('node:crypto')
 const seedWorkspace = require('../shared/seed-workspace.json')
 const { chunkPage, cosineSimilarity, embedText, fuseRankings } = require('./retrieval-core.cjs')
+const { createApiToken, verifyApiToken } = require('@notetodo/auth-core')
 
-const LATEST_SCHEMA_VERSION = 9
+const LATEST_SCHEMA_VERSION = 10
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -320,6 +321,38 @@ class WorkspaceDatabase {
         CREATE INDEX search_chunks_page ON search_chunks(page_id, chunk_index);
         CREATE VIRTUAL TABLE search_chunks_fts USING fts5(page_id UNINDEXED, heading, text, tokenize='unicode61');
         INSERT INTO app_meta(key, value) VALUES ('schema_version', '9')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
+    if (currentVersion < 10) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE api_tokens (
+          id TEXT PRIMARY KEY CHECK(length(id) = 36),
+          name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
+          token_prefix TEXT NOT NULL,
+          secret_hash TEXT NOT NULL CHECK(length(secret_hash) = 64),
+          scopes_json TEXT NOT NULL,
+          expires_at TEXT,
+          revoked_at TEXT,
+          last_used_at TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX api_tokens_active ON api_tokens(revoked_at, expires_at);
+        CREATE TABLE api_audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          request_id TEXT NOT NULL,
+          token_id TEXT REFERENCES api_tokens(id) ON DELETE SET NULL,
+          method TEXT NOT NULL,
+          path TEXT NOT NULL,
+          status INTEGER NOT NULL,
+          duration_ms INTEGER NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX api_audit_time ON api_audit_log(created_at DESC, id DESC);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '10')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value;
         COMMIT;
       `)
@@ -858,7 +891,12 @@ class WorkspaceDatabase {
   }
 
   updateDatabaseCell(recordId, propertyId, value) {
-    const property = this.database.prepare('SELECT type, config_json FROM database_properties WHERE id = ?').get(propertyId)
+    const property = this.database.prepare(`
+      SELECT property.type, property.config_json
+      FROM database_properties property
+      JOIN database_records record ON record.id = ? AND record.database_id = property.database_id
+      WHERE property.id = ?
+    `).get(recordId, propertyId)
     if (!property) throw new Error('Database property does not exist.')
     if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
     const now = new Date().toISOString()
@@ -908,6 +946,66 @@ class WorkspaceDatabase {
 
   setSetting(key, value) {
     this.database.prepare('INSERT INTO app_meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+  }
+
+  issueApiToken(name, scopes, expiresAt = null) {
+    const safeName = String(name).trim()
+    if (!safeName || safeName.length > 100) throw new TypeError('API token name must contain 1 to 100 characters.')
+    if (expiresAt !== null && !Number.isFinite(Date.parse(expiresAt))) throw new TypeError('API token expiry must be a valid ISO date.')
+    const created = createApiToken(scopes)
+    const now = new Date().toISOString()
+    this.database.prepare(`
+      INSERT INTO api_tokens(id, name, token_prefix, secret_hash, scopes_json, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(created.id, safeName, created.prefix, created.secretHash, JSON.stringify(created.scopes), expiresAt, now)
+    return { id: created.id, name: safeName, rawToken: created.rawToken, prefix: created.prefix, scopes: created.scopes, expiresAt, createdAt: now }
+  }
+
+  listApiTokens() {
+    return this.database.prepare(`
+      SELECT id, name, token_prefix, scopes_json, expires_at, revoked_at, last_used_at, created_at
+      FROM api_tokens ORDER BY created_at DESC
+    `).all().map((row) => ({
+      id: row.id, name: row.name, prefix: row.token_prefix, scopes: JSON.parse(row.scopes_json),
+      expiresAt: row.expires_at, revokedAt: row.revoked_at, lastUsedAt: row.last_used_at, createdAt: row.created_at,
+    }))
+  }
+
+  authenticateApiToken(rawToken, requiredScope) {
+    const tokenId = /^ntd_v1_([0-9a-f-]{36})_/u.exec(rawToken)?.[1]
+    if (!tokenId) return null
+    const row = this.database.prepare(`
+      SELECT id, name, secret_hash, scopes_json, expires_at, revoked_at FROM api_tokens WHERE id = ?
+    `).get(tokenId)
+    if (!row) return null
+    const stored = { id: row.id, secretHash: row.secret_hash, scopes: JSON.parse(row.scopes_json), expiresAt: row.expires_at, revokedAt: row.revoked_at }
+    if (!verifyApiToken(rawToken, stored, requiredScope)) return null
+    const lastUsedAt = new Date().toISOString()
+    this.database.prepare('UPDATE api_tokens SET last_used_at = ? WHERE id = ?').run(lastUsedAt, row.id)
+    return { id: row.id, name: row.name, scopes: stored.scopes, lastUsedAt }
+  }
+
+  revokeApiToken(id) {
+    const revokedAt = new Date().toISOString()
+    const result = this.database.prepare('UPDATE api_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(revokedAt, id)
+    return result.changes > 0
+  }
+
+  recordApiAudit(entry) {
+    this.database.prepare(`
+      INSERT INTO api_audit_log(request_id, token_id, method, path, status, duration_ms, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(entry.requestId.slice(0, 128), entry.tokenId ?? null, entry.method.slice(0, 10), entry.path.slice(0, 2048), entry.status, Math.max(0, Math.round(entry.durationMs)), new Date().toISOString())
+  }
+
+  listApiAudit(limit = 100) {
+    return this.database.prepare(`
+      SELECT request_id, token_id, method, path, status, duration_ms, created_at
+      FROM api_audit_log ORDER BY created_at DESC, id DESC LIMIT ?
+    `).all(Math.max(1, Math.min(500, Number(limit) || 100))).map((row) => ({
+      requestId: row.request_id, tokenId: row.token_id, method: row.method, path: row.path,
+      status: row.status, durationMs: row.duration_ms, createdAt: row.created_at,
+    }))
   }
 
   loadSyncDocument(pageId) {
