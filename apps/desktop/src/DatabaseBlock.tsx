@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Activity, ArrowRight, ArrowUpDown, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Filter, Images, Layers3, Link2, List, Plus, RotateCcw, Sigma, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecords, safeGalleryCover, timelineDays, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseViewConfig, type FilterRule, type PropertyValue, type SortRule } from '@notetodo/database-core'
+import { buildCalendarMonth, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseViewConfig, type FilterRule, type PropertyValue, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
 const ROW_HEIGHT = 42
 const VIEWPORT_HEIGHT = 336
 const OVERSCAN = 5
+const LIST_ROW_HEIGHT = 43
+const BOARD_CARD_HEIGHT = 122
 const statuses = [
   { id: 'todo', label: '待开始' },
   { id: 'doing', label: '进行中' },
@@ -22,6 +24,8 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
   const [automationOpen, setAutomationOpen] = useState(false)
   const [automations, setAutomations] = useState<AutomationRule[]>([])
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([])
+  const projectionCache = useRef<{ schemaId: string; records: DatabaseRecord[] }>({ schemaId: '', records: [] })
+  const changedRecordIds = useRef(new Set<string>())
 
   useEffect(() => { void databaseRepository.loadByPage(pageId).then(setSnapshot) }, [pageId])
   useEffect(() => {
@@ -32,7 +36,15 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
 
   // Rollups and formulas are computed once per snapshot, never persisted back.
   // This keeps sort/filter cheap while making every view consume identical data.
-  const derivedRecords = useMemo(() => snapshot ? resolveDerivedRecords(snapshot.schema, snapshot.records) : [], [snapshot])
+  const projection = useMemo(() => {
+    if (!snapshot) return { records: [], recomputedCount: 0 }
+    const previous = projectionCache.current.schemaId === snapshot.schema.id ? projectionCache.current.records : undefined
+    const result = resolveDerivedRecordsIncremental(snapshot.schema, snapshot.records, previous, changedRecordIds.current)
+    projectionCache.current = { schemaId: snapshot.schema.id, records: result.records }
+    changedRecordIds.current.clear()
+    return result
+  }, [snapshot])
+  const derivedRecords = projection.records
   const activeView = snapshot ? snapshot.views.find((view) => view.id === snapshot.activeViewId) ?? snapshot.views[0] : undefined
   const queriedRecords = useMemo(() => snapshot && activeView ? queryRecords(
     derivedRecords,
@@ -55,6 +67,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
         ? editedRecord
         : record),
     }
+    changedRecordIds.current.add(recordId)
     setSnapshot(next)
     void databaseRepository.updateCell(next, recordId, propertyId, value).then(async (result) => {
       // Desktop automation runs in the same SQLite transaction as the user's
@@ -108,7 +121,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
           <button className="database-new" onClick={addRecord}><Plus size={13} />新建</button>
         </div>
       </div>
-      <div className="database-summary"><span>{snapshot.schema.name.toLocaleUpperCase()}</span><span>{records.length} / {snapshot.records.length} RECORDS</span></div>
+      <div className="database-summary"><span>{snapshot.schema.name.toLocaleUpperCase()}</span><span className="database-compute-mark">Δ {projection.recomputedCount} RECALCULATED</span><span>{records.length} / {snapshot.records.length} RECORDS</span></div>
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
       {recordGroups.length > 0 && <div className="database-group-ledger"><span>GROUP LEDGER</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
       {activeView.type === 'table' && <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} />}
@@ -359,17 +372,16 @@ function parseAutomationValue(property: DatabaseProperty | undefined, value: str
   return value
 }
 
-function VirtualTable({ records, allRecords, updateCell }: { records: DatabaseRecord[]; allRecords: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+export function VirtualTable({ records, allRecords, updateCell }: { records: DatabaseRecord[]; allRecords: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
   const [scrollTop, setScrollTop] = useState(0)
-  const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN)
-  const end = Math.min(records.length, Math.ceil((scrollTop + VIEWPORT_HEIGHT) / ROW_HEIGHT) + OVERSCAN)
+  const { start, end, totalSize } = virtualWindow(records.length, scrollTop, ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
   const visible = records.slice(start, end)
 
   return (
     <div className="database-table">
       <div className="database-grid database-grid-head"><span>任务</span><span>状态</span><span>负责人</span><span>截止日期</span><span>优先级</span><span><Link2 size={11} />依赖</span><span><Sigma size={11} />汇总</span><span>ƒ 风险</span></div>
       <div className="database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(ROW_HEIGHT, records.length * ROW_HEIGHT)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-        <div className="database-row-space" style={{ height: records.length * ROW_HEIGHT }}>
+        <div className="database-row-space" style={{ height: totalSize }}>
           {visible.map((record, offset) => (
             <div className="database-grid database-grid-row" key={record.id} style={{ transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}>
               <input value={String(record.values['task-title'] ?? '')} onChange={(event) => updateCell(record.id, 'task-title', event.target.value)} />
@@ -391,12 +403,20 @@ function VirtualTable({ records, allRecords, updateCell }: { records: DatabaseRe
 function RelationCell({ record, records, updateCell }: { record: DatabaseRecord; records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
   const relatedIds = Array.isArray(record.values['task-dependencies']) ? record.values['task-dependencies'] : []
   const label = relatedIds.map((id) => records.find((candidate) => candidate.id === id)?.values['task-title']).filter(Boolean).join('、')
-  const candidates = records.filter((candidate) => candidate.id !== record.id && !relatedIds.includes(candidate.id))
+  // A native select with 10k options multiplied by every visible row defeats
+  // table virtualization. Keep a strict DOM budget; a searchable relation
+  // picker can page beyond this fast path in a later interaction.
+  const candidates: DatabaseRecord[] = []
+  for (const candidate of records) {
+    if (candidate.id !== record.id && !relatedIds.includes(candidate.id)) candidates.push(candidate)
+    if (candidates.length >= 100) break
+  }
   return <div className="relation-cell" title={label || '暂无依赖'}>
     <button type="button" disabled={!relatedIds.length} onClick={() => updateCell(record.id, 'task-dependencies', [])}>{relatedIds.length ? `${relatedIds.length} 项` : '无'}</button>
     <select aria-label={`为 ${record.values['task-title']} 添加依赖`} value="" onChange={(event) => event.target.value && updateCell(record.id, 'task-dependencies', [...relatedIds, event.target.value])}>
       <option value="">+关联</option>
       {candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.values['task-title']}</option>)}
+      {records.length > candidates.length + relatedIds.length + 1 && <option value="" disabled>继续输入以检索更多…</option>}
     </select>
   </div>
 }
@@ -406,13 +426,20 @@ function StatusSelect({ record, updateCell }: { record: DatabaseRecord; updateCe
   return <select className={`status-select status-${value}`} value={value} onChange={(event) => updateCell(record.id, 'task-status', event.target.value)}>{statuses.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}</select>
 }
 
-function BoardView({ records, updateCell }: { records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
-  return <div className="database-board">{statuses.map((status) => {
-    const group = records.filter((record) => record.values['task-status'] === status.id)
-    return <div className="board-column" key={status.id}><header><span className={`status-dot status-${status.id}`} />{status.label}<em>{group.length}</em></header><div>{group.map((record) => <article key={record.id}><strong>{record.values['task-title']}</strong><span><i>{record.values['task-owner'] || '未分配'}</i><time>{record.values['task-due']}</time></span><small className={record.values['task-risk'] === '需关注' ? 'is-risk' : ''}>{record.values['task-risk']} · 依赖分 {record.values['task-dependency-score'] ?? 0}</small><button onClick={() => updateCell(record.id, 'task-status', status.id === 'todo' ? 'doing' : status.id === 'doing' ? 'done' : 'todo')}>推进状态 →</button></article>)}</div></div>
-  })}</div>
+export function BoardView({ records, updateCell }: { records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const groups = new Map(statuses.map((status) => [status.id, [] as DatabaseRecord[]]))
+  for (const record of records) groups.get(String(record.values['task-status']))?.push(record)
+  return <div className="database-board">{statuses.map((status) => <VirtualBoardColumn key={status.id} status={status} records={groups.get(status.id) ?? []} updateCell={updateCell} />)}</div>
 }
 
-function ListView({ records, updateCell }: { records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
-  return <div className="database-list">{records.map((record, index) => <div key={record.id}><span className="list-index">{String(index + 1).padStart(2, '0')}</span><input value={String(record.values['task-title'] ?? '')} onChange={(event) => updateCell(record.id, 'task-title', event.target.value)} /><StatusSelect record={record} updateCell={updateCell} /><span>{record.values['task-owner']}</span><time>{record.values['task-due']}</time></div>)}</div>
+function VirtualBoardColumn({ status, records, updateCell }: { status: typeof statuses[number]; records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const [scrollTop, setScrollTop] = useState(0)
+  const { start, end, totalSize } = virtualWindow(records.length, scrollTop, BOARD_CARD_HEIGHT, 360, 3)
+  return <div className="board-column"><header><span className={`status-dot status-${status.id}`} />{status.label}<em>{records.length}</em></header><div className="board-card-viewport" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="board-card-space" style={{ height: Math.max(230, totalSize) }}>{records.slice(start, end).map((record, offset) => <article key={record.id} style={{ transform: `translateY(${(start + offset) * BOARD_CARD_HEIGHT}px)` }}><strong>{record.values['task-title']}</strong><span><i>{record.values['task-owner'] || '未分配'}</i><time>{record.values['task-due']}</time></span><small className={record.values['task-risk'] === '需关注' ? 'is-risk' : ''}>{record.values['task-risk']} · 依赖分 {record.values['task-dependency-score'] ?? 0}</small><button onClick={() => updateCell(record.id, 'task-status', status.id === 'todo' ? 'doing' : status.id === 'doing' ? 'done' : 'todo')}>推进状态 →</button></article>)}</div></div></div>
+}
+
+export function ListView({ records, updateCell }: { records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const [scrollTop, setScrollTop] = useState(0)
+  const { start, end, totalSize } = virtualWindow(records.length, scrollTop, LIST_ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
+  return <div className="database-list" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="database-list-space" style={{ height: totalSize }}>{records.slice(start, end).map((record, offset) => <div className="database-list-row" key={record.id} style={{ transform: `translateY(${(start + offset) * LIST_ROW_HEIGHT}px)` }}><span className="list-index">{String(start + offset + 1).padStart(2, '0')}</span><input value={String(record.values['task-title'] ?? '')} onChange={(event) => updateCell(record.id, 'task-title', event.target.value)} /><StatusSelect record={record} updateCell={updateCell} /><span>{record.values['task-owner']}</span><time>{record.values['task-due']}</time></div>)}</div></div>
 }

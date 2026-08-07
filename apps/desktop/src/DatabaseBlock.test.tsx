@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema } from '@notetodo/database-core'
-import { GalleryView, TimelineView, ViewRulesPanel } from './DatabaseBlock'
+import { BoardView, GalleryView, ListView, TimelineView, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -63,5 +63,32 @@ describe('ViewRulesPanel', () => {
     fireEvent.click(getByRole('button', { name: '保存到当前视图' }))
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ filterMode: 'or', filters: expect.arrayContaining([expect.objectContaining({ propertyId: 'status', value: 'todo' })]) }))
     expect(onSave.mock.calls[0]?.[0].filters).toHaveLength(2)
+  })
+})
+
+describe('large database DOM budgets', () => {
+  const manyRecords = Array.from({ length: 10_000 }, (_, index): DatabaseRecord => ({
+    id: `task-${index}`,
+    values: { 'task-title': `Task ${index}`, 'task-status': ['todo', 'doing', 'done'][index % 3]!, 'task-owner': 'Lin', 'task-due': '2026-08-07' },
+    createdAt: '', updatedAt: '',
+  }))
+
+  it('windows List rows instead of mounting all records', () => {
+    const { container } = render(<ListView records={manyRecords} updateCell={vi.fn()} />)
+    expect(container.querySelectorAll('.database-list-row').length).toBeLessThanOrEqual(14)
+    expect(container.querySelector<HTMLElement>('.database-list-space')?.style.height).toBe('430000px')
+  })
+
+  it('windows each Board column independently', () => {
+    const { container } = render(<BoardView records={manyRecords} updateCell={vi.fn()} />)
+    expect(container.querySelectorAll('.board-column')).toHaveLength(3)
+    expect(container.querySelectorAll('.board-column article').length).toBeLessThanOrEqual(18)
+    expect(container.querySelectorAll('.board-card-space')).toHaveLength(3)
+  })
+
+  it('bounds Table rows and relation options together', () => {
+    const { container } = render(<VirtualTable records={manyRecords} allRecords={manyRecords} updateCell={vi.fn()} />)
+    expect(container.querySelectorAll('.database-grid-row').length).toBeLessThanOrEqual(14)
+    expect(container.querySelectorAll('.relation-cell option').length).toBeLessThanOrEqual(1_430)
   })
 })

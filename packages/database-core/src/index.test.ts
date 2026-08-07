@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecords, runDatabaseAutomations, safeGalleryCover, timelineDays, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, timelineDays, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -99,6 +99,29 @@ describe('database query engine', () => {
       { id: 'c', values: { score: 4 }, createdAt: '', updatedAt: '' },
     ])
     expect(derived[0]?.values).toMatchObject({ 'dependency-score': 7, label: '合计 7' })
+  })
+
+  it('incrementally recomputes only edited records and rollup dependents at 10k scale', () => {
+    const schema: DatabaseSchema = { id: 'large', name: 'Large', properties: [
+      { id: 'score', name: 'Score', type: 'number' },
+      { id: 'dependencies', name: 'Dependencies', type: 'relation', relation: { databaseId: 'large' } },
+      { id: 'total', name: 'Total', type: 'rollup', rollup: { relationPropertyId: 'dependencies', targetPropertyId: 'score', aggregation: 'sum' } },
+      { id: 'label', name: 'Label', type: 'formula', formula: { expression: 'concat("P", [total])' } },
+    ] }
+    const many = Array.from({ length: 10_000 }, (_, index): DatabaseRecord => ({ id: String(index), values: { score: index, dependencies: index > 0 && index % 1000 === 0 ? ['0'] : [] }, createdAt: '', updatedAt: '1' }))
+    const previous = resolveDerivedRecords(schema, many)
+    const changed = many.map((record, index) => index === 0 ? { ...record, values: { ...record.values, score: 99 }, updatedAt: '2' } : record)
+    const start = performance.now(); const result = resolveDerivedRecordsIncremental(schema, changed, previous, ['0'])
+
+    expect(result.recomputedCount).toBe(10)
+    expect(result.records[1]).toBe(previous[1])
+    expect(result.records[1000]?.values).toMatchObject({ total: 99, label: 'P99' })
+    expect(performance.now() - start).toBeLessThan(150)
+  })
+
+  it('keeps virtual render windows bounded for million-row coordinates', () => {
+    expect(virtualWindow(1_000_000, 21_000_000, 42, 336, 5)).toEqual({ start: 499_995, end: 500_013, offset: 20_999_790, totalSize: 42_000_000 })
+    expect(virtualWindow(0, Number.NaN, 0, 0)).toEqual({ start: 0, end: 0, offset: 0, totalSize: 0 })
   })
 
   it('deduplicates relation identifiers and rejects writes to derived fields', () => {

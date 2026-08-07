@@ -123,21 +123,66 @@ export function normalizePropertyValue(property: DatabaseProperty, input: unknow
 /** Resolves rollups before formulas without mutating persisted source values. */
 export function resolveDerivedRecords(schema: DatabaseSchema, records: DatabaseRecord[]): DatabaseRecord[] {
   const byId = new Map(records.map((record) => [record.id, record]))
-  return records.map((record) => {
-    const values = { ...record.values }
-    for (const property of schema.properties.filter((candidate) => candidate.type === 'rollup' && candidate.rollup)) {
-      const config = property.rollup!
-      const relatedIds = values[config.relationPropertyId]
-      const relatedValues = Array.isArray(relatedIds)
-        ? relatedIds.map((id) => byId.get(id)?.values[config.targetPropertyId] ?? null).filter((value) => value !== null)
-        : []
-      values[property.id] = aggregateRollup(relatedValues, config.aggregation)
+  const derived = derivedProperties(schema)
+  return records.map((record) => resolveRecord(record, byId, derived))
+}
+
+/**
+ * Recomputes only the edited records and records whose rollups reference them.
+ * The linear dependency scan is cheap and preserves object identity for every
+ * unaffected row, which lets React skip work in windowed database views.
+ */
+export function resolveDerivedRecordsIncremental(
+  schema: DatabaseSchema,
+  records: DatabaseRecord[],
+  previous: DatabaseRecord[] | undefined,
+  changedRecordIds: Iterable<string>,
+) {
+  if (!previous?.length) return { records: resolveDerivedRecords(schema, records), recomputedCount: records.length }
+  const changed = new Set(changedRecordIds)
+  const previousById = new Map(previous.map((record) => [record.id, record]))
+  const byId = new Map(records.map((record) => [record.id, record]))
+  const derived = derivedProperties(schema)
+
+  if (derived.rollups.length) {
+    for (const record of records) {
+      if (changed.has(record.id)) continue
+      for (const property of derived.rollups) {
+        const relatedIds = record.values[property.rollup!.relationPropertyId]
+        if (Array.isArray(relatedIds) && relatedIds.some((id) => changed.has(id))) { changed.add(record.id); break }
+      }
     }
-    for (const property of schema.properties.filter((candidate) => candidate.type === 'formula' && candidate.formula)) {
-      values[property.id] = evaluateFormula(property.formula!.expression, values)
-    }
-    return { ...record, values }
+  }
+
+  let recomputedCount = 0
+  const projected = records.map((record) => {
+    const cached = previousById.get(record.id)
+    if (cached && !changed.has(record.id) && cached.updatedAt === record.updatedAt) return cached
+    recomputedCount += 1
+    return resolveRecord(record, byId, derived)
   })
+  return { records: projected, recomputedCount }
+}
+
+function derivedProperties(schema: DatabaseSchema) {
+  return {
+    rollups: schema.properties.filter((candidate) => candidate.type === 'rollup' && candidate.rollup),
+    formulas: schema.properties.filter((candidate) => candidate.type === 'formula' && candidate.formula),
+  }
+}
+
+function resolveRecord(record: DatabaseRecord, byId: Map<string, DatabaseRecord>, derived: ReturnType<typeof derivedProperties>) {
+  const values = { ...record.values }
+  for (const property of derived.rollups) {
+    const config = property.rollup!
+    const relatedIds = values[config.relationPropertyId]
+    const relatedValues = Array.isArray(relatedIds)
+      ? relatedIds.map((id) => byId.get(id)?.values[config.targetPropertyId] ?? null).filter((value) => value !== null)
+      : []
+    values[property.id] = aggregateRollup(relatedValues, config.aggregation)
+  }
+  for (const property of derived.formulas) values[property.id] = evaluateFormula(property.formula!.expression, values)
+  return { ...record, values }
 }
 
 export function evaluateFormula(expression: string, values: Record<string, PropertyValue>): PropertyValue {
@@ -368,6 +413,18 @@ export function timelineDays(rangeStart: string, count = 28) {
 export function prepareGalleryRecords(records: DatabaseRecord[], limit = 120) {
   const safeLimit = Math.max(1, Math.min(300, Math.trunc(limit)))
   return { records: records.slice(0, safeLimit), truncatedCount: Math.max(0, records.length - safeLimit) }
+}
+
+/** Returns a bounded render window shared by table, list and board views. */
+export function virtualWindow(itemCount: number, scrollTop: number, rowHeight: number, viewportHeight: number, overscan = 4) {
+  const count = Math.max(0, Math.trunc(itemCount))
+  const height = Number.isFinite(rowHeight) && rowHeight > 0 ? rowHeight : 1
+  const viewport = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : height
+  const safeScroll = Math.max(0, Number.isFinite(scrollTop) ? scrollTop : 0)
+  const buffer = Math.max(0, Math.min(50, Math.trunc(overscan)))
+  const start = Math.max(0, Math.floor(safeScroll / height) - buffer)
+  const end = Math.min(count, Math.ceil((safeScroll + viewport) / height) + buffer)
+  return { start, end, offset: start * height, totalSize: count * height }
 }
 
 /**
