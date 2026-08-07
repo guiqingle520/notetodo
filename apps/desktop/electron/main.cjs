@@ -290,6 +290,15 @@ function registerWorkspaceIpc(database) {
     assertId(viewId)
     database.setActiveDatabaseView(databaseId, viewId)
   })
+  ipcMain.handle('database:update-view-config', (_event, databaseId, viewId, config) => {
+    assertId(databaseId)
+    assertId(viewId)
+    if (!config || typeof config !== 'object' || Array.isArray(config)) throw new TypeError('Invalid database view configuration.')
+    const serialized = JSON.stringify(config)
+    if ((config.filters !== undefined && !Array.isArray(config.filters)) || (config.sorts !== undefined && !Array.isArray(config.sorts))) throw new TypeError('Database view rules must be arrays.')
+    if (serialized.length > 50_000 || (config.filters?.length ?? 0) > 20 || (config.sorts?.length ?? 0) > 10) throw new TypeError('Database view configuration is too large.')
+    database.updateDatabaseViewConfig(databaseId, viewId, config)
+  })
   ipcMain.handle('sync:load-document', (_event, pageId) => {
     assertId(pageId)
     return database.loadSyncDocument(pageId)

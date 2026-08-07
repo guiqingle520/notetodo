@@ -1085,6 +1085,12 @@ class WorkspaceDatabase {
     this.database.prepare('UPDATE databases SET active_view_id = ? WHERE id = ?').run(viewId, databaseId)
   }
 
+  updateDatabaseViewConfig(databaseId, viewId, config) {
+    const result = this.database.prepare('UPDATE database_views SET config_json = ? WHERE id = ? AND database_id = ?')
+      .run(JSON.stringify(config), viewId, databaseId)
+    if (result.changes !== 1) throw new Error('Database view does not exist.')
+  }
+
   getSetting(key) {
     return this.database.prepare('SELECT value FROM app_meta WHERE key = ?').get(key)?.value ?? null
   }

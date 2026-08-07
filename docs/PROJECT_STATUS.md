@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Database Views & Layout Beta — **进行中（Calendar / Timeline / Gallery 已交付）**
+Database Views & Layout Beta — **进行中（数据库视图与高级视图规则已交付）**
 
 ### 已交付
 
@@ -110,11 +110,13 @@ Database Views & Layout Beta — **进行中（Calendar / Timeline / Gallery 已
 - Gallery 数据库视图：编辑部样张式响应卡片、稳定生成封面、配置化卡片尺寸与可见属性。
 - Gallery 封面仅允许内容寻址本地附件和受限位图 Data URL；远程 URL、SVG 与超大输入默认拒绝。
 - Gallery 最多挂载 120 张卡片，支持一键推进状态，并为旧 SQLite/浏览器工作区幂等补齐视图配置。
+- 高级保存视图：支持至多 20 条 AND/OR 筛选、10 级稳定排序和属性分组，并提供统一规则编辑器。
+- 视图规则经过 Schema 归一化后持久化至 SQLite/浏览器快照；分组采用单次 O(n) 索引并对分组数量设定上限。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：27 个测试文件、113 个测试通过。
+- Vitest：27 个测试文件、115 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -157,6 +159,7 @@ Database Views & Layout Beta — **进行中（Calendar / Timeline / Gallery 已
 - Calendar 一万条记录日期分组性能、SQLite 配置回归和 Chromium 三栏布局：通过。
 - Timeline 一万条记录范围裁剪、组件拖放改期、浏览器持久化与双层工具带：通过。
 - Gallery 一万条记录卡片裁剪、封面协议安全、状态推进刷新恢复和 Chromium 三列布局：通过。
+- 高级视图规则：AND/OR、多级排序、分组、SQLite/浏览器刷新恢复和 Portal 视觉验收：通过。
 
 ## 已完成里程碑归档
 
@@ -183,7 +186,7 @@ Open Platform & External Automation Alpha
 Database Views & Layout Beta
 
 1. Calendar、Timeline 与 Gallery 数据库视图已交付 Beta。
-2. 多条件筛选、排序、分组与已保存视图配置。
+2. 多条件筛选、排序、分组与已保存视图配置已交付 Beta。
 3. 页面多栏布局、页面提及和关联数据库视图。
 4. 大型数据库增量计算、虚拟化和交互性能压测。
 

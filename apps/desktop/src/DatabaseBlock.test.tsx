@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema } from '@notetodo/database-core'
-import { GalleryView, TimelineView } from './DatabaseBlock'
+import { GalleryView, TimelineView, ViewRulesPanel } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -46,5 +46,22 @@ describe('GalleryView', () => {
     expect(container.querySelector('.gallery-cover img')).toBeNull()
     fireEvent.click(getByRole('button', { name: /推进/ }))
     expect(updateCell).toHaveBeenCalledWith('card-1', 'status', 'doing')
+  })
+})
+
+describe('ViewRulesPanel', () => {
+  it('composes OR filters and returns the saved view configuration', () => {
+    const onSave = vi.fn()
+    const ruleSchema: DatabaseSchema = { id: 'rules', name: 'Rules', properties: [
+      { id: 'title', name: '任务', type: 'title' },
+      { id: 'status', name: '状态', type: 'select', options: [{ id: 'todo', name: '待开始', color: 'slate' }, { id: 'doing', name: '进行中', color: 'amber' }] },
+      { id: 'score', name: '优先级', type: 'number' },
+    ] }
+    const { getByRole } = render(<ViewRulesPanel schema={ruleSchema} config={{ filters: [{ propertyId: 'status', operator: 'equals', value: 'todo' }] }} initialTab="filters" onClose={vi.fn()} onSave={onSave} />)
+    fireEvent.click(getByRole('button', { name: '任一条件' }))
+    fireEvent.click(getByRole('button', { name: /添加条件/ }))
+    fireEvent.click(getByRole('button', { name: '保存到当前视图' }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ filterMode: 'or', filters: expect.arrayContaining([expect.objectContaining({ propertyId: 'status', value: 'todo' })]) }))
+    expect(onSave.mock.calls[0]?.[0].filters).toHaveLength(2)
   })
 })

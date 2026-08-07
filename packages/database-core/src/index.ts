@@ -36,17 +36,20 @@ export interface DatabaseView {
   databaseId: string
   name: string
   type: 'table' | 'board' | 'list' | 'calendar' | 'timeline' | 'gallery'
-  config: {
-    filters?: FilterRule[]
-    sorts?: SortRule[]
-    groupByPropertyId?: string
-    datePropertyId?: string
-    startDatePropertyId?: string
-    endDatePropertyId?: string
-    coverPropertyId?: string
-    visiblePropertyIds?: string[]
-    cardSize?: 'small' | 'medium' | 'large'
-  }
+  config: DatabaseViewConfig
+}
+
+export interface DatabaseViewConfig {
+  filters?: FilterRule[]
+  filterMode?: 'and' | 'or'
+  sorts?: SortRule[]
+  groupByPropertyId?: string
+  datePropertyId?: string
+  startDatePropertyId?: string
+  endDatePropertyId?: string
+  coverPropertyId?: string
+  visiblePropertyIds?: string[]
+  cardSize?: 'small' | 'medium' | 'large'
 }
 
 export interface CalendarDay {
@@ -246,9 +249,12 @@ export function queryRecords(
   records: DatabaseRecord[],
   filters: FilterRule[] = [],
   sorts: SortRule[] = [],
+  filterMode: 'and' | 'or' = 'and',
 ): DatabaseRecord[] {
   const filtered = filters.length
-    ? records.filter((record) => filters.every((filter) => matchesFilter(record.values[filter.propertyId], filter)))
+    ? records.filter((record) => filterMode === 'or'
+      ? filters.some((filter) => matchesFilter(record.values[filter.propertyId], filter))
+      : filters.every((filter) => matchesFilter(record.values[filter.propertyId], filter)))
     : [...records]
 
   if (!sorts.length) return filtered
@@ -261,6 +267,37 @@ export function queryRecords(
     }
     return 0
   })
+}
+
+/** Removes stale or oversized rules before view configuration is persisted. */
+export function normalizeViewConfig(schema: DatabaseSchema, config: DatabaseViewConfig): DatabaseViewConfig {
+  const propertyIds = new Set(schema.properties.map((property) => property.id))
+  const validOperators = new Set<FilterRule['operator']>(['equals', 'notEquals', 'contains', 'isEmpty', 'isNotEmpty', 'greaterThan', 'lessThan'])
+  const filters = (config.filters ?? []).filter((rule) => propertyIds.has(rule.propertyId) && validOperators.has(rule.operator)).slice(0, 20)
+  const seenSorts = new Set<string>()
+  const sorts = (config.sorts ?? []).filter((rule) => propertyIds.has(rule.propertyId) && ['asc', 'desc'].includes(rule.direction) && !seenSorts.has(rule.propertyId) && Boolean(seenSorts.add(rule.propertyId))).slice(0, 10)
+  const groupByPropertyId = config.groupByPropertyId && propertyIds.has(config.groupByPropertyId) ? config.groupByPropertyId : undefined
+  return { ...config, filters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId }
+}
+
+/**
+ * Builds stable groups in one pass. Multi-value properties can place a record
+ * in several groups, while the group cap prevents unbounded section creation.
+ */
+export function groupRecordsByProperty(records: DatabaseRecord[], propertyId: string, limit = 100) {
+  const groups = new Map<string, DatabaseRecord[]>()
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)))
+  for (const record of records) {
+    const raw = record.values[propertyId]
+    const values = Array.isArray(raw) ? [...new Set(raw)].slice(0, 20) : [raw]
+    for (const value of values.length ? values : [null]) {
+      const key = value === null || value === '' ? '__empty__' : String(value)
+      const targetKey = groups.has(key) || groups.size < safeLimit ? key : '__other__'
+      const group = groups.get(targetKey) ?? []
+      group.push(record); groups.set(targetKey, group)
+    }
+  }
+  return [...groups].map(([key, groupedRecords]) => ({ key, label: key === '__empty__' ? '未填写' : key === '__other__' ? '其他' : key, records: groupedRecords }))
 }
 
 /** Builds a stable Monday-first 6×7 grid without local-time/DST drift. */
@@ -387,6 +424,7 @@ function matchesFilter(value: PropertyValue, filter: FilterRule) {
     if (Array.isArray(value)) return typeof filter.value === 'string' && value.includes(filter.value)
     return String(value ?? '').toLocaleLowerCase().includes(String(filter.value ?? '').toLocaleLowerCase())
   }
+  if (empty) return false
   const left = Number(value)
   const right = Number(filter.value)
   if (!Number.isFinite(left) || !Number.isFinite(right)) return false

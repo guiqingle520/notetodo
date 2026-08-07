@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, layoutTimelineRecords, normalizePropertyValue, prepareGalleryRecords, queryRecords, resolveDerivedRecords, runDatabaseAutomations, safeGalleryCover, timelineDays, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecords, runDatabaseAutomations, safeGalleryCover, timelineDays, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -33,6 +33,16 @@ describe('database query engine', () => {
     const result = queryRecords(many, [{ propertyId: 'status', operator: 'equals', value: 'doing' }], [{ propertyId: 'score', direction: 'asc' }])
     expect(result).toHaveLength(5_000)
     expect(performance.now() - start).toBeLessThan(500)
+  })
+
+  it('combines OR filters, sanitizes saved rules and groups in one pass', () => {
+    expect(queryRecords(records, [{ propertyId: 'status', operator: 'equals', value: 'done' }, { propertyId: 'score', operator: 'lessThan', value: 4 }], [], 'or').map((record) => record.id)).toEqual(['a', 'b'])
+    const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [{ id: 'status', name: 'Status', type: 'select' }, { id: 'score', name: 'Score', type: 'number' }] }
+    expect(normalizeViewConfig(schema, { filters: [{ propertyId: 'missing', operator: 'equals', value: 1 }], sorts: [{ propertyId: 'score', direction: 'desc' }, { propertyId: 'score', direction: 'asc' }], groupByPropertyId: 'status' })).toMatchObject({ filters: [], sorts: [{ propertyId: 'score', direction: 'desc' }], groupByPropertyId: 'status', filterMode: 'and' })
+    const many = Array.from({ length: 10_000 }, (_, index): DatabaseRecord => ({ ...records[0]!, id: String(index), values: { status: index % 2 ? 'doing' : null } }))
+    const start = performance.now(); const groups = groupRecordsByProperty(many, 'status')
+    expect(groups.map((group) => [group.label, group.records.length])).toEqual([['未填写', 5_000], ['doing', 5_000]])
+    expect(performance.now() - start).toBeLessThan(250)
   })
 
   it('builds a Monday-first calendar and groups ten thousand records in one pass', () => {

@@ -42,6 +42,7 @@ interface Window {
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<{ automationRuns: string[] }>
       createRecord: (databaseId: string, recordId: string) => Promise<void>
       setActiveView: (databaseId: string, viewId: string) => Promise<void>
+      updateViewConfig: (databaseId: string, viewId: string, config: import('@notetodo/database-core').DatabaseViewConfig) => Promise<void>
     }
     sync: {
       loadDocument: (pageId: string) => Promise<{ snapshot: string | null; updates: Array<{ id: number; clientId: string; data: string }>; latestUpdateId: number }>

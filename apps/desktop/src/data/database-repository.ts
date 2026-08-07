@@ -1,4 +1,4 @@
-import type { DatabaseRecord, DatabaseSnapshot, PropertyValue } from '@notetodo/database-core'
+import type { DatabaseRecord, DatabaseSnapshot, DatabaseViewConfig, PropertyValue } from '@notetodo/database-core'
 
 const now = new Date().toISOString()
 const seedSnapshot: DatabaseSnapshot = {
@@ -71,6 +71,11 @@ class DatabaseRepository {
   async setActiveView(snapshot: DatabaseSnapshot, viewId: string) {
     if (window.notetodo?.database) return window.notetodo.database.setActiveView(snapshot.schema.id, viewId)
     this.write({ ...snapshot, activeViewId: viewId })
+  }
+
+  async updateViewConfig(snapshot: DatabaseSnapshot, viewId: string, config: DatabaseViewConfig) {
+    if (window.notetodo?.database) return window.notetodo.database.updateViewConfig(snapshot.schema.id, viewId, config)
+    this.write(snapshot)
   }
 
   private write(snapshot: DatabaseSnapshot) {

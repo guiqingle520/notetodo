@@ -17,6 +17,7 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     updateDatabaseCell(recordId: string, propertyId: string, value: unknown): { automationRuns: string[] }
     createDatabaseRecord(databaseId: string, recordId: string): void
     setActiveDatabaseView(databaseId: string, viewId: string): void
+    updateDatabaseViewConfig(databaseId: string, viewId: string, config: object): void
     loadSyncDocument(pageId: string): {
       snapshot: string | null
       updates: Array<{ id: number; clientId: string; data: string }>
@@ -118,11 +119,14 @@ describe('WorkspaceDatabase', () => {
     database.createDatabaseRecord('roadmap-db', 'task-new')
     database.updateDatabaseCell('task-new', 'task-title', '新增记录')
     database.setActiveDatabaseView('roadmap-db', 'roadmap-board')
+    database.updateDatabaseViewConfig('roadmap-db', 'roadmap-board', { filters: [{ propertyId: 'task-status', operator: 'equals', value: 'doing' }], filterMode: 'and' })
 
     const updated = database.loadDatabaseByPage('projects')
     expect(updated?.records.find((record) => record.id === 'task-1')?.values['task-score']).toBe(2)
     expect(updated?.records.find((record) => record.id === 'task-new')?.values['task-title']).toBe('新增记录')
     expect(updated?.activeViewId).toBe('roadmap-board')
+    expect(updated?.views.find((view) => view.id === 'roadmap-board')?.config.filters).toHaveLength(1)
+    expect(() => database?.updateDatabaseViewConfig('roadmap-db', 'missing-view', {})).toThrow(/does not exist/)
   })
 
   it('persists validated relations while keeping derived properties read-only', () => {
