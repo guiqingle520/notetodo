@@ -83,6 +83,7 @@ type ImportJob = Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
 type PageVersionSummary = Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['list']>>[number]
 type PageVersionDetail = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['get']>>>
+type RetrievalCitation = Awaited<ReturnType<NonNullable<typeof window.notetodo>['retrieval']['search']>>[number]
 
 const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
   spark: Sparkles,
@@ -642,10 +643,10 @@ function PageHistoryPanel({ page, canRestore, onRestored, onClose }: { page: Wor
 }
 
 function AIPanel({ onClose, selectionContext, onApplyPatch, onUndoPatch }: { onClose: () => void; selectionContext: SelectionContext | null; onApplyPatch: (patch: AIPatchProposal) => boolean; onUndoPatch: () => void }) {
-  const { pages, activePageId } = useWorkspace()
+  const { pages, activePageId, setActivePage } = useWorkspace()
   const activePage = pages.find((page) => page.id === activePageId)
   const [prompt, setPrompt] = useState('')
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string; citations?: RetrievalCitation[] }>>([])
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
   const cancelRef = useRef<null | (() => void)>(null)
@@ -664,14 +665,17 @@ function AIPanel({ onClose, selectionContext, onApplyPatch, onUndoPatch }: { onC
     if (window.notetodo?.model) void window.notetodo.model.getConfig().then((config) => setModelName(config.model))
   }, [])
 
-  const submit = () => {
+  const submit = async () => {
     const content = prompt.trim()
     if (!content || running) return
     const history = [...messages, { role: 'user' as const, content }]
-    setMessages([...history, { role: 'assistant', content: '' }])
     setPrompt('')
     setError('')
     setRunning(true)
+    const citations = !usingSelection && window.notetodo?.retrieval
+      ? await window.notetodo.retrieval.search(content, 6).catch(() => [] as RetrievalCitation[])
+      : []
+    setMessages([...history, { role: 'assistant', content: '', citations }])
 
     const onEvent = (event: { type: string; text?: string; message?: string }) => {
       if (event.type === 'text-delta' && event.text) {
@@ -691,7 +695,8 @@ function AIPanel({ onClose, selectionContext, onApplyPatch, onUndoPatch }: { onC
           ...(activePage ? [{ role: 'system' as const, content: usingSelection
             ? `当前页面标题：${activePage.title}\n用户明确选择的正文：${selectionContext.text}`
             : `当前页面标题：${activePage.title}\n当前页面正文：${pageContext.text || '（空页面）'}` }] : []),
-          ...history,
+          ...(citations.length ? [{ role: 'system' as const, content: `以下是经过页面权限过滤的工作区检索片段。仅依据相关内容回答，并用 [S1] 形式标注引用：\n${citations.map((citation) => `[${citation.citationId}] ${citation.title} / ${citation.heading}\n${citation.excerpt}`).join('\n\n')}` }] : []),
+          ...history.map(({ role, content: messageContent }) => ({ role, content: messageContent })),
         ],
       }, onEvent)
     } else {
@@ -751,12 +756,12 @@ function AIPanel({ onClose, selectionContext, onApplyPatch, onUndoPatch }: { onC
       <div className="ai-context"><span>上下文范围</span><div className="context-switch"><button className={contextMode === 'page' ? 'is-active' : ''} onClick={() => setContextMode('page')}>整页 · {pageContext.blocks} 块</button><button className={contextMode === 'selection' ? 'is-active' : ''} disabled={!selectionContext} onClick={() => setContextMode('selection')}>所选文本</button></div><strong>{usingSelection ? `“${selectionContext.text.slice(0, 36)}${selectionContext.text.length > 36 ? '…' : ''}”` : activePage?.title ?? '当前页面'}</strong></div>
       <div className="ai-conversation">
         {!messages.length && <div className="ai-message"><span className="ai-orbit"><Sparkles size={14} /></span><div><p>我可以帮你整理这页内容，也可以调用已经授权的工具。</p><div className="quick-actions"><button onClick={() => setPrompt('提取当前页面的待办事项')}>提取待办</button><button onClick={() => setPrompt('总结当前页面')}>生成摘要</button><button onClick={() => setPrompt('根据当前内容继续写')}>继续写</button></div></div></div>}
-        {messages.map((message, index) => <div className={`chat-message is-${message.role}`} key={index}>{message.role === 'assistant' && <span className="ai-orbit"><Sparkles size={13} /></span>}<div><small>{message.role === 'user' ? 'YOU' : 'NOTETODO AI'}</small><p>{message.content || (running && index === messages.length - 1 ? '正在思考…' : '')}</p>{message.role === 'assistant' && message.content && !running && index === messages.length - 1 && <><button className="preview-patch" onClick={() => void proposePatch(message.content)}><FileText size={12} />预览写入</button><div className="ai-citation"><BookOpen size={11} /><span>来源 · {activePage?.title}{usingSelection ? ' / 所选文本' : ' / 当前页面'}</span></div></>}</div></div>)}
+        {messages.map((message, index) => <div className={`chat-message is-${message.role}`} key={index}>{message.role === 'assistant' && <span className="ai-orbit"><Sparkles size={13} /></span>}<div><small>{message.role === 'user' ? 'YOU' : 'NOTETODO AI'}</small><p>{message.content || (running && index === messages.length - 1 ? '正在思考…' : '')}</p>{message.role === 'assistant' && message.content && !running && index === messages.length - 1 && <><button className="preview-patch" onClick={() => void proposePatch(message.content)}><FileText size={12} />预览写入</button><div className="ai-citation"><BookOpen size={11} /><span>来源</span>{message.citations?.length ? message.citations.map((citation) => <button key={`${citation.pageId}-${citation.chunkIndex}`} onClick={() => setActivePage(citation.pageId)}><em>{citation.citationId}</em>{citation.title}</button>) : <button onClick={() => activePage && setActivePage(activePage.id)}>{activePage?.title}{usingSelection ? ' / 所选文本' : ' / 当前页面'}</button>}</div></>}</div></div>)}
         {error && <div className="ai-error"><CircleHelp size={14} />{error}</div>}
         {patch && <section className={`ai-patch-card is-${patch.status}`}><header><span>AI PATCH / {patch.operation === 'replace-selection' ? 'REPLACE' : 'INSERT'}</span><strong>{patch.status === 'applied' ? '已写入页面' : '待确认变更'}</strong></header><div className="patch-target"><FileText size={13} /><span><small>目标</small>{activePage?.title ?? '当前页面'} · {patch.operation === 'replace-selection' ? '替换所选文本' : '光标后插入'}</span></div>{patch.operation === 'replace-selection' && selectionContext && <del>{selectionContext.text}</del>}<pre>{patch.text}</pre><footer>{patch.status === 'proposed' ? <><button onClick={rejectPatch}>取消</button><button className="apply-patch" onClick={applyPatch}>确认写入</button></> : <><span><CheckCircle2 size={13} />已记录到审计日志</span><button onClick={undoPatch}>撤销</button></>}</footer></section>}
       </div>
       <div className="model-pill"><span className="status-dot" />当前模型 · {modelName}</div>
-      <form className="ai-composer" onSubmit={(event) => { event.preventDefault(); submit() }}>
+      <form className="ai-composer" onSubmit={(event) => { event.preventDefault(); void submit() }}>
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="询问、改写，或交给 AI 执行…" />
         <div><button type="button"><Plus size={16} /></button><span>页面上下文已开启</span>{running ? <button type="button" className="send-button is-cancel" onClick={cancel} aria-label="停止生成"><X size={14} /></button> : <button className="send-button" disabled={!prompt.trim()}><ChevronRight size={17} /></button>}</div>
       </form>

@@ -1,8 +1,9 @@
 const { DatabaseSync } = require('node:sqlite')
 const { randomUUID } = require('node:crypto')
 const seedWorkspace = require('../shared/seed-workspace.json')
+const { chunkPage, cosineSimilarity, embedText, fuseRankings } = require('./retrieval-core.cjs')
 
-const LATEST_SCHEMA_VERSION = 8
+const LATEST_SCHEMA_VERSION = 9
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -17,6 +18,7 @@ class WorkspaceDatabase {
     this.recoverInterruptedImports()
     this.seedIfEmpty()
     this.seedDatabaseIfEmpty()
+    this.backfillRetrievalIndex()
     this.prepareStatements()
   }
 
@@ -302,6 +304,26 @@ class WorkspaceDatabase {
       `)
     }
 
+    if (currentVersion < 9) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE search_chunks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+          chunk_index INTEGER NOT NULL,
+          heading TEXT NOT NULL,
+          text TEXT NOT NULL,
+          embedding BLOB NOT NULL,
+          UNIQUE(page_id, chunk_index)
+        );
+        CREATE INDEX search_chunks_page ON search_chunks(page_id, chunk_index);
+        CREATE VIRTUAL TABLE search_chunks_fts USING fts5(page_id UNINDEXED, heading, text, tokenize='unicode61');
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '9')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
     if (currentVersion > LATEST_SCHEMA_VERSION) {
       throw new Error(`Workspace schema ${currentVersion} is newer than this app supports.`)
     }
@@ -464,7 +486,8 @@ class WorkspaceDatabase {
     this.database.exec('BEGIN IMMEDIATE')
     try {
       const current = this.database.prepare('SELECT id, title, content FROM pages WHERE id=?').get(page.id)
-      if (current && (current.title !== page.title || current.content !== page.content)) this.captureAutomaticVersion(current)
+      const retrievalChanged = !current || current.title !== page.title || current.content !== page.content
+      if (current && retrievalChanged) this.captureAutomaticVersion(current)
       this.statements.upsertPage.run(
         page.id,
         page.title,
@@ -477,6 +500,7 @@ class WorkspaceDatabase {
         page.archivedAt,
       )
       this.reconcilePageAttachments(page.id, page.content)
+      if (retrievalChanged) this.indexPageForRetrieval(page.id, page.title, page.content)
       this.database.exec('COMMIT')
     } catch (error) {
       this.database.exec('ROLLBACK')
@@ -508,6 +532,7 @@ class WorkspaceDatabase {
       for (const page of pages) {
         if (!page.id || page.id.length > 128 || typeof page.content !== 'string' || page.content.length > 20_000_000) throw new TypeError('Imported page exceeds safety limits.')
         this.statements.upsertPage.run(page.id, String(page.title).slice(0, 1000), page.icon, page.parentId, page.favorite ? 1 : 0, page.content, page.updatedAt, page.lastVisitedAt, page.archivedAt)
+        this.indexPageForRetrieval(page.id, page.title, page.content)
       }
       for (const imported of bundle.databases) {
         const viewId = `${imported.id}-table`
@@ -646,6 +671,7 @@ class WorkspaceDatabase {
       const now = new Date().toISOString()
       this.database.prepare('UPDATE pages SET title=?, content=?, updated_at=? WHERE id=?').run(version.title, version.content, now, pageId)
       this.reconcilePageAttachments(pageId, version.content)
+      this.indexPageForRetrieval(pageId, version.title, version.content)
       this.database.exec('COMMIT')
       return mapPageRow(this.database.prepare('SELECT * FROM pages WHERE id=?').get(pageId))
     } catch (error) {
@@ -672,6 +698,52 @@ class WorkspaceDatabase {
         AND NOT EXISTS (SELECT 1 FROM page_attachments WHERE attachment_hash=attachments.hash)
         AND NOT EXISTS (SELECT 1 FROM page_version_attachments WHERE attachment_hash=attachments.hash)
     `).run(hash, cutoff).changes > 0
+  }
+
+  backfillRetrievalIndex() {
+    const pages = this.database.prepare('SELECT p.id, p.title, p.content FROM pages p WHERE NOT EXISTS (SELECT 1 FROM search_chunks sc WHERE sc.page_id=p.id)').all()
+    this.database.exec('BEGIN IMMEDIATE')
+    try { for (const page of pages) this.indexPageForRetrieval(page.id, page.title, page.content); this.database.exec('COMMIT') }
+    catch (error) { this.database.exec('ROLLBACK'); throw error }
+  }
+
+  indexPageForRetrieval(pageId, title, content) {
+    this.database.prepare('DELETE FROM search_chunks_fts WHERE rowid IN (SELECT id FROM search_chunks WHERE page_id=?)').run(pageId)
+    this.database.prepare('DELETE FROM search_chunks WHERE page_id=?').run(pageId)
+    const insertChunk = this.database.prepare('INSERT INTO search_chunks(page_id, chunk_index, heading, text, embedding) VALUES (?, ?, ?, ?, ?)')
+    const insertFts = this.database.prepare('INSERT INTO search_chunks_fts(rowid, page_id, heading, text) VALUES (?, ?, ?, ?)')
+    for (const chunk of chunkPage(title, content)) {
+      const result = insertChunk.run(pageId, chunk.index, chunk.heading, chunk.text, embedText(`${title}\n${chunk.text}`))
+      insertFts.run(Number(result.lastInsertRowid), pageId, chunk.heading, chunk.text)
+    }
+  }
+
+  hybridSearch(query, userId = null, limit = 8) {
+    const normalized = String(query).trim().slice(0, 500)
+    if (!normalized) return []
+    const permissionSql = `p.archived_at IS NULL AND (? IS NULL OR
+      NOT EXISTS (SELECT 1 FROM page_permissions all_permissions WHERE all_permissions.page_id=p.id) OR
+      EXISTS (SELECT 1 FROM page_permissions mine WHERE mine.page_id=p.id AND mine.subject_id=?))`
+    const baseSelect = `SELECT sc.id, sc.page_id AS pageId, sc.chunk_index AS chunkIndex, p.title, sc.heading, sc.text, sc.embedding
+      FROM search_chunks sc JOIN pages p ON p.id=sc.page_id`
+    const lexicalQuery = normalized.split(/\s+/u).filter(Boolean).map((token) => `"${token.replaceAll('"', '""')}"*`).join(' AND ')
+    let lexical = []
+    try {
+      lexical = this.database.prepare(`${baseSelect} JOIN search_chunks_fts fts ON fts.rowid=sc.id
+        WHERE search_chunks_fts MATCH ? AND ${permissionSql} ORDER BY bm25(search_chunks_fts, 0.0, 2.0, 1.0) LIMIT 50`)
+        .all(lexicalQuery, userId, userId)
+    } catch { lexical = [] }
+    const queryEmbedding = embedText(normalized)
+    const semantic = this.database.prepare(`${baseSelect} WHERE ${permissionSql} ORDER BY p.last_visited_at DESC LIMIT 2000`)
+      .all(userId, userId)
+      .map((row) => ({ ...row, similarity: cosineSimilarity(queryEmbedding, row.embedding) }))
+      .filter((row) => row.similarity > 0)
+      .sort((left, right) => right.similarity - left.similarity)
+      .slice(0, 50)
+    return fuseRankings(lexical, semantic, Math.min(12, Math.max(1, limit))).map((item, index) => ({
+      citationId: `S${index + 1}`, pageId: item.pageId, chunkIndex: item.chunkIndex, title: item.title,
+      heading: item.heading, excerpt: item.text.slice(0, 900), score: item.score,
+    }))
   }
 
   setActivePage(id) {

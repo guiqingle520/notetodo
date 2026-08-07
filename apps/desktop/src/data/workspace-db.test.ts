@@ -47,6 +47,7 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     listPageVersions(pageId: string, limit?: number): Array<{ id: number; pageId: string; title: string; reason: 'autosave' | 'restore'; createdAt: string }>
     getPageVersion(pageId: string, versionId: number): null | { id: number; title: string; content: string }
     restorePageVersion(pageId: string, versionId: number): WorkspacePage
+    hybridSearch(query: string, userId?: string | null, limit?: number): Array<{ citationId: string; pageId: string; title: string; excerpt: string; score: number }>
     close(): void
   }
 }
@@ -188,6 +189,17 @@ describe('WorkspaceDatabase', () => {
     const originalVersion = database.listPageVersions('welcome')[0]!
     database.restorePageVersion('welcome', originalVersion.id)
     expect(database.listUnreferencedAttachments('9999-01-01T00:00:00.000Z')).not.toContainEqual(expect.objectContaining({ hash }))
+  })
+
+  it('fuses lexical and local semantic retrieval after permission filtering', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const now = new Date().toISOString()
+    database.upsertPage({ id: 'private-retrieval', title: '火星发射清单', icon: 'note', parentId: null, favorite: false, content: '<p>推进剂阀门检查与轨道窗口确认。</p>', updatedAt: now, lastVisitedAt: now, archivedAt: null })
+    database.upsertPagePermission('private-retrieval', 'member-allowed', 'Allowed', 'viewer')
+
+    expect(database.hybridSearch('火星 推进剂', 'member-allowed').map((item) => item.pageId)).toContain('private-retrieval')
+    expect(database.hybridSearch('火星 推进剂', 'member-denied').map((item) => item.pageId)).not.toContain('private-retrieval')
+    expect(database.hybridSearch('火星 推进剂', 'member-allowed')[0]).toMatchObject({ citationId: 'S1' })
   })
 
   it('replays incremental sync updates and compacts them into one durable snapshot', () => {

@@ -131,6 +131,11 @@ function registerWorkspaceIpc(database) {
     if (role && !['editor', 'owner'].includes(role)) throw new Error('当前角色无权恢复页面历史。')
     return database.restorePageVersion(pageId, versionId)
   })
+  ipcMain.handle('retrieval:search', (_event, query, limit = 8) => {
+    if (typeof query !== 'string' || query.length > 500 || !Number.isSafeInteger(limit)) throw new TypeError('Invalid retrieval query.')
+    const userId = database.getSetting('collaboration_user_id')
+    return database.hybridSearch(query, userId, limit)
+  })
   ipcMain.handle('import:pick-and-inspect', async () => {
     const selected = await dialog.showOpenDialog({
       title: '导入 Notion 工作区',

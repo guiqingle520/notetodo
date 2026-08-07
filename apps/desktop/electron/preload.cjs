@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('notetodo', {
     get: (pageId, versionId) => ipcRenderer.invoke('history:get', pageId, versionId),
     restore: (pageId, versionId) => ipcRenderer.invoke('history:restore', pageId, versionId),
   },
+  retrieval: {
+    search: (query, limit) => ipcRenderer.invoke('retrieval:search', query, limit),
+  },
   database: {
     loadByPage: (pageId) => ipcRenderer.invoke('database:load-by-page', pageId),
     updateCell: (recordId, propertyId, value) => ipcRenderer.invoke('database:update-cell', recordId, propertyId, value),

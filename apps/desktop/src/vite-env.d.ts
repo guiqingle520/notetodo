@@ -16,6 +16,9 @@ interface Window {
       get: (pageId: string, versionId: number) => Promise<null | { id: number; pageId: string; title: string; content: string; reason: 'autosave' | 'restore'; createdAt: string }>
       restore: (pageId: string, versionId: number) => Promise<import('./domain').WorkspacePage>
     }
+    retrieval: {
+      search: (query: string, limit?: number) => Promise<Array<{ citationId: string; pageId: string; chunkIndex: number; title: string; heading: string; excerpt: string; score: number }>>
+    }
     database: {
       loadByPage: (pageId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot | null>
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<void>
