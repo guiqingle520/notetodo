@@ -537,6 +537,25 @@ class WorkspaceDatabase {
     return this.database.prepare('SELECT hash, size, mime_type AS mimeType, relative_path AS relativePath FROM attachments WHERE hash=?').get(hash) ?? null
   }
 
+  registerPageAttachments(pageId, attachments) {
+    const insertAttachment = this.database.prepare('INSERT INTO attachments(hash, size, mime_type, relative_path, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(hash) DO NOTHING')
+    const insertReference = this.database.prepare('INSERT OR IGNORE INTO page_attachments(page_id, attachment_hash, source_path, display_name) VALUES (?, ?, ?, ?)')
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const createdAt = new Date().toISOString()
+      for (const attachment of attachments) {
+        insertAttachment.run(attachment.hash, attachment.size, attachment.mimeType, attachment.relativePath, createdAt)
+        // A deterministic manual source prevents repeated insertion of the same
+        // content on one page from inflating future reference-counted cleanup.
+        insertReference.run(pageId, attachment.hash, `manual/${attachment.hash}`, attachment.displayName)
+      }
+      this.database.exec('COMMIT')
+    } catch (error) {
+      this.database.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   setActivePage(id) {
     const now = new Date().toISOString()
     this.database.exec('BEGIN IMMEDIATE')

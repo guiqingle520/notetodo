@@ -41,6 +41,7 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     updateImportJob(id: string, status: string, errorMessage?: string | null): void
     loadImportJobs(): Array<{ id: string; status: string; report: Record<string, number> }>
     getAttachment(hash: string): null | { hash: string; relativePath: string; mimeType: string }
+    registerPageAttachments(pageId: string, attachments: Array<{ hash: string; size: number; mimeType: string; relativePath: string; displayName: string }>): void
     close(): void
   }
 }
@@ -133,6 +134,13 @@ describe('WorkspaceDatabase', () => {
     database.createImportJob('interrupted-job', 'Large workspace.zip')
     database.recoverInterruptedImports()
     expect(database.loadImportJobs()[0]).toMatchObject({ id: 'interrupted-job', status: 'failed' })
+  })
+
+  it('registers manually selected assets without duplicating content records', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const attachment = { hash: 'b'.repeat(64), size: 128, mimeType: 'application/pdf', relativePath: `bb/${'b'.repeat(64)}`, displayName: 'brief.pdf' }
+    database.registerPageAttachments('welcome', [attachment, attachment])
+    expect(database.getAttachment(attachment.hash)).toMatchObject({ hash: attachment.hash, size: 128, mimeType: 'application/pdf' })
   })
 
   it('replays incremental sync updates and compacts them into one durable snapshot', () => {

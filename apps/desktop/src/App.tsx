@@ -22,6 +22,7 @@ import {
   Heading2,
   Home,
   Inbox,
+  Image as ImageIcon,
   KeyRound,
   Menu,
   List,
@@ -36,6 +37,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PanelsTopLeft,
+  Paperclip,
   Plus,
   Quote,
   RotateCcw,
@@ -88,7 +90,7 @@ interface SlashCommand {
   run: (editor: Editor) => void
 }
 
-const slashCommands: SlashCommand[] = [
+const baseSlashCommands: SlashCommand[] = [
   { label: '正文', hint: '普通文本段落', keywords: 'text paragraph 正文 文本', icon: Type, run: (editor) => { editor.chain().focus().setParagraph().run() } },
   { label: '一级标题', hint: '页面主要章节', keywords: 'heading h1 标题', icon: Heading1, run: (editor) => { editor.chain().focus().setHeading({ level: 1 }).run() } },
   { label: '二级标题', hint: '页面次级章节', keywords: 'heading h2 标题', icon: Heading2, run: (editor) => { editor.chain().focus().setHeading({ level: 2 }).run() } },
@@ -688,12 +690,47 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
   const [shareOpen, setShareOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [pageRole, setPageRole] = useState<'viewer' | 'commenter' | 'editor' | 'owner'>('owner')
+  const [uploadState, setUploadState] = useState<null | { phase: 'working' | 'complete' | 'error'; percent: number; name: string; message: string }>(null)
+  const uploadBusyRef = useRef(false)
   slashMenuRef.current = slashMenu
+
+  const pickAndInsertAttachment = async (activeEditor: Editor, kind: 'image' | 'file') => {
+    if (uploadBusyRef.current) return
+    if (!window.notetodo?.attachments) {
+      setUploadState({ phase: 'error', percent: 0, name: '', message: '请在 NoteTodo 桌面应用中选择本地附件。' })
+      return
+    }
+    uploadBusyRef.current = true
+    setUploadState({ phase: 'working', percent: 0, name: '', message: '等待选择本地文件…' })
+    try {
+      const attachments = await window.notetodo.attachments.pickAndStore(page.id, kind, (progress) => {
+        const percent = progress.total ? Math.min(100, Math.round(progress.completed / progress.total * 100)) : 0
+        setUploadState({ phase: 'working', percent, name: progress.currentName, message: '正在校验并写入本地资源库' })
+      })
+      if (!attachments.length) return setUploadState(null)
+      const content = attachments.map((attachment) => kind === 'image'
+        ? { type: 'image', attrs: { src: attachment.url, alt: attachment.displayName, title: attachment.displayName } }
+        : { type: 'fileAttachment', attrs: { src: attachment.url, name: attachment.displayName, size: attachment.size, mimeType: attachment.mimeType } })
+      activeEditor.chain().focus().insertContent(content).run()
+      setUploadState({ phase: 'complete', percent: 100, name: attachments.at(-1)?.displayName ?? '', message: `已插入 ${attachments.length} 个${kind === 'image' ? '图片' : '文件'}` })
+    } catch (error) {
+      const detail = error instanceof Error ? error.message.split('Error: ').at(-1) ?? error.message : '附件写入失败。'
+      setUploadState({ phase: 'error', percent: 0, name: '', message: detail })
+    } finally {
+      uploadBusyRef.current = false
+    }
+  }
+
+  const slashCommands = useMemo<SlashCommand[]>(() => [
+    ...baseSlashCommands,
+    { label: '本地图片', hint: '选择图片并安全存入工作区', keywords: 'image photo upload 图片 上传', icon: ImageIcon, run: (activeEditor) => { void pickAndInsertAttachment(activeEditor, 'image') } },
+    { label: '本地文件', hint: '附加文档、压缩包或媒体', keywords: 'file attachment upload 文件 附件 上传', icon: Paperclip, run: (activeEditor) => { void pickAndInsertAttachment(activeEditor, 'file') } },
+  ], [page.id])
 
   const filteredSlashCommands = useMemo(() => {
     const query = slashMenu?.query.toLocaleLowerCase() ?? ''
     return slashCommands.filter((command) => `${command.label} ${command.keywords}`.toLocaleLowerCase().includes(query))
-  }, [slashMenu?.query])
+  }, [slashMenu?.query, slashCommands])
 
   const editor = useEditor({
     extensions: [
@@ -761,6 +798,12 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
 
   useEffect(() => { onEditorReady(editor); return () => onEditorReady(null) }, [editor, onEditorReady])
   useEffect(() => renderRemoteCursors(editor, collaborators), [editor, collaborators])
+
+  useEffect(() => {
+    if (!uploadState || uploadState.phase === 'working') return
+    const timeout = window.setTimeout(() => setUploadState(null), uploadState.phase === 'complete' ? 3200 : 6500)
+    return () => window.clearTimeout(timeout)
+  }, [uploadState?.phase, uploadState?.message])
 
   useEffect(() => {
     if (!slashMenu) return
@@ -858,6 +901,17 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
             onChange={(event) => updatePage(page.id, { title: event.target.value })}
           />
           <EditorContent editor={editor} className="editor-content" />
+          {uploadState && (
+            <div className={`asset-progress is-${uploadState.phase}`} role="status" aria-live="polite">
+              <span className="asset-progress-mark">{uploadState.phase === 'complete' ? '✓' : uploadState.phase === 'error' ? '!' : <Upload size={13} />}</span>
+              <span className="asset-progress-copy">
+                <strong>{uploadState.message}</strong>
+                {uploadState.name && <small>{uploadState.name}</small>}
+              </span>
+              {uploadState.phase === 'working' && <em>{uploadState.percent}%</em>}
+              <i style={{ width: `${uploadState.percent}%` }} />
+            </div>
+          )}
           {page.id === 'projects' && <DatabaseBlock pageId={page.id} />}
           {slashMenu && (
             <div className="slash-menu" style={{ left: slashMenu.left, top: slashMenu.top }}>

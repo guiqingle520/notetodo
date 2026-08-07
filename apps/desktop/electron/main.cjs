@@ -4,6 +4,7 @@ const path = require('node:path')
 const { Readable } = require('node:stream')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { ModelService } = require('./model-service.cjs')
+const { isRenderableImage, storeLocalAsset } = require('./asset-store.cjs')
 const { signRoomTicket } = require('@notetodo/auth-core')
 const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomUUID } = require('node:crypto')
@@ -113,6 +114,46 @@ function registerWorkspaceIpc(database) {
   ipcMain.handle('import:list-jobs', () => database.loadImportJobs())
   ipcMain.on('import:cancel', (_event, requestId) => {
     if (typeof requestId === 'string') activeImports.get(requestId)?.abort()
+  })
+  ipcMain.handle('attachments:pick-and-store', async (event, pageId, kind, requestId) => {
+    assertId(pageId); assertId(requestId)
+    if (!['image', 'file'].includes(kind)) throw new TypeError('Invalid attachment kind.')
+    const selected = await dialog.showOpenDialog({
+      title: kind === 'image' ? '插入本地图片' : '插入本地文件',
+      buttonLabel: kind === 'image' ? '插入图片' : '插入文件',
+      properties: ['openFile', 'multiSelections'],
+      filters: kind === 'image'
+        ? [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]
+        : [{ name: '所有文件', extensions: ['*'] }],
+    })
+    if (selected.canceled || !selected.filePaths.length) return []
+    if (selected.filePaths.length > 20) throw new RangeError('一次最多插入 20 个附件。')
+
+    const assetRoot = path.join(app.getPath('userData'), 'attachments')
+    // Sequential disk reads avoid saturating slower SSDs when many large files
+    // are selected, while each file itself is copied as a backpressured stream.
+    const attachments = []
+    const sizes = await Promise.all(selected.filePaths.map((filePath) => fs.promises.stat(filePath).then((stat) => stat.size)))
+    const total = sizes.reduce((sum, size) => sum + size, 0)
+    if (total > 1024 * 1024 * 1024) throw new RangeError('单次附件总大小不能超过 1 GB。')
+    let completedBeforeFile = 0
+    const channel = `attachments:progress:${requestId}`
+    for (const filePath of selected.filePaths) {
+      const attachment = await storeLocalAsset(filePath, assetRoot, {
+        onProgress: (completed) => {
+          if (!event.sender.isDestroyed()) event.sender.send(channel, { completed: completedBeforeFile + completed, total, currentName: path.basename(filePath) })
+        },
+      })
+      if (kind === 'image' && !isRenderableImage(attachment)) throw new TypeError(`${attachment.displayName} 不是受支持的图片。`)
+      attachments.push(attachment)
+      completedBeforeFile += attachment.size
+    }
+    database.registerPageAttachments(pageId, attachments)
+    return attachments.map((attachment) => ({
+      ...attachment,
+      relativePath: undefined,
+      url: `notetodo-asset://${attachment.hash}/${encodeURIComponent(attachment.displayName)}`,
+    }))
   })
   ipcMain.handle('database:load-by-page', (_event, pageId) => {
     assertId(pageId)

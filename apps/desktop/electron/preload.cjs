@@ -54,6 +54,16 @@ contextBridge.exposeInMainWorld('notetodo', {
     },
     listJobs: () => ipcRenderer.invoke('import:list-jobs'),
   },
+  attachments: {
+    pickAndStore: (pageId, kind, onProgress) => {
+      const requestId = crypto.randomUUID()
+      const channel = `attachments:progress:${requestId}`
+      const listener = (_event, progress) => onProgress(progress)
+      ipcRenderer.on(channel, listener)
+      return ipcRenderer.invoke('attachments:pick-and-store', pageId, kind, requestId)
+        .finally(() => ipcRenderer.removeListener(channel, listener))
+    },
+  },
   model: {
     getConfig: () => ipcRenderer.invoke('model:get-config'),
     saveConfig: (config) => ipcRenderer.invoke('model:save-config', config),

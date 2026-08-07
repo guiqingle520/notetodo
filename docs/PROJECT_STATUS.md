@@ -64,11 +64,14 @@ Content Parity, Import & Retrieval Alpha — **进行中**
 - Notion Aside/Details/附件链接规范化为可编辑富内容节点，Callout/Toggle 加入 Slash 菜单。
 - 富内容块第二批：Bookmark、KaTeX Formula、动态 Table of Contents 和安全 Embed 节点。
 - HTTPS 书签白名单、受支持嵌入来源与 iframe sandbox；目录仅在正文变更时增量重建。
+- Electron 原生图片/文件多选，Preload 白名单桥接以及编辑器 Slash 插入交互。
+- 本地附件流式 SHA-256 入库、按哈希去重、事务化页面引用和逐字节上传进度。
+- 图片魔数嗅探、单文件/单批资源限制，以及不向 Renderer 暴露源文件路径。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：15 个测试文件、56 个测试通过。
+- Vitest：16 个测试文件、60 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -98,15 +101,16 @@ Content Parity, Import & Retrieval Alpha — **进行中**
 - Bookmark/Formula/TOC/Embed 的 Yjs 往返、URL 协议与嵌入来源安全测试：通过。
 - 富内容装饰 DOM 多次 HTML/Yjs 迁移不重复正文：通过。
 - 动态目录 Slash 插入、标题派生和 Chromium 视觉验收：通过。
+- 本地附件流式哈希、重复内容去重、图片类型嗅探和大小限制：通过。
 - 隔离 Electron 烟雾测试：Schema v7、CSP、Preload、SQLite 与协作票据链路通过，退出码 0。
-- 全工作区：15 个测试文件、56 项测试通过。
+- 全工作区：16 个测试文件、60 项测试通过。
 
 ## 当前里程碑余项
 
 Content Parity, Import & Retrieval Alpha
 
-1. 扩展块 Schema：图片、文件、Callout、Toggle、书签、公式、目录和嵌入已完成；继续块级工具栏和上传交互。
-2. 建立附件内容寻址存储、缩略图、垃圾回收和上传进度。
+1. 扩展块 Schema、Slash 图片/文件选择和上传交互已完成；继续块级工具栏与拖放/粘贴上传。
+2. 附件内容寻址存储和上传进度已完成；继续缩略图、引用计数与垃圾回收。
 3. Notion ZIP/HTML/Markdown/CSV、附件、链接重写、事务写入、进度取消和可恢复报告已完成。
 4. 增加页面历史、快照浏览、差异比较与恢复。
 5. 建立权限过滤的全文/向量混合检索和 AI 引用定位。
