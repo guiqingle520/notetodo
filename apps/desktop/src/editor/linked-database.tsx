@@ -47,7 +47,7 @@ function LinkedDatabaseView({ node, selected }: NodeViewProps) {
       contentEditable={false}
     >
       <header className="linked-database-head">
-        <span><Database size={13} /><small>LINKED DATABASE</small><strong>{sourceTitle}</strong></span>
+        <span><Database size={13} /><small>关联数据库</small><strong>{sourceTitle}</strong></span>
         <button type="button" onClick={() => sourcePageId && setActivePage(sourcePageId)}>打开源页面 <ArrowUpRight size={12} /></button>
       </header>
       {sourcePageId ? <DatabaseBlock pageId={sourcePageId} /> : <p className="linked-database-error">关联的数据源已失效。</p>}

@@ -21,6 +21,8 @@ export type PropertyValue = string | number | boolean | string[] | null
 export interface DatabaseRecord {
   id: string
   values: Record<string, PropertyValue>
+  /** Rich-text HTML owned by the record detail page. Optional for legacy snapshots. */
+  content?: string
   createdAt: string
   updatedAt: string
 }

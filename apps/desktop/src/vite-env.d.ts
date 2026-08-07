@@ -45,6 +45,7 @@ interface Window {
       deleteProperty: (databaseId: string, propertyId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<{ automationRuns: string[] }>
       createRecord: (databaseId: string, recordId: string) => Promise<void>
+      updateRecordContent: (recordId: string, content: string) => Promise<void>
       setActiveView: (databaseId: string, viewId: string) => Promise<void>
       updateViewConfig: (databaseId: string, viewId: string, config: import('@notetodo/database-core').DatabaseViewConfig) => Promise<void>
     }

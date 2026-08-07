@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema } from '@notetodo/database-core'
-import { BoardView, DatabaseCreationPrompt, GalleryView, GenericTable, ListView, SchemaPanel, TimelineView, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { BoardView, DatabaseCreationPrompt, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TimelineView, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -136,5 +136,20 @@ describe('database authoring', () => {
     expect(onAdd).toHaveBeenCalledWith('评分', 'number')
     expect(onRename).toHaveBeenCalledWith('notes', '研究备注')
     expect(onDelete).toHaveBeenCalledWith('notes')
+  })
+
+  it('opens a record detail surface with body and editable properties', () => {
+    const onUpdateCell = vi.fn(); const onUpdateContent = vi.fn()
+    const detailSchema: DatabaseSchema = { id: 'research-db', name: '研究资料', properties: [
+      { id: 'name', name: '名称', type: 'title' },
+      { id: 'status', name: '状态', type: 'select', options: [{ id: 'todo', name: '待开始', color: 'slate' }, { id: 'done', name: '已完成', color: 'green' }] },
+    ] }
+    const detailRecord: DatabaseRecord = { id: 'detail-1', values: { name: '离线知识图谱', status: 'todo' }, content: '<p>记录正文</p>', createdAt: '2026-08-07T08:00:00Z', updatedAt: '2026-08-07T08:00:00Z' }
+    const { container, getByRole, getByText } = render(<RecordDetailPanel record={detailRecord} schema={detailSchema} onClose={vi.fn()} onUpdateCell={onUpdateCell} onUpdateContent={onUpdateContent} />)
+    expect(getByText('记录正文')).toBeTruthy()
+    fireEvent.change(getByRole('textbox', { name: '记录标题' }), { target: { value: '知识图谱 v2' } })
+    fireEvent.change(container.querySelector('.record-property-field select')!, { target: { value: 'done' } })
+    expect(onUpdateCell).toHaveBeenCalledWith('detail-1', 'name', '知识图谱 v2')
+    expect(onUpdateCell).toHaveBeenCalledWith('detail-1', 'status', 'done')
   })
 })

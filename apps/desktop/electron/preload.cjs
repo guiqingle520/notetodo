@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('notetodo', {
     deleteProperty: (databaseId, propertyId) => ipcRenderer.invoke('database:delete-property', databaseId, propertyId),
     updateCell: (recordId, propertyId, value) => ipcRenderer.invoke('database:update-cell', recordId, propertyId, value),
     createRecord: (databaseId, recordId) => ipcRenderer.invoke('database:create-record', databaseId, recordId),
+    updateRecordContent: (recordId, content) => ipcRenderer.invoke('database:update-record-content', recordId, content),
     setActiveView: (databaseId, viewId) => ipcRenderer.invoke('database:set-active-view', databaseId, viewId),
     updateViewConfig: (databaseId, viewId, config) => ipcRenderer.invoke('database:update-view-config', databaseId, viewId, config),
   },

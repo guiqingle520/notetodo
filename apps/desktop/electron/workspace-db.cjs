@@ -6,7 +6,7 @@ const { createApiToken, verifyApiToken } = require('@notetodo/auth-core')
 const { planAutomationRuns, validateAutomationRule } = require('@notetodo/automation-core')
 const { WEBHOOK_EVENTS, createWebhookEnvelope, nextWebhookAttempt, stableJson, validateWebhookUrl } = require('@notetodo/webhook-core')
 
-const LATEST_SCHEMA_VERSION = 12
+const LATEST_SCHEMA_VERSION = 13
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -441,6 +441,16 @@ class WorkspaceDatabase {
         CREATE INDEX automation_runs_database_time ON automation_runs(database_id, created_at DESC);
         CREATE INDEX automation_runs_status ON automation_runs(status, created_at DESC);
         INSERT INTO app_meta(key, value) VALUES ('schema_version', '12')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
+    if (currentVersion < 13) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        ALTER TABLE database_records ADD COLUMN content TEXT NOT NULL DEFAULT '' CHECK(length(content) <= 2000000);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '13')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value;
         COMMIT;
       `)
@@ -1000,7 +1010,7 @@ class WorkspaceDatabase {
       type: property.type,
       ...JSON.parse(property.config_json),
     }))
-    const recordRows = this.database.prepare('SELECT id, created_at, updated_at FROM database_records WHERE database_id = ? ORDER BY position').all(database.id)
+    const recordRows = this.database.prepare('SELECT id, content, created_at, updated_at FROM database_records WHERE database_id = ? ORDER BY position').all(database.id)
     const valueStatement = this.database.prepare(`
       SELECT property_id, text_value, number_value, boolean_value, json_value
       FROM property_values WHERE record_id = ?
@@ -1012,7 +1022,7 @@ class WorkspaceDatabase {
         if (row.text_value !== null) values[row.property_id] = row.text_value
         if (row.json_value !== null) values[row.property_id] = JSON.parse(row.json_value)
       }
-      return { id: record.id, values, createdAt: record.created_at, updatedAt: record.updated_at }
+      return { id: record.id, values, content: record.content, createdAt: record.created_at, updatedAt: record.updated_at }
     })
     const views = this.database.prepare('SELECT id, name, type, config_json FROM database_views WHERE database_id = ? ORDER BY position').all(database.id).map((view) => ({
       id: view.id,
@@ -1134,6 +1144,12 @@ class WorkspaceDatabase {
       this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, createdAt: now } }, now)
       this.database.exec('COMMIT')
     } catch (error) { this.database.exec('ROLLBACK'); throw error }
+  }
+
+  updateDatabaseRecordContent(recordId, content) {
+    const now = new Date().toISOString()
+    const result = this.database.prepare('UPDATE database_records SET content = ?, updated_at = ? WHERE id = ?').run(content, now, recordId)
+    if (result.changes !== 1) throw new Error('Database record does not exist.')
   }
 
   setActiveDatabaseView(databaseId, viewId) {

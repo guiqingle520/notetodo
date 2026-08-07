@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Activity, ArrowRight, ArrowUpDown, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Database, Filter, Images, Layers3, Link2, List, Plus, RotateCcw, Settings2, Sigma, Table2, Trash2, X, Zap } from 'lucide-react'
+import { EditorContent, useEditor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import Placeholder from '@tiptap/extension-placeholder'
+import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Database, Filter, Images, Layers3, Link2, List, Plus, RotateCcw, Settings2, Sigma, Table2, Trash2, X, Zap } from 'lucide-react'
 import { buildCalendarMonth, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseViewConfig, type FilterRule, type PropertyType, type PropertyValue, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
@@ -43,9 +46,9 @@ export function DatabaseCreationPrompt({ pageTitle, onCreate }: { pageTitle: str
   }
   if (!open) return <button className="database-create-trigger" onClick={() => setOpen(true)}><Database size={14} /><span><strong>创建数据库</strong><small>在当前页面建立结构化集合</small></span><Plus size={13} /></button>
   return <section className="database-create-composer">
-    <div><Database size={18} /><span><small>NEW COLLECTION / LOCAL-FIRST</small><strong>把这页变成可查询的资料集</strong></span></div>
+    <div><Database size={18} /><span><strong>创建数据库</strong><small>为此页面添加一个内联数据库</small></span></div>
     <label><span>数据库名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void create(); if (event.key === 'Escape') setOpen(false) }} /></label>
-    <p>将创建“名称、状态、日期”三个基础属性和默认表格；记录保存在本地 SQLite，可继续扩展 Schema。</p>
+    <p>包含名称、状态和日期属性。创建后可以继续添加属性与视图。</p>
     <footer><button onClick={() => setOpen(false)}>取消</button><button disabled={!name.trim() || busy} onClick={() => void create()}>{busy ? '正在创建…' : '创建数据库'}</button></footer>
   </section>
 }
@@ -55,6 +58,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [rulesOpen, setRulesOpen] = useState<'filters' | 'sorts' | 'group' | null>(null)
   const [schemaOpen, setSchemaOpen] = useState(false)
   const [automationOpen, setAutomationOpen] = useState(false)
+  const [openRecordId, setOpenRecordId] = useState<string | null>(null)
   const [automations, setAutomations] = useState<AutomationRule[]>([])
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([])
   const projectionCache = useRef<{ schemaId: string; records: DatabaseRecord[] }>({ schemaId: '', records: [] })
@@ -130,6 +134,12 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     for (const [propertyId, value] of Object.entries(record.values)) void databaseRepository.updateCell(next, id, propertyId, value)
   }
 
+  const updateRecordContent = (recordId: string, content: string) => {
+    const next = { ...snapshot, records: snapshot.records.map((record) => record.id === recordId ? { ...record, content, updatedAt: new Date().toISOString() } : record) }
+    setSnapshot(next)
+    void databaseRepository.updateRecordContent(next, recordId, content)
+  }
+
   const setView = (viewId: string) => {
     const next = { ...snapshot, activeViewId: viewId }
     setSnapshot(next)
@@ -161,12 +171,12 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
           <button className="database-new" onClick={addRecord}><Plus size={13} />新建</button>
         </div>
       </div>
-      <div className="database-summary"><span>{snapshot.schema.name.toLocaleUpperCase()}</span><span className="database-compute-mark">Δ {projection.recomputedCount} RECALCULATED</span><span>{records.length} / {snapshot.records.length} RECORDS</span></div>
+      <div className="database-summary"><span>{snapshot.schema.name}</span><span className="database-compute-mark">已更新 {projection.recomputedCount} 项</span><span>{records.length} / {snapshot.records.length} 条记录</span></div>
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
-      {recordGroups.length > 0 && <div className="database-group-ledger"><span>GROUP LEDGER</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
+      {recordGroups.length > 0 && <div className="database-group-ledger"><span>分组</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
       {activeView.type === 'table' && (snapshot.schema.id === 'roadmap-db'
-        ? <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} />
-        : <GenericTable records={records} schema={snapshot.schema} updateCell={updateCell} />)}
+        ? <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} onOpenRecord={setOpenRecordId} />
+        : <GenericTable records={records} schema={snapshot.schema} updateCell={updateCell} onOpenRecord={setOpenRecordId} />)}
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
       {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
@@ -174,6 +184,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       {activeView.type === 'gallery' && <GalleryView records={records} schema={snapshot.schema} coverPropertyId={activeView.config.coverPropertyId} visiblePropertyIds={activeView.config.visiblePropertyIds} cardSize={activeView.config.cardSize} updateCell={updateCell} />}
       {rulesOpen && createPortal(<ViewRulesPanel schema={snapshot.schema} config={activeView.config} initialTab={rulesOpen} onClose={() => setRulesOpen(null)} onSave={(config) => { saveViewConfig(config); setRulesOpen(null) }} />, document.body)}
       {schemaOpen && createPortal(<SchemaPanel schema={snapshot.schema} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
+      {openRecordId && derivedRecords.find((record) => record.id === openRecordId) && createPortal(<RecordDetailPanel key={openRecordId} record={derivedRecords.find((record) => record.id === openRecordId)!} schema={snapshot.schema} onClose={() => setOpenRecordId(null)} onUpdateCell={updateCell} onUpdateContent={updateRecordContent} />, document.body)}
       {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
         if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
         else setAutomations((current) => [...current.filter((item) => item.id !== rule.id), rule])
@@ -208,7 +219,7 @@ export function SchemaPanel({ schema, onClose, onAdd, onRename, onDelete }: { sc
   return <div className="schema-panel-backdrop" onMouseDown={onClose}><section className="schema-panel" role="dialog" aria-modal="true" aria-label="数据库属性管理" onMouseDown={(event) => event.stopPropagation()}>
     <header><div><small>SCHEMA DESK / {schema.name.toLocaleUpperCase()}</small><strong>定义资料的骨架</strong></div><button aria-label="关闭属性管理" onClick={onClose}><X size={15} /></button></header>
     <main><div className="schema-ledger-head"><span>序号</span><span>属性名称</span><span>类型</span><span>操作</span></div>{schema.properties.map((property, index) => <div className="schema-ledger-row" key={property.id}><em>{String(index + 1).padStart(2, '0')}</em><input aria-label={`${property.name} 属性名称`} defaultValue={property.name} maxLength={100} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== property.name) void onRename(property.id, next) }} /><span><i>{propertyTypeLabel(property.type)}</i>{propertyTypeName(property.type)}</span>{property.type === 'title' || ['formula', 'rollup'].includes(property.type) ? <small>{property.type === 'title' ? '主属性' : '只读派生'}</small> : <button className={deletePending === property.id ? 'is-confirm' : ''} onClick={() => { if (deletePending !== property.id) return setDeletePending(property.id); void onDelete(property.id).then(() => setDeletePending(null)) }}><Trash2 size={11} />{deletePending === property.id ? '确认删除' : '删除'}</button>}</div>)}</main>
-    <footer><div><input aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span>{schema.properties.length} / 50 PROPERTIES · 标题属性受保护</span></footer>
+    <footer><div><input aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span>{schema.properties.length} / 50 个属性 · 标题属性受保护</span></footer>
   </section></div>
 }
 
@@ -219,7 +230,7 @@ function propertyTypeName(type: PropertyType) {
 function ViewRuleSummary({ config, schema, onOpen }: { config: DatabaseViewConfig; schema: DatabaseSchema; onOpen: (tab: 'filters' | 'sorts' | 'group') => void }) {
   if (!config.filters?.length && !config.sorts?.length && !config.groupByPropertyId) return null
   return <div className="view-rule-summary">
-    <span>SAVED VIEW</span>
+    <span>已保存视图</span>
     {config.filters?.length ? <button onClick={() => onOpen('filters')}><Filter size={10} />{config.filters.length} 条筛选 · {config.filterMode === 'or' ? '任一' : '全部'}</button> : null}
     {config.sorts?.length ? <button onClick={() => onOpen('sorts')}><ArrowUpDown size={10} />{config.sorts.map((sort) => propertyName(schema.properties, sort.propertyId)).join(' → ')}</button> : null}
     {config.groupByPropertyId ? <button onClick={() => onOpen('group')}><Layers3 size={10} />按 {propertyName(schema.properties, config.groupByPropertyId)} 分组</button> : null}
@@ -415,7 +426,7 @@ function AutomationPanel({ schema, rules, runs, onClose, onSave, onToggle, onRep
 
   return <div className="automation-backdrop" onMouseDown={onClose}>
     <section className="automation-panel" role="dialog" aria-modal="true" aria-label="数据库自动化" onMouseDown={(event) => event.stopPropagation()}>
-      <header><div><span><Zap size={15} /></span><div><small>AUTOMATION DESK / {schema.name.toLocaleUpperCase()}</small><strong>规则与执行磁带</strong></div></div><button onClick={onClose}><X size={16} /></button></header>
+      <header><div><span><Zap size={15} /></span><div><small>{schema.name}</small><strong>数据库自动化</strong></div></div><button onClick={onClose}><X size={16} /></button></header>
       <nav><button className={tab === 'rules' ? 'is-active' : ''} onClick={() => setTab('rules')}><Zap size={12} />规则 {rules.length}</button><button className={tab === 'runs' ? 'is-active' : ''} onClick={() => setTab('runs')}><Activity size={12} />运行 {runs.length}</button></nav>
       {tab === 'rules' ? <div className="automation-layout">
         <aside><button className="automation-new" onClick={() => setDraft(blankRule())}><Plus size={12} />新建规则</button>{rules.map((rule) => <button className={draft.id === rule.id ? 'is-selected' : ''} key={rule.id} onClick={() => setDraft(structuredClone(rule))}><i className={rule.enabled ? 'is-live' : ''} /><span><strong>{rule.name}</strong><small>{propertyName(schema.properties, rule.trigger.propertyId)} 变更时</small></span><em onClick={(event) => { event.stopPropagation(); void onToggle(rule) }}>{rule.enabled ? 'ON' : 'OFF'}</em></button>)}</aside>
@@ -450,7 +461,7 @@ function defaultPropertyValue(property: DatabaseProperty): PropertyValue {
   return null
 }
 
-export function GenericTable({ records, schema, updateCell }: { records: DatabaseRecord[]; schema: DatabaseSchema; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+export function GenericTable({ records, schema, updateCell, onOpenRecord }: { records: DatabaseRecord[]; schema: DatabaseSchema; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void }) {
   const [scrollTop, setScrollTop] = useState(0)
   const properties = schema.properties.slice(0, 20)
   const { start, end, totalSize } = virtualWindow(records.length, scrollTop, ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
@@ -459,13 +470,13 @@ export function GenericTable({ records, schema, updateCell }: { records: Databas
   return <div className="generic-database-table">
     <div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i>{property.name}</span>)}</div>
     <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(ROW_HEIGHT, records.length * ROW_HEIGHT)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className="generic-database-grid generic-database-row" key={record.id} style={{ gridTemplateColumns: template, transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} updateCell={updateCell} />)}</div>)}</div>
+      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className="generic-database-grid generic-database-row" key={record.id} style={{ gridTemplateColumns: template, transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
     </div>
     {!records.length && <div className="generic-database-empty"><Database size={17} /><span>还没有记录</span><small>点击右上角“新建”写入第一行</small></div>}
   </div>
 }
 
-function GenericCell({ record, property, updateCell }: { record: DatabaseRecord; property: DatabaseProperty; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+function GenericCell({ record, property, updateCell, onOpenRecord }: { record: DatabaseRecord; property: DatabaseProperty; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void }) {
   const value = record.values[property.id]
   if (property.type === 'select') return <select className={`generic-select value-${String(value ?? 'empty')}`} value={String(value ?? '')} onChange={(event) => updateCell(record.id, property.id, event.target.value || null)}><option value="">未选择</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
   if (property.type === 'checkbox') return <label className="generic-check"><input type="checkbox" checked={Boolean(value)} onChange={(event) => updateCell(record.id, property.id, event.target.checked)} /><span /></label>
@@ -473,14 +484,95 @@ function GenericCell({ record, property, updateCell }: { record: DatabaseRecord;
   if (property.type === 'date') return <input type="date" value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value || null)} />
   if (property.type === 'multiSelect') return <input value={Array.isArray(value) ? value.join(', ') : ''} placeholder="逗号分隔" onChange={(event) => updateCell(record.id, property.id, event.target.value.split(',').map((item) => item.trim()).filter(Boolean))} />
   if (property.type === 'formula' || property.type === 'rollup' || property.type === 'relation') return <output>{Array.isArray(value) ? value.join('、') : value === null || value === undefined ? '—' : String(value)}</output>
-  return <input className={property.type === 'title' ? 'is-title' : ''} type={property.type === 'url' ? 'url' : 'text'} value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value)} />
+  if (property.type === 'title') return <div className="generic-title-cell"><input className="is-title" value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value)} /><button aria-label={`打开 ${String(value || '无标题')}`} title="打开记录详情" onClick={() => onOpenRecord?.(record.id)}><BookOpen size={12} /></button></div>
+  return <input type={property.type === 'url' ? 'url' : 'text'} value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value)} />
+}
+
+export function RecordDetailPanel({ record, schema, onClose, onUpdateCell, onUpdateContent }: { record: DatabaseRecord; schema: DatabaseSchema; onClose: () => void; onUpdateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onUpdateContent: (recordId: string, content: string) => void }) {
+  const titleProperty = schema.properties.find((property) => property.type === 'title')
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestContent = useRef(record.content ?? '')
+  const savedContent = useRef(record.content ?? '')
+  const [saveState, setSaveState] = useState<'saved' | 'saving'>('saved')
+  const persist = () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    if (latestContent.current === savedContent.current) return
+    savedContent.current = latestContent.current
+    onUpdateContent(record.id, latestContent.current)
+    setSaveState('saved')
+  }
+  const editor = useEditor({
+    extensions: [StarterKit, Placeholder.configure({ placeholder: '输入正文，或键入 / 唤起内容块…' })],
+    content: record.content || '<p></p>',
+    immediatelyRender: false,
+    editorProps: { attributes: { 'aria-label': '记录正文' } },
+    onUpdate: ({ editor: current }) => {
+      latestContent.current = current.isEmpty ? '' : current.getHTML()
+      setSaveState('saving')
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      // Coalesce rapid keystrokes so SQLite receives one small write per pause.
+      saveTimer.current = setTimeout(persist, 450)
+    },
+  })
+  useEffect(() => () => persist(), [])
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { persist(); onClose() } }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+  const close = () => { persist(); onClose() }
+  const title = titleProperty ? String(record.values[titleProperty.id] ?? '') : ''
+  return <div className="record-detail-backdrop" onMouseDown={close}>
+    <section className="record-detail-panel" role="dialog" aria-modal="true" aria-label={`记录详情：${title || '无标题'}`} onMouseDown={(event) => event.stopPropagation()}>
+      <header><span><BookOpen size={13} />{schema.name}<i>/</i>{record.id.slice(0, 8)}</span><div><em className={`is-${saveState}`}>{saveState === 'saving' ? '正在保存…' : '已保存到本地'}</em><button aria-label="关闭记录详情" onClick={close}><X size={16} /></button></div></header>
+      <div className="record-detail-layout">
+        <main>
+          <small>DATABASE RECORD / LOCAL-FIRST</small>
+          <input className="record-detail-title" aria-label="记录标题" placeholder="无标题" value={title} onChange={(event) => titleProperty && onUpdateCell(record.id, titleProperty.id, event.target.value)} />
+          <nav className="record-editor-toolbar" aria-label="正文格式">
+            <button className={editor?.isActive('bold') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBold().run()}>B</button>
+            <button className={editor?.isActive('italic') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleItalic().run()}><i>I</i></button>
+            <button className={editor?.isActive('heading', { level: 2 }) ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
+            <button className={editor?.isActive('bulletList') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBulletList().run()}>• 列表</button>
+            <button className={editor?.isActive('blockquote') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBlockquote().run()}>“ 引用</button>
+          </nav>
+          <EditorContent editor={editor} className="record-detail-editor" />
+        </main>
+        <aside>
+          <div className="record-property-heading"><span>属性</span><em>{schema.properties.length}</em></div>
+          {schema.properties.filter((property) => property.type !== 'title').map((property) => <RecordPropertyField key={property.id} record={record} property={property} onUpdate={onUpdateCell} />)}
+          <footer><span>创建</span><time>{formatRecordTime(record.createdAt)}</time><span>更新</span><time>{formatRecordTime(record.updatedAt)}</time></footer>
+        </aside>
+      </div>
+    </section>
+  </div>
+}
+
+function RecordPropertyField({ record, property, onUpdate }: { record: DatabaseRecord; property: DatabaseProperty; onUpdate: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const value = record.values[property.id]
+  let field: ReactNode
+  if (property.type === 'select') field = <select value={String(value ?? '')} onChange={(event) => onUpdate(record.id, property.id, event.target.value || null)}><option value="">未选择</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+  else if (property.type === 'checkbox') field = <label className="record-property-check"><input type="checkbox" checked={Boolean(value)} onChange={(event) => onUpdate(record.id, property.id, event.target.checked)} /><span>{value ? '已勾选' : '未勾选'}</span></label>
+  else if (property.type === 'number') field = <input type="number" value={typeof value === 'number' ? value : ''} onChange={(event) => onUpdate(record.id, property.id, event.target.value === '' ? null : Number(event.target.value))} />
+  else if (property.type === 'date') field = <input type="date" value={typeof value === 'string' ? value : ''} onChange={(event) => onUpdate(record.id, property.id, event.target.value || null)} />
+  else if (property.type === 'multiSelect') field = <input value={Array.isArray(value) ? value.join(', ') : ''} placeholder="逗号分隔" onChange={(event) => onUpdate(record.id, property.id, event.target.value.split(',').map((item) => item.trim()).filter(Boolean))} />
+  else if (['formula', 'rollup', 'relation'].includes(property.type)) field = <output>{Array.isArray(value) ? value.join('、') : value === null || value === undefined ? '—' : String(value)}</output>
+  else field = <input type={property.type === 'url' ? 'url' : 'text'} value={typeof value === 'string' ? value : ''} placeholder="空" onChange={(event) => onUpdate(record.id, property.id, event.target.value)} />
+  return <label className="record-property-field"><span><i>{propertyTypeLabel(property.type)}</i>{property.name}</span>{field}</label>
+}
+
+function formatRecordTime(value: string) {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function propertyTypeLabel(type: DatabaseProperty['type']) {
   return ({ title: 'Aa', text: 'Tx', number: '#', checkbox: '✓', select: '◉', multiSelect: '◎', date: '◫', url: '↗', relation: '↔', rollup: '∑', formula: 'ƒ' } as const)[type]
 }
 
-export function VirtualTable({ records, allRecords, updateCell }: { records: DatabaseRecord[]; allRecords: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+export function VirtualTable({ records, allRecords, updateCell, onOpenRecord }: { records: DatabaseRecord[]; allRecords: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void }) {
   const [scrollTop, setScrollTop] = useState(0)
   const { start, end, totalSize } = virtualWindow(records.length, scrollTop, ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
   const visible = records.slice(start, end)
@@ -492,7 +584,7 @@ export function VirtualTable({ records, allRecords, updateCell }: { records: Dat
         <div className="database-row-space" style={{ height: totalSize }}>
           {visible.map((record, offset) => (
             <div className="database-grid database-grid-row" key={record.id} style={{ transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}>
-              <input value={String(record.values['task-title'] ?? '')} onChange={(event) => updateCell(record.id, 'task-title', event.target.value)} />
+              <div className="generic-title-cell"><input value={String(record.values['task-title'] ?? '')} onChange={(event) => updateCell(record.id, 'task-title', event.target.value)} /><button aria-label={`打开 ${String(record.values['task-title'] || '无标题')}`} title="打开记录详情" onClick={() => onOpenRecord?.(record.id)}><BookOpen size={12} /></button></div>
               <StatusSelect record={record} updateCell={updateCell} />
               <input value={String(record.values['task-owner'] ?? '')} onChange={(event) => updateCell(record.id, 'task-owner', event.target.value)} />
               <input type="date" value={String(record.values['task-due'] ?? '')} onChange={(event) => updateCell(record.id, 'task-due', event.target.value)} />

@@ -109,6 +109,11 @@ class DatabaseRepository {
     this.write(snapshot)
   }
 
+  async updateRecordContent(snapshot: DatabaseSnapshot, recordId: string, content: string) {
+    if (window.notetodo?.database) return window.notetodo.database.updateRecordContent(recordId, content)
+    this.write(snapshot)
+  }
+
   async setActiveView(snapshot: DatabaseSnapshot, viewId: string) {
     if (window.notetodo?.database) return window.notetodo.database.setActiveView(snapshot.schema.id, viewId)
     this.write({ ...snapshot, activeViewId: viewId })
@@ -158,7 +163,7 @@ function upgradeBrowserSnapshot(snapshot: DatabaseSnapshot): DatabaseSnapshot {
   const views = [...snapshot.views]
   for (const view of seedSnapshot.views) if (!views.some((candidate) => candidate.id === view.id)) views.push(structuredClone(view))
   const seedRecords = new Map(seedSnapshot.records.map((record) => [record.id, record]))
-  const records = snapshot.records.map((record) => ({ ...record, values: { ...(seedRecords.get(record.id)?.values ?? {}), ...record.values } }))
+  const records = snapshot.records.map((record) => ({ ...record, content: record.content ?? '', values: { ...(seedRecords.get(record.id)?.values ?? {}), ...record.values } }))
   return { ...snapshot, schema: { ...snapshot.schema, properties }, views, records, activeViewId: views.some((view) => view.id === snapshot.activeViewId) ? snapshot.activeViewId : views[0]?.id ?? '' }
 }
 

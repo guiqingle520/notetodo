@@ -305,6 +305,11 @@ function registerWorkspaceIpc(database) {
     assertId(recordId)
     database.createDatabaseRecord(databaseId, recordId)
   })
+  ipcMain.handle('database:update-record-content', (_event, recordId, content) => {
+    assertId(recordId)
+    if (typeof content !== 'string' || content.length > 2_000_000) throw new TypeError('Database record content is invalid or too large.')
+    database.updateDatabaseRecordContent(recordId, content)
+  })
   ipcMain.handle('database:set-active-view', (_event, databaseId, viewId) => {
     assertId(databaseId)
     assertId(viewId)
