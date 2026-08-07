@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema } from '@notetodo/database-core'
-import { BoardView, GalleryView, ListView, TimelineView, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { BoardView, DatabaseCreationPrompt, GalleryView, GenericTable, ListView, SchemaPanel, TimelineView, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -90,5 +90,51 @@ describe('large database DOM budgets', () => {
     const { container } = render(<VirtualTable records={manyRecords} allRecords={manyRecords} updateCell={vi.fn()} />)
     expect(container.querySelectorAll('.database-grid-row').length).toBeLessThanOrEqual(14)
     expect(container.querySelectorAll('.relation-cell option').length).toBeLessThanOrEqual(1_430)
+  })
+})
+
+describe('database authoring', () => {
+  it('creates a database from the current page with a validated name', () => {
+    const onCreate = vi.fn().mockResolvedValue(undefined)
+    const { getByRole } = render(<DatabaseCreationPrompt pageTitle="研究计划" onCreate={onCreate} />)
+    fireEvent.click(getByRole('button', { name: /创建数据库/ }))
+    const input = getByRole('textbox', { name: '数据库名称' })
+    fireEvent.change(input, { target: { value: '研究资料库' } })
+    fireEvent.click(getByRole('button', { name: '创建数据库' }))
+    expect(onCreate).toHaveBeenCalledWith('研究资料库')
+  })
+
+  it('edits schema-driven title, select and date cells', () => {
+    const updateCell = vi.fn()
+    const authoringSchema: DatabaseSchema = { id: 'research-db', name: '研究', properties: [
+      { id: 'name', name: '名称', type: 'title' },
+      { id: 'status', name: '状态', type: 'select', options: [{ id: 'todo', name: '待开始', color: 'slate' }, { id: 'done', name: '已完成', color: 'green' }] },
+      { id: 'date', name: '日期', type: 'date' },
+    ] }
+    const authored: DatabaseRecord = { id: 'r1', values: { name: '资料 A', status: 'todo', date: '2026-08-07' }, createdAt: '', updatedAt: '' }
+    const { container, getByDisplayValue } = render(<GenericTable records={[authored]} schema={authoringSchema} updateCell={updateCell} />)
+    fireEvent.change(getByDisplayValue('资料 A'), { target: { value: '资料 B' } })
+    fireEvent.change(container.querySelector('.generic-select')!, { target: { value: 'done' } })
+    expect(updateCell).toHaveBeenCalledWith('r1', 'name', '资料 B')
+    expect(updateCell).toHaveBeenCalledWith('r1', 'status', 'done')
+  })
+
+  it('adds, renames and confirms deletion of schema properties', () => {
+    const onAdd = vi.fn().mockResolvedValue(undefined); const onRename = vi.fn().mockResolvedValue(undefined); const onDelete = vi.fn().mockResolvedValue(undefined)
+    const authoringSchema: DatabaseSchema = { id: 'research-db', name: '研究', properties: [
+      { id: 'name', name: '名称', type: 'title' }, { id: 'notes', name: '备注', type: 'text' },
+    ] }
+    const { getByRole } = render(<SchemaPanel schema={authoringSchema} onClose={vi.fn()} onAdd={onAdd} onRename={onRename} onDelete={onDelete} />)
+    fireEvent.change(getByRole('textbox', { name: '新属性名称' }), { target: { value: '评分' } })
+    fireEvent.change(getByRole('combobox', { name: '新属性类型' }), { target: { value: 'number' } })
+    fireEvent.click(getByRole('button', { name: /添加属性/ }))
+    fireEvent.change(getByRole('textbox', { name: '备注 属性名称' }), { target: { value: '研究备注' } })
+    fireEvent.blur(getByRole('textbox', { name: '备注 属性名称' }))
+    fireEvent.click(getByRole('button', { name: '删除' }))
+    expect(onDelete).not.toHaveBeenCalled()
+    fireEvent.click(getByRole('button', { name: '确认删除' }))
+    expect(onAdd).toHaveBeenCalledWith('评分', 'number')
+    expect(onRename).toHaveBeenCalledWith('notes', '研究备注')
+    expect(onDelete).toHaveBeenCalledWith('notes')
   })
 })

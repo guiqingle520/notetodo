@@ -14,6 +14,10 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     restorePage(id: string): void
     searchPages(query: string, limit?: number): WorkspacePage[]
     loadDatabaseByPage(pageId: string): DatabaseSnapshot | null
+    createDatabaseForPage(pageId: string, databaseId: string, name: string): DatabaseSnapshot
+    addDatabaseProperty(databaseId: string, propertyId: string, name: string, type: string): DatabaseSnapshot
+    renameDatabaseProperty(databaseId: string, propertyId: string, name: string): DatabaseSnapshot
+    deleteDatabaseProperty(databaseId: string, propertyId: string): DatabaseSnapshot
     updateDatabaseCell(recordId: string, propertyId: string, value: unknown): { automationRuns: string[] }
     createDatabaseRecord(databaseId: string, recordId: string): void
     setActiveDatabaseView(databaseId: string, viewId: string): void
@@ -127,6 +131,25 @@ describe('WorkspaceDatabase', () => {
     expect(updated?.activeViewId).toBe('roadmap-board')
     expect(updated?.views.find((view) => view.id === 'roadmap-board')?.config.filters).toHaveLength(1)
     expect(() => database?.updateDatabaseViewConfig('roadmap-db', 'missing-view', {})).toThrow(/does not exist/)
+  })
+
+  it('creates a typed database atomically on any existing page', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const now = new Date().toISOString()
+    database.upsertPage({ id: 'research', title: '研究台账', icon: 'grid', parentId: null, favorite: false, content: '<p></p>', updatedAt: now, lastVisitedAt: now, archivedAt: null })
+    const created = database.createDatabaseForPage('research', 'research-db', '研究台账')
+
+    expect(created.schema).toMatchObject({ id: 'research-db', name: '研究台账' })
+    expect(created.schema.properties.map((property) => property.type)).toEqual(['title', 'select', 'date'])
+    expect(created.views).toEqual([expect.objectContaining({ id: 'research-db-table', type: 'table', name: '默认表格' })])
+    expect(database.loadDatabaseByPage('research')?.activeViewId).toBe('research-db-table')
+    database.addDatabaseProperty('research-db', 'research-notes', '备注', 'text')
+    database.renameDatabaseProperty('research-db', 'research-notes', '研究备注')
+    expect(database.loadDatabaseByPage('research')?.schema.properties.at(-1)).toMatchObject({ id: 'research-notes', name: '研究备注', type: 'text' })
+    database.deleteDatabaseProperty('research-db', 'research-notes')
+    expect(database.loadDatabaseByPage('research')?.schema.properties.some((property) => property.id === 'research-notes')).toBe(false)
+    expect(() => database!.deleteDatabaseProperty('research-db', 'research-db-title')).toThrow(/cannot be deleted/)
+    expect(() => database!.createDatabaseForPage('missing', 'missing-db', '无效')).toThrow('Database page does not exist.')
   })
 
   it('persists validated relations while keeping derived properties read-only', () => {

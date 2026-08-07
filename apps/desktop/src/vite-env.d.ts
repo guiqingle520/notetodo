@@ -39,6 +39,10 @@ interface Window {
     }
     database: {
       loadByPage: (pageId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot | null>
+      create: (pageId: string, databaseId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      addProperty: (databaseId: string, propertyId: string, name: string, type: import('@notetodo/database-core').PropertyType) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      renameProperty: (databaseId: string, propertyId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      deleteProperty: (databaseId: string, propertyId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<{ automationRuns: string[] }>
       createRecord: (databaseId: string, recordId: string) => Promise<void>
       setActiveView: (databaseId: string, viewId: string) => Promise<void>

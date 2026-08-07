@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Database Views & Layout Beta — **已完成**
+Database Authoring & Record Pages Beta — **进行中（数据库创建与基础 Schema 管理已交付）**
 
 ### 已交付
 
@@ -118,11 +118,14 @@ Database Views & Layout Beta — **已完成**
 - 大型数据库派生字段增量投影：仅重算已修改记录与 Rollup 依赖方，未受影响记录保持对象引用稳定。
 - Table、List、Board 统一窗口化预算；Relation 原生选项严格限流，避免万级记录产生指数级 DOM。
 - 数据库状态栏显示本轮重算记录数，为大型工作区提供轻量性能可观测性。
+- 任意可编辑页面可创建本地数据库，SQLite 事务一次写入数据库、默认属性和默认表格视图。
+- Schema 驱动通用表格支持标题、文本、数字、复选框、单选、多选、日期与网址单元格。
+- 属性工作台支持添加、重命名和二次确认删除，并保护标题及派生属性边界。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：27 个测试文件、123 个测试通过。
+- Vitest：27 个测试文件、127 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -168,6 +171,7 @@ Database Views & Layout Beta — **已完成**
 - 高级视图规则：AND/OR、多级排序、分组、SQLite/浏览器刷新恢复和 Portal 视觉验收：通过。
 - 多栏布局、页面提及、关联数据库的 HTML/Tiptap/Yjs 往返与真实 Chromium 插入、跳转、刷新恢复：通过。
 - 一万条派生记录增量重算、百万行虚拟坐标、Table/List/Board DOM 预算与 Chromium 滚动布局：通过。
+- 任意页面数据库创建、Schema 增删改、通用记录编辑和浏览器刷新恢复：通过。
 
 ## 已完成里程碑归档
 
@@ -189,7 +193,7 @@ Open Platform & External Automation Alpha
 3. 用户可编辑自动化规则、执行日志和失败重放已交付 Alpha。
 4. MCP Server 读写工作区与自定义模型工具调用闭环已交付 Alpha。
 
-## 当前开发里程碑
+## 最近完成里程碑
 
 Database Views & Layout Beta
 
@@ -198,11 +202,11 @@ Database Views & Layout Beta
 3. 页面多栏布局、页面提及和关联数据库视图已交付 Beta。
 4. 大型数据库增量计算、虚拟化和交互性能压测已交付 Beta。
 
-## 下一开发里程碑
+## 当前开发里程碑
 
 Database Authoring & Record Pages Beta
 
-1. 在任意页面创建内联/整页数据库，以及数据库 Schema 属性管理。
+1. 任意页面内联数据库创建与基础 Schema 属性管理已交付 Beta；后续补充独立整页数据库入口。
 2. 数据库记录详情页、页面正文和属性面板。
 3. 视图新建、重命名、复制、删除和默认视图管理。
 4. 数据库模板、批量编辑与 CSV 导出。

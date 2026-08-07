@@ -1,4 +1,4 @@
-import type { DatabaseRecord, DatabaseSnapshot, DatabaseViewConfig, PropertyValue } from '@notetodo/database-core'
+import type { DatabaseRecord, DatabaseSnapshot, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
 
 const now = new Date().toISOString()
 const seedSnapshot: DatabaseSnapshot = {
@@ -46,15 +46,56 @@ function record(id: string, values: [string, string, string, string, number, str
 
 class DatabaseRepository {
   private readonly key = 'notetodo-browser-database-v1'
+  private readonly collectionKey = 'notetodo-browser-databases-v2'
+  private readonly pageByDatabase = new Map<string, string>()
 
   async loadByPage(pageId: string) {
     if (window.notetodo?.database) return window.notetodo.database.loadByPage(pageId)
+    const collections = this.readCollections()
+    if (collections[pageId]) {
+      this.pageByDatabase.set(collections[pageId]!.schema.id, pageId)
+      return structuredClone(collections[pageId]!)
+    }
     if (pageId !== 'projects') return null
     const saved = localStorage.getItem(this.key)
-    if (!saved) return structuredClone(seedSnapshot)
-    const upgraded = upgradeBrowserSnapshot(JSON.parse(saved) as DatabaseSnapshot)
-    this.write(upgraded)
+    const upgraded = saved ? upgradeBrowserSnapshot(JSON.parse(saved) as DatabaseSnapshot) : structuredClone(seedSnapshot)
+    this.pageByDatabase.set(upgraded.schema.id, pageId)
+    this.write(upgraded, pageId)
     return upgraded
+  }
+
+  async createOnPage(pageId: string, name: string) {
+    const databaseId = crypto.randomUUID()
+    if (window.notetodo?.database) return window.notetodo.database.create(pageId, databaseId, name)
+    const snapshot = createBrowserDatabase(databaseId, name)
+    this.pageByDatabase.set(databaseId, pageId)
+    this.write(snapshot, pageId)
+    return structuredClone(snapshot)
+  }
+
+  async addProperty(snapshot: DatabaseSnapshot, name: string, type: Exclude<PropertyType, 'title' | 'relation' | 'rollup' | 'formula'>) {
+    const propertyId = crypto.randomUUID()
+    if (window.notetodo?.database) return window.notetodo.database.addProperty(snapshot.schema.id, propertyId, name, type)
+    const property = { id: propertyId, name, type, ...(['select', 'multiSelect'].includes(type) ? { options: [
+      { id: 'option-1', name: '选项 1', color: 'slate' as const }, { id: 'option-2', name: '选项 2', color: 'amber' as const },
+    ] } : {}) }
+    const next = { ...snapshot, schema: { ...snapshot.schema, properties: [...snapshot.schema.properties, property] } }
+    this.write(next); return structuredClone(next)
+  }
+
+  async renameProperty(snapshot: DatabaseSnapshot, propertyId: string, name: string) {
+    if (window.notetodo?.database) return window.notetodo.database.renameProperty(snapshot.schema.id, propertyId, name)
+    const next = { ...snapshot, schema: { ...snapshot.schema, properties: snapshot.schema.properties.map((property) => property.id === propertyId ? { ...property, name } : property) } }
+    this.write(next); return structuredClone(next)
+  }
+
+  async deleteProperty(snapshot: DatabaseSnapshot, propertyId: string) {
+    const property = snapshot.schema.properties.find((candidate) => candidate.id === propertyId)
+    if (!property || property.type === 'title') throw new Error('标题属性不能删除。')
+    if (window.notetodo?.database) return window.notetodo.database.deleteProperty(snapshot.schema.id, propertyId)
+    const records = snapshot.records.map((record) => { const values = { ...record.values }; delete values[propertyId]; return { ...record, values } })
+    const next = { ...snapshot, schema: { ...snapshot.schema, properties: snapshot.schema.properties.filter((candidate) => candidate.id !== propertyId) }, records }
+    this.write(next); return structuredClone(next)
   }
 
   async updateCell(snapshot: DatabaseSnapshot, recordId: string, propertyId: string, value: PropertyValue) {
@@ -78,8 +119,35 @@ class DatabaseRepository {
     this.write(snapshot)
   }
 
-  private write(snapshot: DatabaseSnapshot) {
-    localStorage.setItem(this.key, JSON.stringify(snapshot))
+  private write(snapshot: DatabaseSnapshot, explicitPageId?: string) {
+    const pageId = explicitPageId ?? this.pageByDatabase.get(snapshot.schema.id) ?? (snapshot.schema.id === 'roadmap-db' ? 'projects' : undefined)
+    if (!pageId) throw new Error('Database is not attached to a page.')
+    const collections = this.readCollections()
+    collections[pageId] = snapshot
+    localStorage.setItem(this.collectionKey, JSON.stringify(collections))
+    if (pageId === 'projects') localStorage.setItem(this.key, JSON.stringify(snapshot))
+  }
+
+  private readCollections() {
+    try { return JSON.parse(localStorage.getItem(this.collectionKey) ?? '{}') as Record<string, DatabaseSnapshot> }
+    catch { return {} as Record<string, DatabaseSnapshot> }
+  }
+}
+
+function createBrowserDatabase(databaseId: string, name: string): DatabaseSnapshot {
+  const titleId = `${databaseId}-title`; const statusId = `${databaseId}-status`; const dateId = `${databaseId}-date`
+  const viewId = `${databaseId}-table`
+  return {
+    schema: { id: databaseId, name, properties: [
+      { id: titleId, name: '名称', type: 'title' },
+      { id: statusId, name: '状态', type: 'select', options: [
+        { id: 'todo', name: '待开始', color: 'slate' }, { id: 'doing', name: '进行中', color: 'amber' }, { id: 'done', name: '已完成', color: 'green' },
+      ] },
+      { id: dateId, name: '日期', type: 'date' },
+    ] },
+    records: [],
+    views: [{ id: viewId, databaseId, name: '默认表格', type: 'table', config: {} }],
+    activeViewId: viewId,
   }
 }
 

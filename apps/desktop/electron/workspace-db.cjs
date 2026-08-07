@@ -1024,6 +1024,61 @@ class WorkspaceDatabase {
     return { schema: { id: database.id, name: database.name, properties }, records, views, activeViewId: database.active_view_id }
   }
 
+  createDatabaseForPage(pageId, databaseId, name) {
+    const title = `${databaseId}-title`; const status = `${databaseId}-status`; const date = `${databaseId}-date`
+    const tableView = `${databaseId}-table`
+    const statusConfig = JSON.stringify({ options: [
+      { id: 'todo', name: '待开始', color: 'slate' },
+      { id: 'doing', name: '进行中', color: 'amber' },
+      { id: 'done', name: '已完成', color: 'green' },
+    ] })
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      if (!this.database.prepare('SELECT 1 FROM pages WHERE id = ? AND archived_at IS NULL').get(pageId)) throw new Error('Database page does not exist.')
+      this.database.prepare('INSERT INTO databases(id, page_id, name, active_view_id) VALUES (?, ?, ?, ?)').run(databaseId, pageId, name, tableView)
+      const insertProperty = this.database.prepare('INSERT INTO database_properties(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+      insertProperty.run(title, databaseId, '名称', 'title', 0, '{}')
+      insertProperty.run(status, databaseId, '状态', 'select', 1, statusConfig)
+      insertProperty.run(date, databaseId, '日期', 'date', 2, '{}')
+      this.database.prepare('INSERT INTO database_views(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(tableView, databaseId, '默认表格', 'table', 0, '{}')
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseByPage(pageId)
+  }
+
+  addDatabaseProperty(databaseId, propertyId, name, type) {
+    const config = type === 'select' || type === 'multiSelect' ? JSON.stringify({ options: [
+      { id: 'option-1', name: '选项 1', color: 'slate' },
+      { id: 'option-2', name: '选项 2', color: 'amber' },
+    ] }) : '{}'
+    const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_properties WHERE database_id = ?').get(databaseId).position
+    const result = this.database.prepare('INSERT INTO database_properties(id, database_id, name, type, position, config_json) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)')
+      .run(propertyId, databaseId, name, type, position, config, databaseId)
+    if (result.changes !== 1) throw new Error('Database does not exist.')
+    return this.loadDatabaseById(databaseId)
+  }
+
+  renameDatabaseProperty(databaseId, propertyId, name) {
+    const result = this.database.prepare('UPDATE database_properties SET name = ? WHERE id = ? AND database_id = ?').run(name, propertyId, databaseId)
+    if (result.changes !== 1) throw new Error('Database property does not exist.')
+    return this.loadDatabaseById(databaseId)
+  }
+
+  deleteDatabaseProperty(databaseId, propertyId) {
+    const property = this.database.prepare('SELECT type FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
+    if (!property) throw new Error('Database property does not exist.')
+    if (property.type === 'title') throw new Error('The title property cannot be deleted.')
+    this.database.prepare('DELETE FROM database_properties WHERE id = ? AND database_id = ?').run(propertyId, databaseId)
+    return this.loadDatabaseById(databaseId)
+  }
+
+  loadDatabaseById(databaseId) {
+    const page = this.database.prepare('SELECT page_id FROM databases WHERE id = ?').get(databaseId)
+    if (!page) throw new Error('Database does not exist.')
+    return this.loadDatabaseByPage(page.page_id)
+  }
+
   updateDatabaseCell(recordId, propertyId, value) {
     const property = this.database.prepare(`
       SELECT property.type, property.config_json, property.database_id AS databaseId

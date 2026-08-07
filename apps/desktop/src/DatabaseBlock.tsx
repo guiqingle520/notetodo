@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Activity, ArrowRight, ArrowUpDown, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Filter, Images, Layers3, Link2, List, Plus, RotateCcw, Sigma, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseViewConfig, type FilterRule, type PropertyValue, type SortRule } from '@notetodo/database-core'
+import { Activity, ArrowRight, ArrowUpDown, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Database, Filter, Images, Layers3, Link2, List, Plus, RotateCcw, Settings2, Sigma, Table2, Trash2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseViewConfig, type FilterRule, type PropertyType, type PropertyValue, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -18,20 +18,56 @@ const statuses = [
 type AutomationRun = Awaited<ReturnType<NonNullable<typeof window.notetodo>['automations']['listRuns']>>[number]
 const previewAutomation: AutomationRule = { id: 'completed-task-priority', name: '完成后归档优先级', enabled: true, trigger: { type: 'propertyChanged', propertyId: 'task-status' }, condition: { propertyId: 'task-status', operator: 'equals', value: 'done' }, actions: [{ type: 'setProperty', propertyId: 'task-score', value: 1 }] }
 
-export function DatabaseBlock({ pageId }: { pageId: string }) {
-  const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null>(null)
+export function PageDatabaseMount({ pageId, pageTitle, canEdit }: { pageId: string; pageTitle: string; canEdit: boolean }) {
+  const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null | undefined>(undefined)
+  useEffect(() => {
+    let active = true
+    setSnapshot(undefined)
+    void databaseRepository.loadByPage(pageId).then((loaded) => { if (active) setSnapshot(loaded) })
+    return () => { active = false }
+  }, [pageId])
+  if (snapshot === undefined) return null
+  if (snapshot) return <DatabaseBlock pageId={pageId} initialSnapshot={snapshot} />
+  return canEdit ? <DatabaseCreationPrompt pageTitle={pageTitle} onCreate={async (name) => setSnapshot(await databaseRepository.createOnPage(pageId, name))} /> : null
+}
+
+export function DatabaseCreationPrompt({ pageTitle, onCreate }: { pageTitle: string; onCreate: (name: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(`${pageTitle || '未命名'} 数据库`)
+  const [busy, setBusy] = useState(false)
+  const create = async () => {
+    const normalized = name.trim()
+    if (!normalized || busy) return
+    setBusy(true)
+    try { await onCreate(normalized) } finally { setBusy(false) }
+  }
+  if (!open) return <button className="database-create-trigger" onClick={() => setOpen(true)}><Database size={14} /><span><strong>创建数据库</strong><small>在当前页面建立结构化集合</small></span><Plus size={13} /></button>
+  return <section className="database-create-composer">
+    <div><Database size={18} /><span><small>NEW COLLECTION / LOCAL-FIRST</small><strong>把这页变成可查询的资料集</strong></span></div>
+    <label><span>数据库名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void create(); if (event.key === 'Escape') setOpen(false) }} /></label>
+    <p>将创建“名称、状态、日期”三个基础属性和默认表格；记录保存在本地 SQLite，可继续扩展 Schema。</p>
+    <footer><button onClick={() => setOpen(false)}>取消</button><button disabled={!name.trim() || busy} onClick={() => void create()}>{busy ? '正在创建…' : '创建数据库'}</button></footer>
+  </section>
+}
+
+export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; initialSnapshot?: DatabaseSnapshot }) {
+  const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null>(initialSnapshot ?? null)
   const [rulesOpen, setRulesOpen] = useState<'filters' | 'sorts' | 'group' | null>(null)
+  const [schemaOpen, setSchemaOpen] = useState(false)
   const [automationOpen, setAutomationOpen] = useState(false)
   const [automations, setAutomations] = useState<AutomationRule[]>([])
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([])
   const projectionCache = useRef<{ schemaId: string; records: DatabaseRecord[] }>({ schemaId: '', records: [] })
   const changedRecordIds = useRef(new Set<string>())
 
-  useEffect(() => { void databaseRepository.loadByPage(pageId).then(setSnapshot) }, [pageId])
+  useEffect(() => {
+    if (initialSnapshot) { setSnapshot(initialSnapshot); return }
+    void databaseRepository.loadByPage(pageId).then(setSnapshot)
+  }, [pageId, initialSnapshot])
   useEffect(() => {
     if (!snapshot) return
     if (window.notetodo?.automations) void Promise.all([window.notetodo.automations.list(snapshot.schema.id), window.notetodo.automations.listRuns(snapshot.schema.id)]).then(([rules, runs]) => { setAutomations(rules); setAutomationRuns(runs) })
-    else setAutomations([previewAutomation])
+    else setAutomations(snapshot.schema.id === 'roadmap-db' ? [previewAutomation] : [])
   }, [snapshot?.schema.id])
 
   // Rollups and formulas are computed once per snapshot, never persisted back.
@@ -79,9 +115,12 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
 
   const addRecord = () => {
     const id = crypto.randomUUID()
+    const values = Object.fromEntries(snapshot.schema.properties
+      .filter((property) => !['formula', 'rollup'].includes(property.type))
+      .map((property) => [property.id, defaultPropertyValue(property)]))
     const record: DatabaseRecord = {
       id,
-      values: { 'task-title': '新任务', 'task-status': 'todo', 'task-owner': '', 'task-start': new Date().toISOString().slice(0, 10), 'task-due': '', 'task-score': 1, 'task-dependencies': [] },
+      values,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -114,6 +153,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
           })}
         </div>
         <div className="database-tools">
+          <button className={schemaOpen ? 'is-active' : ''} onClick={() => setSchemaOpen(true)}><Settings2 size={13} />属性 · {snapshot.schema.properties.length}</button>
           <button className={activeView.config.filters?.length ? 'is-active' : ''} onClick={() => setRulesOpen('filters')}><Filter size={13} />筛选{activeView.config.filters?.length ? ` · ${activeView.config.filters.length}` : ''}</button>
           <button className={activeView.config.sorts?.length ? 'is-active' : ''} onClick={() => setRulesOpen('sorts')}><ArrowUpDown size={13} />排序{activeView.config.sorts?.length ? ` · ${activeView.config.sorts.length}` : ''}</button>
           <button className={activeView.config.groupByPropertyId ? 'is-active' : ''} onClick={() => setRulesOpen('group')}><Layers3 size={13} />分组</button>
@@ -124,13 +164,16 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       <div className="database-summary"><span>{snapshot.schema.name.toLocaleUpperCase()}</span><span className="database-compute-mark">Δ {projection.recomputedCount} RECALCULATED</span><span>{records.length} / {snapshot.records.length} RECORDS</span></div>
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
       {recordGroups.length > 0 && <div className="database-group-ledger"><span>GROUP LEDGER</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
-      {activeView.type === 'table' && <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} />}
+      {activeView.type === 'table' && (snapshot.schema.id === 'roadmap-db'
+        ? <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} />
+        : <GenericTable records={records} schema={snapshot.schema} updateCell={updateCell} />)}
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
       {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
       {activeView.type === 'timeline' && <TimelineView records={records} schema={snapshot.schema} startDatePropertyId={activeView.config.startDatePropertyId} endDatePropertyId={activeView.config.endDatePropertyId} updateCell={updateCell} />}
       {activeView.type === 'gallery' && <GalleryView records={records} schema={snapshot.schema} coverPropertyId={activeView.config.coverPropertyId} visiblePropertyIds={activeView.config.visiblePropertyIds} cardSize={activeView.config.cardSize} updateCell={updateCell} />}
       {rulesOpen && createPortal(<ViewRulesPanel schema={snapshot.schema} config={activeView.config} initialTab={rulesOpen} onClose={() => setRulesOpen(null)} onSave={(config) => { saveViewConfig(config); setRulesOpen(null) }} />, document.body)}
+      {schemaOpen && createPortal(<SchemaPanel schema={snapshot.schema} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
       {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
         if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
         else setAutomations((current) => [...current.filter((item) => item.id !== rule.id), rule])
@@ -145,6 +188,32 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       }} />}
     </section>
   )
+}
+
+const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title' | 'relation' | 'rollup' | 'formula'>; label: string }> = [
+  { id: 'text', label: '文本' }, { id: 'number', label: '数字' }, { id: 'checkbox', label: '复选框' },
+  { id: 'select', label: '单选' }, { id: 'multiSelect', label: '多选' }, { id: 'date', label: '日期' }, { id: 'url', label: '网址' },
+]
+
+export function SchemaPanel({ schema, onClose, onAdd, onRename, onDelete }: { schema: DatabaseSchema; onClose: () => void; onAdd: (name: string, type: Exclude<PropertyType, 'title' | 'relation' | 'rollup' | 'formula'>) => Promise<void>; onRename: (propertyId: string, name: string) => Promise<void>; onDelete: (propertyId: string) => Promise<void> }) {
+  const [name, setName] = useState('')
+  const [type, setType] = useState<(typeof writablePropertyTypes)[number]['id']>('text')
+  const [busy, setBusy] = useState(false)
+  const [deletePending, setDeletePending] = useState<string | null>(null)
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [onClose])
+  const add = async () => {
+    if (!name.trim() || busy || schema.properties.length >= 50) return
+    setBusy(true); try { await onAdd(name.trim(), type); setName('') } finally { setBusy(false) }
+  }
+  return <div className="schema-panel-backdrop" onMouseDown={onClose}><section className="schema-panel" role="dialog" aria-modal="true" aria-label="数据库属性管理" onMouseDown={(event) => event.stopPropagation()}>
+    <header><div><small>SCHEMA DESK / {schema.name.toLocaleUpperCase()}</small><strong>定义资料的骨架</strong></div><button aria-label="关闭属性管理" onClick={onClose}><X size={15} /></button></header>
+    <main><div className="schema-ledger-head"><span>序号</span><span>属性名称</span><span>类型</span><span>操作</span></div>{schema.properties.map((property, index) => <div className="schema-ledger-row" key={property.id}><em>{String(index + 1).padStart(2, '0')}</em><input aria-label={`${property.name} 属性名称`} defaultValue={property.name} maxLength={100} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== property.name) void onRename(property.id, next) }} /><span><i>{propertyTypeLabel(property.type)}</i>{propertyTypeName(property.type)}</span>{property.type === 'title' || ['formula', 'rollup'].includes(property.type) ? <small>{property.type === 'title' ? '主属性' : '只读派生'}</small> : <button className={deletePending === property.id ? 'is-confirm' : ''} onClick={() => { if (deletePending !== property.id) return setDeletePending(property.id); void onDelete(property.id).then(() => setDeletePending(null)) }}><Trash2 size={11} />{deletePending === property.id ? '确认删除' : '删除'}</button>}</div>)}</main>
+    <footer><div><input aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span>{schema.properties.length} / 50 PROPERTIES · 标题属性受保护</span></footer>
+  </section></div>
+}
+
+function propertyTypeName(type: PropertyType) {
+  return ({ title: '标题', text: '文本', number: '数字', checkbox: '复选框', select: '单选', multiSelect: '多选', date: '日期', url: '网址', relation: '关联', rollup: '汇总', formula: '公式' } as const)[type]
 }
 
 function ViewRuleSummary({ config, schema, onOpen }: { config: DatabaseViewConfig; schema: DatabaseSchema; onOpen: (tab: 'filters' | 'sorts' | 'group') => void }) {
@@ -370,6 +439,45 @@ function parseAutomationValue(property: DatabaseProperty | undefined, value: str
   if (property?.type === 'checkbox') return ['true', '1', '是'].includes(value.toLocaleLowerCase())
   if (property?.type === 'relation' || property?.type === 'multiSelect') return value.split(',').map((item) => item.trim()).filter(Boolean)
   return value
+}
+
+function defaultPropertyValue(property: DatabaseProperty): PropertyValue {
+  if (property.type === 'title') return '新记录'
+  if (property.type === 'select') return property.options?.[0]?.id ?? null
+  if (property.type === 'date') return new Date().toISOString().slice(0, 10)
+  if (property.type === 'checkbox') return false
+  if (property.type === 'multiSelect' || property.type === 'relation') return []
+  return null
+}
+
+export function GenericTable({ records, schema, updateCell }: { records: DatabaseRecord[]; schema: DatabaseSchema; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const [scrollTop, setScrollTop] = useState(0)
+  const properties = schema.properties.slice(0, 20)
+  const { start, end, totalSize } = virtualWindow(records.length, scrollTop, ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
+  const template = properties.map((property, index) => index === 0 || property.type === 'title' ? 'minmax(180px, 1.6fr)' : 'minmax(120px, 1fr)').join(' ')
+  const minWidth = Math.max(420, properties.length * 140)
+  return <div className="generic-database-table">
+    <div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i>{property.name}</span>)}</div>
+    <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(ROW_HEIGHT, records.length * ROW_HEIGHT)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className="generic-database-grid generic-database-row" key={record.id} style={{ gridTemplateColumns: template, transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} updateCell={updateCell} />)}</div>)}</div>
+    </div>
+    {!records.length && <div className="generic-database-empty"><Database size={17} /><span>还没有记录</span><small>点击右上角“新建”写入第一行</small></div>}
+  </div>
+}
+
+function GenericCell({ record, property, updateCell }: { record: DatabaseRecord; property: DatabaseProperty; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const value = record.values[property.id]
+  if (property.type === 'select') return <select className={`generic-select value-${String(value ?? 'empty')}`} value={String(value ?? '')} onChange={(event) => updateCell(record.id, property.id, event.target.value || null)}><option value="">未选择</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+  if (property.type === 'checkbox') return <label className="generic-check"><input type="checkbox" checked={Boolean(value)} onChange={(event) => updateCell(record.id, property.id, event.target.checked)} /><span /></label>
+  if (property.type === 'number') return <input type="number" value={typeof value === 'number' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value === '' ? null : Number(event.target.value))} />
+  if (property.type === 'date') return <input type="date" value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value || null)} />
+  if (property.type === 'multiSelect') return <input value={Array.isArray(value) ? value.join(', ') : ''} placeholder="逗号分隔" onChange={(event) => updateCell(record.id, property.id, event.target.value.split(',').map((item) => item.trim()).filter(Boolean))} />
+  if (property.type === 'formula' || property.type === 'rollup' || property.type === 'relation') return <output>{Array.isArray(value) ? value.join('、') : value === null || value === undefined ? '—' : String(value)}</output>
+  return <input className={property.type === 'title' ? 'is-title' : ''} type={property.type === 'url' ? 'url' : 'text'} value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value)} />
+}
+
+function propertyTypeLabel(type: DatabaseProperty['type']) {
+  return ({ title: 'Aa', text: 'Tx', number: '#', checkbox: '✓', select: '◉', multiSelect: '◎', date: '◫', url: '↗', relation: '↔', rollup: '∑', formula: 'ƒ' } as const)[type]
 }
 
 export function VirtualTable({ records, allRecords, updateCell }: { records: DatabaseRecord[]; allRecords: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {

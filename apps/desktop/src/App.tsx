@@ -69,7 +69,7 @@ import Collaboration from '@tiptap/extension-collaboration'
 import * as Y from 'yjs'
 import { pageBreadcrumbs, type PageIcon, type WorkspacePage } from './domain'
 import { useWorkspace } from './store'
-import { DatabaseBlock } from './DatabaseBlock'
+import { PageDatabaseMount } from './DatabaseBlock'
 import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
@@ -1238,7 +1238,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
               <i style={{ width: `${uploadState.percent}%` }} />
             </div>
           )}
-          {page.id === 'projects' && <DatabaseBlock pageId={page.id} />}
+          <PageDatabaseMount pageId={page.id} pageTitle={page.title} canEdit={Boolean(editor?.isEditable)} />
           {slashMenu && (
             <div className="slash-menu" style={{ left: slashMenu.left, top: slashMenu.top }}>
               <header><span>插入内容块</span><kbd>/</kbd></header>

@@ -273,6 +273,26 @@ function registerWorkspaceIpc(database) {
     assertId(pageId)
     return database.loadDatabaseByPage(pageId)
   })
+  ipcMain.handle('database:create', (_event, pageId, databaseId, name) => {
+    assertId(pageId); assertId(databaseId)
+    if (typeof name !== 'string' || name.trim().length < 1 || name.length > 200) throw new TypeError('Invalid database name.')
+    return database.createDatabaseForPage(pageId, databaseId, name.trim())
+  })
+  ipcMain.handle('database:add-property', (_event, databaseId, propertyId, name, type) => {
+    assertId(databaseId); assertId(propertyId)
+    if (typeof name !== 'string' || name.trim().length < 1 || name.length > 100) throw new TypeError('Invalid property name.')
+    if (!['text', 'number', 'checkbox', 'select', 'multiSelect', 'date', 'url'].includes(type)) throw new TypeError('Invalid property type.')
+    return database.addDatabaseProperty(databaseId, propertyId, name.trim(), type)
+  })
+  ipcMain.handle('database:rename-property', (_event, databaseId, propertyId, name) => {
+    assertId(databaseId); assertId(propertyId)
+    if (typeof name !== 'string' || name.trim().length < 1 || name.length > 100) throw new TypeError('Invalid property name.')
+    return database.renameDatabaseProperty(databaseId, propertyId, name.trim())
+  })
+  ipcMain.handle('database:delete-property', (_event, databaseId, propertyId) => {
+    assertId(databaseId); assertId(propertyId)
+    return database.deleteDatabaseProperty(databaseId, propertyId)
+  })
   ipcMain.handle('database:update-cell', (_event, recordId, propertyId, value) => {
     assertId(recordId)
     assertId(propertyId)
