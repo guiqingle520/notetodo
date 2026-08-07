@@ -862,6 +862,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
   const { pages, activePageId, updatePage, toggleFavorite, archivePage, setActivePage } = useWorkspace()
   const page = pages.find((candidate) => candidate.id === activePageId) ?? pages[0]
   const breadcrumbs = useMemo(() => pageBreadcrumbs(pages, page.id), [pages, page.id])
+  const isDatabasePage = page.icon === 'grid' && page.content.includes('data-notetodo-page-layout="database"')
   const [slashMenu, setSlashMenu] = useState<EditorMenuState | null>(null)
   const slashMenuRef = useRef(slashMenu)
   const [pageMentionMenu, setPageMentionMenu] = useState<EditorMenuState | null>(null)
@@ -1013,6 +1014,9 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
       },
     },
     onUpdate: ({ editor: activeEditor }) => {
+      // A full-page database stores its layout marker in the page document.
+      // The hidden rich-text editor must not normalize that marker away.
+      if (isDatabasePage) return
       const content = activeEditor.getHTML()
       updatePage(page.id, { content })
       const menu = slashMenuRef.current
@@ -1034,7 +1038,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
       syncSession?.updatePresence({ anchor: selection.anchor, head: selection.head })
       onSelectionChange(selection.empty ? null : { from: selection.from, to: selection.to, text: activeEditor.state.doc.textBetween(selection.from, selection.to, ' ') })
     },
-  }, [page.id, syncSession, loadingDocument, pageRole])
+  }, [page.id, syncSession, loadingDocument, pageRole, isDatabasePage])
   localEditorRef.current = editor
 
   const trackHoveredBlock = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -1199,16 +1203,16 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
       </header>
 
       <div className="editor-scroll">
-        <article className="document">
+        <article className={`document ${isDatabasePage ? 'is-database-page' : ''}`}>
           <div className="document-kicker"><span>NT / {page.id.slice(0, 4).toUpperCase()}</span><span>{new Date(page.updatedAt).toLocaleDateString('zh-CN')}</span></div>
-          <div className="page-meta-actions"><button>添加图标</button><button>添加封面</button><button>添加说明</button></div>
+          {!isDatabasePage && <div className="page-meta-actions"><button>添加图标</button><button>添加封面</button><button>添加说明</button></div>}
           <input
             className="page-title"
             value={page.title}
             aria-label="页面标题"
             onChange={(event) => updatePage(page.id, { title: event.target.value })}
           />
-          <div
+          {!isDatabasePage && <div
             className={`editor-stage ${dropActive ? 'is-drop-active' : ''}`}
             onMouseMove={trackHoveredBlock}
             onDragEnter={(event) => { if (editor?.isEditable && window.notetodo?.attachments && event.dataTransfer.types.includes('Files')) setDropActive(true) }}
@@ -1217,8 +1221,8 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
           >
             <EditorContent editor={editor} className="editor-content" />
             {dropActive && <div className="editor-drop-guide" aria-hidden="true"><Upload size={18} /><strong>放入工作页</strong><span>图片显示为画面，其他内容成为文件卡片</span></div>}
-          </div>
-          {blockToolbar && editor?.isEditable && (
+          </div>}
+          {!isDatabasePage && blockToolbar && editor?.isEditable && (
             <div className="block-toolbar" style={{ top: blockToolbar.top }} role="toolbar" aria-label="内容块工具栏">
               <span title="内容块"><GripVertical size={14} /></span>
               <button onMouseDown={(event) => { event.preventDefault(); runBlockAction('move-up') }} disabled={blockToolbar.index === 0} aria-label="上移内容块"><ArrowUp size={13} /></button>
@@ -1238,8 +1242,8 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
               <i style={{ width: `${uploadState.percent}%` }} />
             </div>
           )}
-          <PageDatabaseMount pageId={page.id} pageTitle={page.title} canEdit={Boolean(editor?.isEditable)} />
-          {slashMenu && (
+          <PageDatabaseMount pageId={page.id} pageTitle={page.title} canEdit={Boolean(editor?.isEditable)} fullPage={isDatabasePage} />
+          {!isDatabasePage && slashMenu && (
             <div className="slash-menu" style={{ left: slashMenu.left, top: slashMenu.top }}>
               <header><span>插入内容块</span><kbd>/</kbd></header>
               <div>
@@ -1261,7 +1265,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
               <footer><span><kbd>↑↓</kbd> 选择</span><span><kbd>Enter</kbd> 插入</span></footer>
             </div>
           )}
-          {pageMentionMenu && (
+          {!isDatabasePage && pageMentionMenu && (
             <div className="page-mention-menu" style={{ left: pageMentionMenu.left, top: pageMentionMenu.top }}>
               <header><span>链接到页面</span><kbd>@</kbd></header>
               <div>
@@ -1283,7 +1287,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
               <footer><span><kbd>↑↓</kbd> 选择</span><span><kbd>Enter</kbd> 链接</span></footer>
             </div>
           )}
-          <div className="document-end"><span />END OF PAGE<span /></div>
+          {!isDatabasePage && <div className="document-end"><span />END OF PAGE<span /></div>}
         </article>
       </div>
       {shareOpen && <SharePanel pageId={page.id} onClose={() => setShareOpen(false)} />}

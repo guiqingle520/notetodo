@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Filter, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, Plus, RotateCcw, Settings2, Sigma, Star, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type PropertyType, type PropertyValue, type SortRule } from '@notetodo/database-core'
+import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, FileUp, Filter, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Settings2, Sigma, Star, Table2, Trash2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, coerceCsvPropertyValue, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -21,7 +21,7 @@ const statuses = [
 type AutomationRun = Awaited<ReturnType<NonNullable<typeof window.notetodo>['automations']['listRuns']>>[number]
 const previewAutomation: AutomationRule = { id: 'completed-task-priority', name: '完成后归档优先级', enabled: true, trigger: { type: 'propertyChanged', propertyId: 'task-status' }, condition: { propertyId: 'task-status', operator: 'equals', value: 'done' }, actions: [{ type: 'setProperty', propertyId: 'task-score', value: 1 }] }
 
-export function PageDatabaseMount({ pageId, pageTitle, canEdit }: { pageId: string; pageTitle: string; canEdit: boolean }) {
+export function PageDatabaseMount({ pageId, pageTitle, canEdit, fullPage = false }: { pageId: string; pageTitle: string; canEdit: boolean; fullPage?: boolean }) {
   const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null | undefined>(undefined)
   useEffect(() => {
     let active = true
@@ -30,11 +30,11 @@ export function PageDatabaseMount({ pageId, pageTitle, canEdit }: { pageId: stri
     return () => { active = false }
   }, [pageId])
   if (snapshot === undefined) return null
-  if (snapshot) return <DatabaseBlock pageId={pageId} initialSnapshot={snapshot} />
-  return canEdit ? <DatabaseCreationPrompt pageTitle={pageTitle} onCreate={async (name) => setSnapshot(await databaseRepository.createOnPage(pageId, name))} /> : null
+  if (snapshot) return <div className={fullPage ? 'database-page-surface' : undefined}><DatabaseBlock pageId={pageId} initialSnapshot={snapshot} /></div>
+  return canEdit ? <div className={fullPage ? 'database-page-surface is-empty' : undefined}><DatabaseCreationPrompt pageTitle={pageTitle} fullPage={fullPage} onCreate={async (name) => setSnapshot(await databaseRepository.createOnPage(pageId, name))} /></div> : null
 }
 
-export function DatabaseCreationPrompt({ pageTitle, onCreate }: { pageTitle: string; onCreate: (name: string) => Promise<void> }) {
+export function DatabaseCreationPrompt({ pageTitle, onCreate, fullPage = false }: { pageTitle: string; onCreate: (name: string) => Promise<void>; fullPage?: boolean }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(`${pageTitle || '未命名'} 数据库`)
   const [busy, setBusy] = useState(false)
@@ -44,12 +44,12 @@ export function DatabaseCreationPrompt({ pageTitle, onCreate }: { pageTitle: str
     setBusy(true)
     try { await onCreate(normalized) } finally { setBusy(false) }
   }
-  if (!open) return <button className="database-create-trigger" onClick={() => setOpen(true)}><Database size={14} /><span><strong>创建数据库</strong><small>在当前页面建立结构化集合</small></span><Plus size={13} /></button>
+  if (!open && !fullPage) return <button className="database-create-trigger" onClick={() => setOpen(true)}><Database size={14} /><span><strong>创建数据库</strong><small>在当前页面建立结构化集合</small></span><Plus size={13} /></button>
   return <section className="database-create-composer">
-    <div><Database size={18} /><span><strong>创建数据库</strong><small>为此页面添加一个内联数据库</small></span></div>
+    <div><Database size={18} /><span><strong>{fullPage ? '创建整页数据库' : '创建数据库'}</strong><small>{fullPage ? '从表格开始，之后随时切换看板、日历或画廊' : '为此页面添加一个内联数据库'}</small></span></div>
     <label><span>数据库名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void create(); if (event.key === 'Escape') setOpen(false) }} /></label>
     <p>包含名称、状态和日期属性。创建后可以继续添加属性与视图。</p>
-    <footer><button onClick={() => setOpen(false)}>取消</button><button disabled={!name.trim() || busy} onClick={() => void create()}>{busy ? '正在创建…' : '创建数据库'}</button></footer>
+    <footer>{!fullPage && <button onClick={() => setOpen(false)}>取消</button>}<button disabled={!name.trim() || busy} onClick={() => void create()}>{busy ? '正在创建…' : '创建数据库'}</button></footer>
   </section>
 }
 
@@ -60,6 +60,8 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [automationOpen, setAutomationOpen] = useState(false)
   const [viewMenuOpen, setViewMenuOpen] = useState<'create' | 'manage' | null>(null)
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<DatabaseTemplate | 'new' | null>(null)
+  const [csvImportOpen, setCsvImportOpen] = useState(false)
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(() => new Set())
   const [exportState, setExportState] = useState<'idle' | 'working' | 'done'>('idle')
   const [openRecordId, setOpenRecordId] = useState<string | null>(null)
@@ -192,6 +194,17 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     try { if (await databaseRepository.exportCsv(`${snapshot.schema.name}-${activeView.name}`, serializeDatabaseCsv(snapshot.schema, records))) { setExportState('done'); window.setTimeout(() => setExportState('idle'), 1800) } else setExportState('idle') }
     catch { setExportState('idle') }
   }
+  const saveEditedTemplate = async (draft: Pick<DatabaseTemplate, 'name' | 'values' | 'content'>) => {
+    const now = new Date().toISOString()
+    const existing = editingTemplate && editingTemplate !== 'new' ? editingTemplate : null
+    const template: DatabaseTemplate = { id: existing?.id ?? crypto.randomUUID(), databaseId: snapshot.schema.id, ...draft, createdAt: existing?.createdAt ?? now, updatedAt: now }
+    setSnapshot(await databaseRepository.saveTemplate(snapshot, template)); setEditingTemplate(null)
+  }
+  const importCsvRecords = async (rows: Array<Record<string, PropertyValue>>) => {
+    const now = new Date().toISOString()
+    const imported = rows.map((values): DatabaseRecord => ({ id: crypto.randomUUID(), values, content: '', createdAt: now, updatedAt: now }))
+    setSnapshot(await databaseRepository.importRecords(snapshot, imported)); setCsvImportOpen(false)
+  }
 
   return (
     <section className="database-block">
@@ -210,12 +223,13 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
           <button className={activeView.config.sorts?.length ? 'is-active' : ''} onClick={() => setRulesOpen('sorts')}><ArrowUpDown size={13} />排序{activeView.config.sorts?.length ? ` · ${activeView.config.sorts.length}` : ''}</button>
           <button className={activeView.config.groupByPropertyId ? 'is-active' : ''} onClick={() => setRulesOpen('group')}><Layers3 size={13} />分组</button>
           <button className={templateMenuOpen ? 'is-active' : ''} onClick={() => setTemplateMenuOpen((open) => !open)}><LayoutTemplate size={13} />模板{snapshot.templates?.length ? ` · ${snapshot.templates.length}` : ''}</button>
+          <button className={csvImportOpen ? 'is-active' : ''} onClick={() => setCsvImportOpen(true)}><FileUp size={13} />导入</button>
           <button onClick={() => void exportCsv()} disabled={exportState === 'working'}><Download size={13} />{exportState === 'working' ? '导出中' : exportState === 'done' ? '已导出' : 'CSV'}</button>
           <button className="database-automation" onClick={() => setAutomationOpen(true)}><Zap size={13} />自动化 · {automations.filter((rule) => rule.enabled).length}</button>
           <button className="database-new" onClick={addRecord}><Plus size={13} />新建</button>
         </div>
         {viewMenuOpen && <ViewManagementMenu key={`${viewMenuOpen}-${activeView.id}`} mode={viewMenuOpen} views={snapshot.views} activeView={activeView} defaultViewId={snapshot.views[0]!.id} onClose={() => setViewMenuOpen(null)} onCreate={createView} onRename={async (name) => { setSnapshot(await databaseRepository.renameView(snapshot, activeView.id, name)); setViewMenuOpen(null) }} onDuplicate={duplicateView} onDelete={async () => { setSnapshot(await databaseRepository.deleteView(snapshot, activeView.id)); setViewMenuOpen(null) }} onSetDefault={async () => { setSnapshot(await databaseRepository.setDefaultView(snapshot, activeView.id)); setViewMenuOpen(null) }} />}
-        {templateMenuOpen && <DatabaseTemplateMenu templates={snapshot.templates ?? []} selectedCount={selectedRecordIds.size} onClose={() => setTemplateMenuOpen(false)} onCreateBlank={addRecord} onApply={createFromTemplate} onSaveSelection={saveSelectionAsTemplate} onDelete={async (templateId) => setSnapshot(await databaseRepository.deleteTemplate(snapshot, templateId))} />}
+        {templateMenuOpen && <DatabaseTemplateMenu templates={snapshot.templates ?? []} selectedCount={selectedRecordIds.size} onClose={() => setTemplateMenuOpen(false)} onCreateBlank={addRecord} onApply={createFromTemplate} onEdit={(template) => { setTemplateMenuOpen(false); setEditingTemplate(template ?? 'new') }} onSaveSelection={saveSelectionAsTemplate} onDelete={async (templateId) => setSnapshot(await databaseRepository.deleteTemplate(snapshot, templateId))} />}
       </div>
       {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
       <div className="database-summary"><span>{snapshot.schema.name}</span><span className="database-compute-mark">已更新 {projection.recomputedCount} 项</span><span>{records.length} / {snapshot.records.length} 条记录</span></div>
@@ -231,6 +245,8 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       {activeView.type === 'gallery' && <GalleryView records={records} schema={snapshot.schema} coverPropertyId={activeView.config.coverPropertyId} visiblePropertyIds={activeView.config.visiblePropertyIds} cardSize={activeView.config.cardSize} updateCell={updateCell} />}
       {rulesOpen && createPortal(<ViewRulesPanel schema={snapshot.schema} config={activeView.config} initialTab={rulesOpen} onClose={() => setRulesOpen(null)} onSave={(config) => { saveViewConfig(config); setRulesOpen(null) }} />, document.body)}
       {schemaOpen && createPortal(<SchemaPanel schema={snapshot.schema} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
+      {editingTemplate && createPortal(<TemplateEditorPanel schema={snapshot.schema} template={editingTemplate === 'new' ? null : editingTemplate} onClose={() => setEditingTemplate(null)} onSave={saveEditedTemplate} />, document.body)}
+      {csvImportOpen && createPortal(<CsvImportPanel schema={snapshot.schema} onClose={() => setCsvImportOpen(false)} onImport={importCsvRecords} />, document.body)}
       {openRecordId && derivedRecords.find((record) => record.id === openRecordId) && createPortal(<RecordDetailPanel key={openRecordId} record={derivedRecords.find((record) => record.id === openRecordId)!} schema={snapshot.schema} onClose={() => setOpenRecordId(null)} onUpdateCell={updateCell} onUpdateContent={updateRecordContent} />, document.body)}
       {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
         if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
@@ -307,9 +323,9 @@ export function ViewManagementMenu({ mode, views, activeView, defaultViewId, onC
   </section>
 }
 
-export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCreateBlank, onApply, onSaveSelection, onDelete }: {
+export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCreateBlank, onApply, onEdit, onSaveSelection, onDelete }: {
   templates: DatabaseTemplate[]; selectedCount: number; onClose: () => void; onCreateBlank: () => void
-  onApply: (templateId: string) => Promise<void>; onSaveSelection: (name: string) => Promise<void>; onDelete: (templateId: string) => Promise<void>
+  onApply: (templateId: string) => Promise<void>; onEdit: (template: DatabaseTemplate | null) => void; onSaveSelection: (name: string) => Promise<void>; onDelete: (templateId: string) => Promise<void>
 }) {
   const [name, setName] = useState('新模板')
   const [busy, setBusy] = useState(false)
@@ -317,13 +333,91 @@ export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCrea
   return <section className="database-template-menu" role="dialog" aria-label="数据库模板">
     <header><strong>新建记录</strong><button aria-label="关闭数据库模板" onClick={onClose}><X size={14} /></button></header>
     <button className="template-blank" onClick={() => { onCreateBlank(); onClose() }}><Plus size={15} /><span><strong>空白记录</strong><small>使用数据库默认值</small></span></button>
+    <button className="template-blank is-template" onClick={() => onEdit(null)}><LayoutTemplate size={15} /><span><strong>新建模板</strong><small>编辑属性预设与页面正文</small></span></button>
     <div className="database-template-list">
       <small>模板</small>
-      {templates.map((template) => <div key={template.id}><button disabled={busy} onClick={() => void run(() => onApply(template.id))}><LayoutTemplate size={15} /><span><strong>{template.name}</strong><small>{Object.keys(template.values).length} 个预设属性</small></span></button><button aria-label={`删除模板 ${template.name}`} disabled={busy} onClick={() => void run(() => onDelete(template.id))}><Trash2 size={13} /></button></div>)}
+      {templates.map((template) => <div key={template.id}><button disabled={busy} onClick={() => void run(() => onApply(template.id))}><LayoutTemplate size={15} /><span><strong>{template.name}</strong><small>{Object.keys(template.values).length} 个预设属性</small></span></button><button aria-label={`编辑模板 ${template.name}`} onClick={() => onEdit(template)}><PencilLine size={13} /></button><button aria-label={`删除模板 ${template.name}`} disabled={busy} onClick={() => void run(() => onDelete(template.id))}><Trash2 size={13} /></button></div>)}
       {!templates.length && <p>还没有模板。选中一条记录后，可以将它保存为模板。</p>}
     </div>
     <footer><input aria-label="模板名称" value={name} maxLength={200} disabled={!selectedCount} onChange={(event) => setName(event.target.value)} /><button disabled={!selectedCount || !name.trim() || busy} onClick={() => void run(() => onSaveSelection(name.trim()))}>保存所选记录{selectedCount > 1 ? '中的第一条' : ''}</button></footer>
   </section>
+}
+
+export function TemplateEditorPanel({ schema, template, onClose, onSave }: {
+  schema: DatabaseSchema; template: DatabaseTemplate | null; onClose: () => void
+  onSave: (draft: Pick<DatabaseTemplate, 'name' | 'values' | 'content'>) => Promise<void>
+}) {
+  const properties = schema.properties.filter((property) => !['title', 'formula', 'rollup', 'relation'].includes(property.type))
+  const [name, setName] = useState(template?.name ?? '新模板')
+  const [values, setValues] = useState<Record<string, PropertyValue>>(() => Object.fromEntries(properties.map((property) => [property.id, template?.values[property.id] ?? defaultPropertyValue(property)])))
+  const [content, setContent] = useState(template?.content ?? '')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [busy, onClose])
+  return <div className="schema-panel-backdrop template-editor-backdrop" onMouseDown={onClose}><section className="template-editor-panel" role="dialog" aria-modal="true" aria-label="编辑数据库模板" onMouseDown={(event) => event.stopPropagation()}>
+    <header><div><span className="template-editor-icon"><LayoutTemplate size={18} /></span><span><small>{template ? 'EDIT DATABASE TEMPLATE' : 'NEW DATABASE TEMPLATE'}</small><strong>{template ? '编辑记录模板' : '创建记录模板'}</strong></span></div><button aria-label="关闭模板编辑器" onClick={onClose}><X size={15} /></button></header>
+    <main>
+      <label className="template-name-field"><span>模板名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <section className="template-property-section"><div><strong>属性预设</strong><small>使用模板新建记录时自动填入</small></div>{properties.map((property) => <label key={property.id}><span><i>{propertyTypeLabel(property.type)}</i>{property.name}</span><TemplateValueInput property={property} value={values[property.id] ?? null} onChange={(value) => setValues((current) => ({ ...current, [property.id]: value }))} /></label>)}</section>
+      <section className="template-content-field"><span><strong>页面正文</strong><small>标题、清单与段落会原样带入新记录</small></span><TemplateContentEditor initialContent={content} onChange={setContent} /></section>
+    </main>
+    <footer><span>模板只保存预设，不会修改已有记录。</span><div><button onClick={onClose}>取消</button><button disabled={!name.trim() || busy} onClick={() => { setBusy(true); void onSave({ name: name.trim(), values, content }).finally(() => setBusy(false)) }}>{busy ? '保存中…' : '保存模板'}</button></div></footer>
+  </section></div>
+}
+
+function TemplateContentEditor({ initialContent, onChange }: { initialContent: string; onChange: (content: string) => void }) {
+  const editor = useEditor({
+    extensions: [StarterKit, Placeholder.configure({ placeholder: "输入 '/' 的体验会在后续扩展；现在可以直接编写模板正文…" })],
+    content: initialContent || '<p></p>', immediatelyRender: false,
+    onUpdate: ({ editor: activeEditor }) => onChange(activeEditor.getHTML()),
+  })
+  return <div className="template-rich-editor"><EditorContent editor={editor} /></div>
+}
+
+function TemplateValueInput({ property, value, onChange }: { property: DatabaseProperty; value: PropertyValue; onChange: (value: PropertyValue) => void }) {
+  const label = `${property.name} 模板预设`
+  if (property.type === 'checkbox') return <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />
+  if (property.type === 'select') return <select aria-label={label} value={String(value ?? '')} onChange={(event) => onChange(event.target.value || null)}><option value="">未选择</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+  const textValue = Array.isArray(value) ? value.join(', ') : String(value ?? '')
+  return <input aria-label={label} type={property.type === 'number' ? 'number' : property.type === 'date' ? 'date' : property.type === 'url' ? 'url' : 'text'} value={textValue} placeholder="留空" onChange={(event) => onChange(property.type === 'number' ? (event.target.value ? Number(event.target.value) : null) : property.type === 'multiSelect' ? event.target.value.split(/[,，]/u).map((item) => item.trim()).filter(Boolean) : event.target.value || null)} />
+}
+
+export function CsvImportPanel({ schema, onClose, onImport }: {
+  schema: DatabaseSchema; onClose: () => void; onImport: (rows: Array<Record<string, PropertyValue>>) => Promise<void>
+}) {
+  const writable = schema.properties.filter((property) => !['formula', 'rollup', 'relation'].includes(property.type))
+  const [fileName, setFileName] = useState('')
+  const [parsed, setParsed] = useState<ParsedDatabaseCsv | null>(null)
+  const [mappings, setMappings] = useState<Array<string | null>>([])
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const choose = async (file?: File) => {
+    if (!file) return
+    setError('')
+    try {
+      const result = parseDatabaseCsv(await file.text())
+      if (!result.headers.length || !result.rows.length) throw new TypeError('CSV 至少需要表头和一行数据。')
+      setFileName(file.name); setParsed(result); setMappings(inferCsvPropertyMappings(result.headers, schema))
+    } catch (reason) { setParsed(null); setError(reason instanceof Error ? reason.message : '无法读取 CSV。') }
+  }
+  const mappedCount = mappings.filter(Boolean).length
+  const submit = async () => {
+    if (!parsed || !mappedCount || busy) return
+    const rows = parsed.rows.map((row) => Object.fromEntries(mappings.flatMap((propertyId, columnIndex) => {
+      const property = writable.find((candidate) => candidate.id === propertyId)
+      return property ? [[property.id, coerceCsvPropertyValue(property, row[columnIndex] ?? '')] as const] : []
+    })))
+    setBusy(true); setError('')
+    try { await onImport(rows) } catch (reason) { setError(reason instanceof Error ? reason.message.split('Error: ').at(-1) ?? reason.message : '导入失败。'); setBusy(false) }
+  }
+  return <div className="schema-panel-backdrop csv-import-backdrop" onMouseDown={onClose}><section className="csv-import-panel" role="dialog" aria-modal="true" aria-label="导入 CSV" onMouseDown={(event) => event.stopPropagation()}>
+    <header><div><span><FileUp size={18} /></span><div><small>IMPORT / CSV</small><strong>把表格带进数据库</strong></div></div><button aria-label="关闭 CSV 导入" onClick={onClose}><X size={15} /></button></header>
+    <main>
+      <label className={`csv-dropzone ${parsed ? 'has-file' : ''}`}><input type="file" accept=".csv,text/csv" onChange={(event) => void choose(event.target.files?.[0])} /><span>{parsed ? <CheckCircle2 size={20} /> : <FileUp size={20} />}</span><strong>{parsed ? fileName : '选择 CSV 文件'}</strong><small>{parsed ? `${parsed.rows.length} 行 · ${parsed.headers.length} 列${parsed.truncated ? ' · 已截取前 10,000 行' : ''}` : '支持 Excel、Numbers 与 Notion 导出的 UTF-8 CSV，最大 10 MB'}</small></label>
+      {parsed && <><section className="csv-mapping"><div className="csv-mapping-head"><span>CSV 列</span><span>示例</span><span>数据库属性</span></div>{parsed.headers.map((header, index) => <label key={`${header}-${index}`}><strong>{header}</strong><span>{parsed.rows[0]?.[index] || '—'}</span><select aria-label={`${header} 映射属性`} value={mappings[index] ?? ''} onChange={(event) => setMappings((current) => current.map((value, candidate) => candidate === index ? event.target.value || null : value))}><option value="">不导入</option>{writable.map((property) => <option key={property.id} value={property.id}>{property.name} · {propertyTypeName(property.type)}</option>)}</select></label>)}</section><div className="csv-import-note"><CircleAlert size={14} /><span>导入会新增 {parsed.rows.length} 条记录，不覆盖已有内容。全部写入在一个本地事务中完成。</span></div></>}
+      {error && <p className="csv-import-error">{error}</p>}
+    </main>
+    <footer><span>{parsed ? `已映射 ${mappedCount} / ${parsed.headers.length} 列` : '等待选择文件'}</span><div><button onClick={onClose}>取消</button><button disabled={!parsed || !mappedCount || busy} onClick={() => void submit()}>{busy ? '正在导入…' : parsed ? `导入 ${parsed.rows.length} 条记录` : '导入'}</button></div></footer>
+  </section></div>
 }
 
 export function BulkEditToolbar({ schema, count, onClear, onApply }: { schema: DatabaseSchema; count: number; onClear: () => void; onApply: (propertyId: string, value: PropertyValue) => Promise<void> }) {

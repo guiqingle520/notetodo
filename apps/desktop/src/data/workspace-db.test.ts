@@ -28,6 +28,7 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     deleteDatabaseView(databaseId: string, viewId: string): DatabaseSnapshot
     setDefaultDatabaseView(databaseId: string, viewId: string): DatabaseSnapshot
     bulkUpdateDatabaseRecords(databaseId: string, recordIds: string[], propertyId: string, value: unknown): DatabaseSnapshot
+    importDatabaseRecords(databaseId: string, records: Array<{ id: string; values: Record<string, unknown> }>): DatabaseSnapshot
     saveDatabaseTemplate(databaseId: string, template: { id: string; name: string; values: Record<string, unknown>; content: string; createdAt: string }): DatabaseSnapshot
     deleteDatabaseTemplate(databaseId: string, templateId: string): DatabaseSnapshot
     createDatabaseRecordFromTemplate(databaseId: string, templateId: string, recordId: string): DatabaseSnapshot
@@ -194,6 +195,15 @@ describe('WorkspaceDatabase', () => {
     expect(applied.records.find((record) => record.id === 'task-from-template')).toMatchObject({ values: { 'task-status': 'todo', 'task-owner': '发布组', 'task-score': 2 }, content: expect.stringContaining('逐项确认') })
     expect(database.deleteDatabaseTemplate('roadmap-db', 'release-template').templates).toHaveLength(0)
     expect(() => database?.bulkUpdateDatabaseRecords('roadmap-db', ['missing'], 'task-owner', 'x')).toThrow(/selected database record/)
+    const imported = database.importDatabaseRecords('roadmap-db', [
+      { id: 'csv-1', values: { 'task-title': 'CSV 任务', 'task-score': 8, 'task-status': 'doing' } },
+      { id: 'csv-2', values: { 'task-title': '第二条', 'task-owner': 'Lin' } },
+    ])
+    expect(imported.records.slice(-2).map((record) => record.values)).toEqual([
+      expect.objectContaining({ 'task-title': 'CSV 任务', 'task-score': 8, 'task-status': 'doing' }),
+      expect.objectContaining({ 'task-title': '第二条', 'task-owner': 'Lin' }),
+    ])
+    expect(() => database?.importDatabaseRecords('roadmap-db', [{ id: 'csv-1', values: {} }])).toThrow()
   })
 
   it('persists validated relations while keeping derived properties read-only', () => {

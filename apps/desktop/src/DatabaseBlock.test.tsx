@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render, waitFor } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema, DatabaseView } from '@notetodo/database-core'
-import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TimelineView, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -197,9 +197,20 @@ describe('database authoring', () => {
     toolbar.unmount()
 
     const onSaveSelection = vi.fn().mockResolvedValue(undefined)
-    const templates = render(<DatabaseTemplateMenu templates={[]} selectedCount={1} onClose={vi.fn()} onCreateBlank={vi.fn()} onApply={vi.fn()} onSaveSelection={onSaveSelection} onDelete={vi.fn()} />)
+    const onEdit = vi.fn()
+    const templates = render(<DatabaseTemplateMenu templates={[]} selectedCount={1} onClose={vi.fn()} onCreateBlank={vi.fn()} onApply={vi.fn()} onEdit={onEdit} onSaveSelection={onSaveSelection} onDelete={vi.fn()} />)
+    fireEvent.click(templates.getByRole('button', { name: /新建模板/u }))
+    expect(onEdit).toHaveBeenCalledWith(null)
     fireEvent.change(templates.getByRole('textbox', { name: '模板名称' }), { target: { value: '发布检查' } })
     fireEvent.click(templates.getByRole('button', { name: '保存所选记录' }))
     await waitFor(() => expect(onSaveSelection).toHaveBeenCalledWith('发布检查'))
+    templates.unmount()
+
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    const editor = render(<TemplateEditorPanel schema={authoringSchema} template={null} onClose={vi.fn()} onSave={onSave} />)
+    fireEvent.change(editor.getByRole('textbox', { name: '模板名称' }), { target: { value: '缺陷处理' } })
+    fireEvent.change(editor.getByRole('combobox', { name: '状态 模板预设' }), { target: { value: 'done' } })
+    fireEvent.click(editor.getByRole('button', { name: '保存模板' }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: '缺陷处理', values: { status: 'done' } })))
   })
 })

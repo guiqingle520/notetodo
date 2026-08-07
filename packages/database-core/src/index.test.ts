@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, serializeDatabaseCsv, timelineDays, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, serializeDatabaseCsv, timelineDays, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -151,5 +151,16 @@ describe('database query engine', () => {
     ] }
     const csv = serializeDatabaseCsv(schema, [{ id: '1', values: { title: '=HYPERLINK("x")', note: '包含,逗号\n和换行' }, createdAt: '', updatedAt: '' }])
     expect(csv).toBe('名称,说明\r\n"\'=HYPERLINK(""x"")","包含,逗号\n和换行"')
+  })
+
+  it('parses quoted CSV and infers safe schema mappings', () => {
+    const parsed = parseDatabaseCsv('\uFEFF名称,说明,状态\r\n"发布,复盘","第一行\n第二行",已完成')
+    expect(parsed).toEqual({ headers: ['名称', '说明', '状态'], rows: [['发布,复盘', '第一行\n第二行', '已完成']], truncated: false })
+    const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
+      { id: 'title', name: '名称', type: 'title' }, { id: 'done', name: '状态', type: 'checkbox' }, { id: 'score', name: '得分', type: 'number' },
+    ] }
+    expect(inferCsvPropertyMappings(parsed.headers, schema)).toEqual(['title', null, 'done'])
+    expect(coerceCsvPropertyValue(schema.properties[1]!, '已完成')).toBe(true)
+    expect(coerceCsvPropertyValue(schema.properties[2]!, '12.5')).toBe(12.5)
   })
 })

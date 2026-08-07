@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('notetodo', {
     deleteView: (databaseId, viewId) => ipcRenderer.invoke('database:delete-view', databaseId, viewId),
     setDefaultView: (databaseId, viewId) => ipcRenderer.invoke('database:set-default-view', databaseId, viewId),
     bulkUpdate: (databaseId, recordIds, propertyId, value) => ipcRenderer.invoke('database:bulk-update', databaseId, recordIds, propertyId, value),
+    importRecords: (databaseId, records) => ipcRenderer.invoke('database:import-records', databaseId, records),
     saveTemplate: (databaseId, template) => ipcRenderer.invoke('database:save-template', databaseId, template),
     deleteTemplate: (databaseId, templateId) => ipcRenderer.invoke('database:delete-template', databaseId, templateId),
     createFromTemplate: (databaseId, templateId, recordId) => ipcRenderer.invoke('database:create-from-template', databaseId, templateId, recordId),

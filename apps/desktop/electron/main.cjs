@@ -353,6 +353,10 @@ function registerWorkspaceIpc(database) {
     if (serialized === undefined || serialized.length > 100_000) throw new TypeError('Database cell value is invalid or too large.')
     return database.bulkUpdateDatabaseRecords(databaseId, uniqueIds, propertyId, value)
   })
+  ipcMain.handle('database:import-records', (_event, databaseId, records) => {
+    validateIdentifier(databaseId, 'Database ID')
+    return workspace.importDatabaseRecords(databaseId, records)
+  })
   ipcMain.handle('database:save-template', (_event, databaseId, template) => {
     assertId(databaseId); assertId(template?.id)
     if (typeof template.name !== 'string' || !template.name.trim() || template.name.length > 200) throw new TypeError('Invalid database template name.')

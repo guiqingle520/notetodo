@@ -53,6 +53,7 @@ interface Window {
       deleteView: (databaseId: string, viewId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       setDefaultView: (databaseId: string, viewId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       bulkUpdate: (databaseId: string, recordIds: string[], propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      importRecords: (databaseId: string, records: Array<{ id: string; values: Record<string, import('@notetodo/database-core').PropertyValue> }>) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       saveTemplate: (databaseId: string, template: import('@notetodo/database-core').DatabaseTemplate) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       deleteTemplate: (databaseId: string, templateId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       createFromTemplate: (databaseId: string, templateId: string, recordId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>

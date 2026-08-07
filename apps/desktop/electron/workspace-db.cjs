@@ -1195,6 +1195,30 @@ class WorkspaceDatabase {
     return this.loadDatabaseById(databaseId)
   }
 
+  importDatabaseRecords(databaseId, records) {
+    if (!Array.isArray(records) || records.length < 1 || records.length > 10_000) throw new TypeError('A CSV import must contain between 1 and 10,000 records.')
+    const properties = this.database.prepare('SELECT id, type, config_json FROM database_properties WHERE database_id = ? ORDER BY position').all(databaseId)
+    if (!properties.length) throw new Error('Database does not exist.')
+    const writable = new Map(properties.filter((property) => !['formula', 'rollup', 'relation'].includes(property.type)).map((property) => [property.id, property]))
+    const now = new Date().toISOString()
+    let position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const insert = this.database.prepare('INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      for (const record of records) {
+        if (!record || typeof record.id !== 'string' || !record.id || typeof record.values !== 'object' || Array.isArray(record.values)) throw new TypeError('CSV import contains an invalid record.')
+        insert.run(record.id, databaseId, position++, '', now, now)
+        for (const [propertyId, value] of Object.entries(record.values)) {
+          const property = writable.get(propertyId)
+          if (property) this.writeDatabasePropertyValue(record.id, property, value, now)
+        }
+      }
+      this.enqueueWebhookEvent('database.record.created', `${databaseId}:csv`, { databaseId, recordIds: records.map((record) => record.id), source: 'csv', createdAt: now }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseById(databaseId)
+  }
+
   saveDatabaseTemplate(databaseId, template) {
     const existing = this.database.prepare('SELECT database_id FROM database_templates WHERE id = ?').get(template.id)
     if (existing && existing.database_id !== databaseId) throw new Error('Template belongs to another database.')

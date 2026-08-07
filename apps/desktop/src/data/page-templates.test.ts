@@ -12,5 +12,6 @@ describe('page templates', () => {
   it('keeps every built-in template addressable and non-empty', () => {
     expect(new Set(pageTemplates.map((template) => template.id)).size).toBe(pageTemplates.length)
     expect(pageTemplates.every((template) => template.name && template.content)).toBe(true)
+    expect(createPageFromTemplate(null, 'database')).toMatchObject({ icon: 'grid', content: expect.stringContaining('data-notetodo-page-layout="database"') })
   })
 })

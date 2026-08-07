@@ -161,6 +161,12 @@ class DatabaseRepository {
     this.write(next); return structuredClone(next)
   }
 
+  async importRecords(snapshot: DatabaseSnapshot, records: DatabaseRecord[]) {
+    if (window.notetodo?.database) return window.notetodo.database.importRecords(snapshot.schema.id, records.map(({ id, values }) => ({ id, values })))
+    const next = { ...snapshot, records: [...snapshot.records, ...records] }
+    this.write(next); return structuredClone(next)
+  }
+
   async saveTemplate(snapshot: DatabaseSnapshot, template: DatabaseTemplate) {
     if (window.notetodo?.database) return window.notetodo.database.saveTemplate(snapshot.schema.id, template)
     const templates = [...(snapshot.templates ?? []).filter((candidate) => candidate.id !== template.id), template]

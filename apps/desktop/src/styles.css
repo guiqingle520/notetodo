@@ -79,6 +79,75 @@ button { color: inherit; }
 .save-state.is-error { color: #a74732; }
 .save-state.is-error i { background: #b74d36; box-shadow: 0 0 0 3px rgba(183,77,54,.12); }
 @keyframes sync-pulse { 50% { opacity: .35; transform: scale(.75); } }
+
+/* Full-page databases use the same quiet geometry as Notion: the title keeps
+   the document rhythm while the collection is allowed to span the viewport. */
+.document.is-database-page { width: 100%; max-width: none; padding: 34px 44px 80px; }
+.document.is-database-page .document-kicker { max-width: 1180px; margin: 0 auto 17px; }
+.document.is-database-page .page-title { display: block; width: min(1180px, 100%); margin: 0 auto 24px; font-size: 40px; }
+.database-page-surface { width: 100%; max-width: 1440px; margin: 0 auto; }
+.database-page-surface .database-block { margin-top: 0; }
+.database-page-surface.is-empty { display: grid; min-height: 430px; place-items: start center; padding-top: 46px; }
+.database-page-surface.is-empty .database-create-composer { width: min(620px, 100%); padding: 26px; border-radius: 10px; box-shadow: 0 8px 28px rgba(15,15,15,.08); }
+
+.database-template-menu .template-blank.is-template { border-top: 1px solid var(--line); }
+.database-template-list > div { grid-template-columns: minmax(0,1fr) 28px 28px; }
+
+.template-editor-backdrop, .csv-import-backdrop { z-index: 120; }
+.template-editor-panel, .csv-import-panel { width: min(680px, calc(100vw - 56px)); max-height: min(760px, calc(100vh - 56px)); overflow: hidden; display: flex; flex-direction: column; border: 1px solid rgba(55,53,47,.16); border-radius: 8px; background: #fff; color: var(--ink); box-shadow: 0 18px 60px rgba(15,15,15,.22), 0 2px 8px rgba(15,15,15,.08); animation: menu-in .14s ease-out both; }
+.template-editor-panel > header, .csv-import-panel > header { min-height: 68px; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.template-editor-panel > header > div, .csv-import-panel > header > div { display: flex; align-items: center; gap: 11px; }
+.template-editor-panel > header span:not(.template-editor-icon), .csv-import-panel > header div div { display: flex; flex-direction: column; gap: 2px; }
+.template-editor-icon, .csv-import-panel > header > div > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 6px; background: #f1f1ef; }
+.template-editor-panel header small, .csv-import-panel header small { color: #9b9a97; font: 9px ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .08em; }
+.template-editor-panel header strong, .csv-import-panel header strong { font-size: 15px; font-weight: 600; }
+.template-editor-panel header button, .csv-import-panel header button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
+.template-editor-panel header button:hover, .csv-import-panel header button:hover { background: rgba(55,53,47,.08); }
+.template-editor-panel > main, .csv-import-panel > main { overflow: auto; padding: 18px; }
+.template-name-field { display: grid; grid-template-columns: 130px minmax(0,1fr); align-items: center; min-height: 44px; border-bottom: 1px solid var(--line); }
+.template-name-field > span, .template-property-section label > span { color: #787774; font-size: 12px; }
+.template-name-field input, .template-property-section input:not([type="checkbox"]), .template-property-section select { width: 100%; height: 32px; border: 1px solid transparent; border-radius: 4px; padding: 0 8px; background: transparent; color: var(--ink); outline: none; }
+.template-name-field input:focus, .template-property-section input:focus, .template-property-section select:focus { border-color: rgba(35,131,226,.5); box-shadow: 0 0 0 2px rgba(35,131,226,.12); }
+.template-property-section { padding-top: 18px; }
+.template-property-section > div { display: flex; justify-content: space-between; margin-bottom: 9px; }
+.template-property-section > div strong, .template-content-field strong { font-size: 12px; font-weight: 600; }
+.template-property-section > div small, .template-content-field small { color: #9b9a97; font-size: 11px; }
+.template-property-section label { min-height: 40px; display: grid; grid-template-columns: 130px minmax(0,1fr); align-items: center; border-top: 1px solid rgba(55,53,47,.06); }
+.template-property-section label > span { display: flex; align-items: center; gap: 7px; }
+.template-property-section label i { min-width: 22px; color: #9b9a97; font: normal 9px ui-monospace, monospace; }
+.template-property-section input[type="checkbox"] { justify-self: start; width: 16px; height: 16px; accent-color: var(--accent); }
+.template-content-field { display: flex; flex-direction: column; gap: 9px; margin-top: 20px; }
+.template-content-field > span { display: flex; justify-content: space-between; }
+.template-rich-editor { min-height: 170px; padding: 12px 14px; border: 1px solid rgba(55,53,47,.13); border-radius: 5px; cursor: text; }
+.template-rich-editor:focus-within { border-color: rgba(35,131,226,.5); box-shadow: 0 0 0 2px rgba(35,131,226,.1); }
+.template-rich-editor .tiptap { min-height: 144px; outline: none; font-size: 13px; line-height: 1.6; }
+.template-rich-editor .tiptap > *:first-child { margin-top: 0; }
+.template-rich-editor .tiptap p.is-editor-empty:first-child::before { height: 0; color: #b4b4b1; content: attr(data-placeholder); float: left; pointer-events: none; }
+.template-editor-panel > footer, .csv-import-panel > footer { min-height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-top: 1px solid var(--line); background: #fbfbfa; }
+.template-editor-panel > footer > span, .csv-import-panel > footer > span { color: #9b9a97; font-size: 11px; }
+.template-editor-panel > footer div, .csv-import-panel > footer div { display: flex; gap: 8px; }
+.template-editor-panel > footer button, .csv-import-panel > footer button { height: 32px; padding: 0 13px; border: 1px solid rgba(55,53,47,.13); border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; }
+.template-editor-panel > footer button:last-child, .csv-import-panel > footer button:last-child { border-color: var(--accent); background: var(--accent); color: #fff; }
+.template-editor-panel > footer button:disabled, .csv-import-panel > footer button:disabled { opacity: .45; cursor: default; }
+
+.csv-import-panel { width: min(760px, calc(100vw - 56px)); }
+.csv-dropzone { position: relative; min-height: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border: 1px dashed rgba(55,53,47,.22); border-radius: 7px; background: #fbfbfa; cursor: pointer; }
+.csv-dropzone:hover { border-color: rgba(35,131,226,.55); background: rgba(35,131,226,.025); }
+.csv-dropzone.has-file { border-style: solid; background: #f7f7f5; }
+.csv-dropzone input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.csv-dropzone > span { color: #787774; }
+.csv-dropzone strong { font-size: 13px; }
+.csv-dropzone small { color: #9b9a97; font-size: 11px; }
+.csv-mapping { margin-top: 18px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.csv-mapping-head, .csv-mapping label { display: grid; grid-template-columns: minmax(100px,.8fr) minmax(120px,1fr) minmax(170px,1.15fr); align-items: center; gap: 12px; min-height: 42px; padding: 0 11px; }
+.csv-mapping-head { min-height: 30px; background: #f7f7f5; color: #9b9a97; font-size: 10px; }
+.csv-mapping label { border-top: 1px solid var(--line); }
+.csv-mapping label strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.csv-mapping label > span { overflow: hidden; color: #9b9a97; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.csv-mapping select { width: 100%; height: 28px; border: 1px solid rgba(55,53,47,.13); border-radius: 4px; background: #fff; padding: 0 6px; color: var(--ink); font-size: 11px; }
+.csv-import-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 12px; padding: 9px 11px; border-radius: 5px; background: #f1f1ef; color: #787774; font-size: 11px; line-height: 1.45; }
+.csv-import-note svg { flex: 0 0 auto; margin-top: 1px; }
+.csv-import-error { margin: 10px 0 0; color: #d44c47; font-size: 11px; }
 .collaboration-presence { display: flex; align-items: center; gap: 5px; margin-right: 4px; padding: 3px 6px; border: 0; border-radius: 4px; background: transparent; }
 .presence-state { display: flex; align-items: center; gap: 4px; color: #777970; font: 8px 'DM Mono', monospace; }
 .collaboration-presence.is-online .presence-state { color: #527753; }
@@ -1172,11 +1241,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .database-template-menu button small { color: var(--notion-faint); font-size: 10px; }
 .database-template-list { max-height: 210px; overflow-y: auto; padding: 4px 5px 6px; border-top: 1px solid var(--notion-divider); }
 .database-template-list > small { display: block; padding: 4px 7px; color: var(--notion-faint); font-size: 10px; }
-.database-template-list > div { display: grid; grid-template-columns: 1fr 28px; align-items: center; border-radius: 4px; }
+.database-template-list > div { display: grid; grid-template-columns: minmax(0,1fr) 28px 28px; align-items: center; border-radius: 4px; }
 .database-template-list > div:hover { background: var(--notion-hover); }
 .database-template-list > div > button:first-child { min-height: 42px; display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 4px; padding: 4px 7px; color: var(--notion-text); border: 0; background: transparent; text-align: left; cursor: pointer; }
 .database-template-list > div > button:last-child { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-faint); border: 0; background: transparent; cursor: pointer; }
 .database-template-list > div > button:last-child:hover { color: #eb5757; background: rgba(235,87,87,.10); }
+.database-template-list > div > button:nth-last-child(2):not(:first-child) { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-faint); border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
+.database-template-list > div > button:nth-last-child(2):not(:first-child):hover { color: var(--notion-text); background: var(--notion-hover); }
 .database-template-list > p { margin: 0; padding: 14px 10px; color: var(--notion-faint); font-size: 11px; line-height: 1.5; text-align: center; }
 .database-template-menu > footer { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding: 9px; border-top: 1px solid var(--notion-divider); background: var(--notion-sidebar); }
 .database-template-menu > footer input { min-width: 0; height: 31px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); background: #fff; font-size: 12px; }
