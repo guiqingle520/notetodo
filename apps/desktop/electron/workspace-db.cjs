@@ -18,6 +18,7 @@ class WorkspaceDatabase {
     this.recoverInterruptedImports()
     this.seedIfEmpty()
     this.seedDatabaseIfEmpty()
+    this.ensureAdvancedDatabaseSeed()
     this.backfillRetrievalIndex()
     this.prepareStatements()
   }
@@ -381,13 +382,16 @@ class WorkspaceDatabase {
       ['task-owner', '负责人', 'text', 2, '{}'],
       ['task-due', '截止日期', 'date', 3, '{}'],
       ['task-score', '优先级', 'number', 4, '{}'],
+      ['task-dependencies', '依赖任务', 'relation', 5, JSON.stringify({ relation: { databaseId: 'roadmap-db' } })],
+      ['task-dependency-score', '依赖总优先级', 'rollup', 6, JSON.stringify({ rollup: { relationPropertyId: 'task-dependencies', targetPropertyId: 'task-score', aggregation: 'sum' } })],
+      ['task-risk', '风险标签', 'formula', 7, JSON.stringify({ formula: { expression: 'if([task-dependency-score] >= 3, "需关注", "正常")' } })],
     ]
     const records = [
-      ['task-1', 0, ['编辑器交互收尾', 'doing', 'Lin', '2026-08-08', 3]],
-      ['task-2', 1, ['SQLite 数据迁移', 'done', 'Ming', '2026-08-06', 2]],
-      ['task-3', 2, ['数据库 Table View', 'doing', 'Lin', '2026-08-10', 3]],
-      ['task-4', 3, ['模型网关设置页', 'todo', 'Kai', '2026-08-12', 2]],
-      ['task-5', 4, ['桌面安装包签名', 'todo', 'Ming', '2026-08-16', 1]],
+      ['task-1', 0, ['编辑器交互收尾', 'doing', 'Lin', '2026-08-08', 3, ['task-2']]],
+      ['task-2', 1, ['SQLite 数据迁移', 'done', 'Ming', '2026-08-06', 2, []]],
+      ['task-3', 2, ['数据库 Table View', 'doing', 'Lin', '2026-08-10', 3, ['task-1', 'task-2']]],
+      ['task-4', 3, ['模型网关设置页', 'todo', 'Kai', '2026-08-12', 2, ['task-2']]],
+      ['task-5', 4, ['桌面安装包签名', 'todo', 'Ming', '2026-08-16', 1, ['task-3', 'task-4']]],
     ]
 
     this.database.exec('BEGIN IMMEDIATE')
@@ -403,7 +407,7 @@ class WorkspaceDatabase {
         insertRecord.run(recordId, 'roadmap-db', position, now, now)
         properties.forEach((property, index) => {
           const value = values[index]
-          insertValue.run(recordId, property[0], typeof value === 'string' ? value : null, typeof value === 'number' ? value : null, null, null, now)
+          insertValue.run(recordId, property[0], typeof value === 'string' ? value : null, typeof value === 'number' ? value : null, null, Array.isArray(value) ? JSON.stringify(value) : null, now)
         })
       }
 
@@ -411,6 +415,43 @@ class WorkspaceDatabase {
       insertView.run('roadmap-table', 'roadmap-db', '所有任务', 'table', 0, '{}')
       insertView.run('roadmap-board', 'roadmap-db', '状态看板', 'board', 1, JSON.stringify({ groupByPropertyId: 'task-status' }))
       insertView.run('roadmap-list', 'roadmap-db', '紧凑列表', 'list', 2, '{}')
+      this.database.exec('COMMIT')
+    } catch (error) {
+      this.database.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  /**
+   * Data-only backfill for workspaces created before relation/rollup/formula
+   * support. INSERT OR IGNORE makes this safe to run on every application boot
+   * without overwriting user-edited values or property configuration.
+   */
+  ensureAdvancedDatabaseSeed() {
+    const roadmap = this.database.prepare('SELECT id FROM databases WHERE id = ?').get('roadmap-db')
+    if (!roadmap) return
+
+    const properties = [
+      ['task-dependencies', '依赖任务', 'relation', 5, JSON.stringify({ relation: { databaseId: 'roadmap-db' } })],
+      ['task-dependency-score', '依赖总优先级', 'rollup', 6, JSON.stringify({ rollup: { relationPropertyId: 'task-dependencies', targetPropertyId: 'task-score', aggregation: 'sum' } })],
+      ['task-risk', '风险标签', 'formula', 7, JSON.stringify({ formula: { expression: 'if([task-dependency-score] >= 3, "需关注", "正常")' } })],
+    ]
+    const insertProperty = this.database.prepare(`
+      INSERT OR IGNORE INTO database_properties(id, database_id, name, type, position, config_json)
+      VALUES (?, 'roadmap-db', ?, ?, ?, ?)
+    `)
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      for (const property of properties) insertProperty.run(...property)
+      const relationProperty = this.database.prepare(`
+        INSERT OR IGNORE INTO property_values(record_id, property_id, json_value, updated_at)
+        VALUES (?, 'task-dependencies', ?, ?)
+      `)
+      const now = new Date().toISOString()
+      for (const [recordId, relatedIds] of [
+        ['task-1', ['task-2']], ['task-2', []], ['task-3', ['task-1', 'task-2']],
+        ['task-4', ['task-2']], ['task-5', ['task-3', 'task-4']],
+      ]) relationProperty.run(recordId, JSON.stringify(relatedIds), now)
       this.database.exec('COMMIT')
     } catch (error) {
       this.database.exec('ROLLBACK')
@@ -817,8 +858,9 @@ class WorkspaceDatabase {
   }
 
   updateDatabaseCell(recordId, propertyId, value) {
-    const property = this.database.prepare('SELECT type FROM database_properties WHERE id = ?').get(propertyId)
+    const property = this.database.prepare('SELECT type, config_json FROM database_properties WHERE id = ?').get(propertyId)
     if (!property) throw new Error('Database property does not exist.')
+    if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
     const now = new Date().toISOString()
     let textValue = null
     let numberValue = null
@@ -828,6 +870,17 @@ class WorkspaceDatabase {
       if (property.type === 'number') numberValue = Number(value)
       else if (property.type === 'checkbox') booleanValue = value ? 1 : 0
       else if (property.type === 'multiSelect') jsonValue = JSON.stringify(value)
+      else if (property.type === 'relation') {
+        if (!Array.isArray(value) || value.length > 100 || value.some((id) => typeof id !== 'string' || id.length === 0 || id.length > 128)) {
+          throw new TypeError('Relation value must be an array of at most 100 record IDs.')
+        }
+        const uniqueIds = [...new Set(value)]
+        const relationDatabaseId = JSON.parse(property.config_json).relation?.databaseId
+        if (typeof relationDatabaseId !== 'string') throw new Error('Relation property has no target database.')
+        const recordExists = this.database.prepare('SELECT 1 FROM database_records WHERE id = ? AND database_id = ?')
+        if (uniqueIds.some((id) => !recordExists.get(id, relationDatabaseId))) throw new Error('Relation target does not exist in the configured database.')
+        jsonValue = JSON.stringify(uniqueIds)
+      }
       else textValue = String(value)
     }
     this.database.prepare(`

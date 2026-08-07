@@ -1,4 +1,4 @@
-export type PropertyType = 'title' | 'text' | 'number' | 'checkbox' | 'select' | 'multiSelect' | 'date' | 'url'
+export type PropertyType = 'title' | 'text' | 'number' | 'checkbox' | 'select' | 'multiSelect' | 'date' | 'url' | 'relation' | 'rollup' | 'formula'
 
 export interface SelectOption {
   id: string
@@ -11,6 +11,9 @@ export interface DatabaseProperty {
   name: string
   type: PropertyType
   options?: SelectOption[]
+  relation?: { databaseId: string }
+  rollup?: { relationPropertyId: string; targetPropertyId: string; aggregation: 'count' | 'sum' | 'average' | 'min' | 'max' | 'showOriginal' }
+  formula?: { expression: string }
 }
 
 export type PropertyValue = string | number | boolean | string[] | null
@@ -58,6 +61,21 @@ export interface FilterRule {
   value?: PropertyValue
 }
 
+export interface DatabaseAutomation {
+  id: string
+  name: string
+  enabled: boolean
+  trigger: { type: 'propertyChanged'; propertyId: string }
+  condition?: FilterRule
+  actions: Array<{ type: 'setProperty'; propertyId: string; value: PropertyValue }>
+}
+
+export interface AutomationExecution {
+  automationId: string
+  propertyId: string
+  value: PropertyValue
+}
+
 /**
  * Converts UI input to the schema's canonical value. Invalid values become
  * null instead of leaking mixed types into sorting, formulas and sync.
@@ -65,14 +83,142 @@ export interface FilterRule {
 export function normalizePropertyValue(property: DatabaseProperty, input: unknown): PropertyValue {
   if (input === null || input === undefined || input === '') return null
   switch (property.type) {
+    case 'formula':
+    case 'rollup': return null
     case 'checkbox': return Boolean(input)
     case 'number': {
       const value = typeof input === 'number' ? input : Number(input)
       return Number.isFinite(value) ? value : null
     }
-    case 'multiSelect': return Array.isArray(input) ? input.filter((value): value is string => typeof value === 'string') : null
+    case 'multiSelect':
+    case 'relation': return Array.isArray(input) ? [...new Set(input.filter((value): value is string => typeof value === 'string'))] : null
     default: return typeof input === 'string' ? input : String(input)
   }
+}
+
+/** Resolves rollups before formulas without mutating persisted source values. */
+export function resolveDerivedRecords(schema: DatabaseSchema, records: DatabaseRecord[]): DatabaseRecord[] {
+  const byId = new Map(records.map((record) => [record.id, record]))
+  return records.map((record) => {
+    const values = { ...record.values }
+    for (const property of schema.properties.filter((candidate) => candidate.type === 'rollup' && candidate.rollup)) {
+      const config = property.rollup!
+      const relatedIds = values[config.relationPropertyId]
+      const relatedValues = Array.isArray(relatedIds)
+        ? relatedIds.map((id) => byId.get(id)?.values[config.targetPropertyId] ?? null).filter((value) => value !== null)
+        : []
+      values[property.id] = aggregateRollup(relatedValues, config.aggregation)
+    }
+    for (const property of schema.properties.filter((candidate) => candidate.type === 'formula' && candidate.formula)) {
+      values[property.id] = evaluateFormula(property.formula!.expression, values)
+    }
+    return { ...record, values }
+  })
+}
+
+export function evaluateFormula(expression: string, values: Record<string, PropertyValue>): PropertyValue {
+  try {
+    if (expression.length > 1000) return null
+    const parser = new FormulaParser(tokenizeFormula(expression), values)
+    return normalizeFormulaResult(parser.parse())
+  } catch { return null }
+}
+
+function aggregateRollup(values: PropertyValue[], aggregation: NonNullable<DatabaseProperty['rollup']>['aggregation']): PropertyValue {
+  if (aggregation === 'count') return values.length
+  if (aggregation === 'showOriginal') return values.flatMap((value) => Array.isArray(value) ? value : [String(value)])
+  const numbers = values.map(Number).filter(Number.isFinite)
+  if (!numbers.length) return null
+  if (aggregation === 'sum') return numbers.reduce((sum, value) => sum + value, 0)
+  if (aggregation === 'average') return numbers.reduce((sum, value) => sum + value, 0) / numbers.length
+  return aggregation === 'min' ? Math.min(...numbers) : Math.max(...numbers)
+}
+
+type FormulaToken = { type: 'number' | 'string' | 'reference' | 'identifier' | 'operator' | 'punctuation' | 'eof'; value: string }
+
+function tokenizeFormula(expression: string) {
+  const tokens: FormulaToken[] = []
+  let index = 0
+  while (index < expression.length) {
+    const rest = expression.slice(index)
+    const whitespace = rest.match(/^\s+/u); if (whitespace) { index += whitespace[0].length; continue }
+    const reference = rest.match(/^\[([^\]\n]{1,128})\]/u); if (reference) { tokens.push({ type: 'reference', value: reference[1]! }); index += reference[0].length; continue }
+    const string = rest.match(/^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/u); if (string) { tokens.push({ type: 'string', value: string[0] }); index += string[0].length; continue }
+    const number = rest.match(/^\d+(?:\.\d+)?/u); if (number) { tokens.push({ type: 'number', value: number[0] }); index += number[0].length; continue }
+    const identifier = rest.match(/^[A-Za-z_][A-Za-z0-9_]*/u); if (identifier) { tokens.push({ type: 'identifier', value: identifier[0] }); index += identifier[0].length; continue }
+    const operator = rest.match(/^(?:>=|<=|==|!=|&&|\|\||[+\-*/><!])/u); if (operator) { tokens.push({ type: 'operator', value: operator[0] }); index += operator[0].length; continue }
+    if (['(', ')', ','].includes(rest[0]!)) { tokens.push({ type: 'punctuation', value: rest[0]! }); index += 1; continue }
+    throw new Error('Invalid formula token')
+  }
+  if (tokens.length > 256) throw new Error('Formula is too complex')
+  tokens.push({ type: 'eof', value: '' })
+  return tokens
+}
+
+class FormulaParser {
+  private index = 0
+  private depth = 0
+  constructor(private readonly tokens: FormulaToken[], private readonly values: Record<string, PropertyValue>) {}
+  parse(): unknown { const value = this.expression(0); if (this.peek().type !== 'eof') throw new Error('Unexpected token'); return value }
+  private expression(minimum: number): unknown {
+    if (++this.depth > 32) throw new Error('Formula nesting is too deep')
+    let left = this.prefix()
+    const precedence: Record<string, number> = { '||': 1, '&&': 2, '==': 3, '!=': 3, '>': 4, '<': 4, '>=': 4, '<=': 4, '+': 5, '-': 5, '*': 6, '/': 6 }
+    while (this.peek().type === 'operator' && (precedence[this.peek().value] ?? 0) >= minimum) {
+      const operator = this.take().value; const level = precedence[operator]!
+      const right = this.expression(level + 1); left = applyFormulaOperator(operator, left, right)
+    }
+    this.depth -= 1
+    return left
+  }
+  private prefix(): unknown {
+    const token = this.take()
+    if (token.type === 'number') return Number(token.value)
+    if (token.type === 'string') return JSON.parse(token.value.startsWith("'") ? `"${token.value.slice(1, -1).replaceAll('"', '\\"')}"` : token.value)
+    if (token.type === 'reference') return this.values[token.value] ?? null
+    if (token.type === 'operator' && ['-', '!'].includes(token.value)) { const value = this.expression(7); return token.value === '-' ? -Number(value) : !value }
+    if (token.value === '(') { const value = this.expression(0); this.expect(')'); return value }
+    if (token.type === 'identifier') {
+      if (['true', 'false', 'null'].includes(token.value)) return token.value === 'true' ? true : token.value === 'false' ? false : null
+      this.expect('('); const args: unknown[] = []
+      if (this.peek().value !== ')') { do { args.push(this.expression(0)) } while (this.peek().value === ',' && this.take()) }
+      this.expect(')'); return applyFormulaFunction(token.value, args)
+    }
+    throw new Error('Invalid formula expression')
+  }
+  private peek() { return this.tokens[this.index]! }
+  private take() { return this.tokens[this.index++]! }
+  private expect(value: string) { if (this.take().value !== value) throw new Error(`Expected ${value}`) }
+}
+
+function applyFormulaOperator(operator: string, left: unknown, right: unknown): unknown {
+  if (operator === '+') return typeof left === 'string' || typeof right === 'string' ? `${left ?? ''}${right ?? ''}` : Number(left) + Number(right)
+  if (operator === '-') return Number(left) - Number(right)
+  if (operator === '*') return Number(left) * Number(right)
+  if (operator === '/') return Number(right) === 0 ? null : Number(left) / Number(right)
+  if (operator === '&&') return Boolean(left) && Boolean(right)
+  if (operator === '||') return Boolean(left) || Boolean(right)
+  if (operator === '==') return left === right
+  if (operator === '!=') return left !== right
+  if (operator === '>') return Number(left) > Number(right)
+  if (operator === '<') return Number(left) < Number(right)
+  if (operator === '>=') return Number(left) >= Number(right)
+  return Number(left) <= Number(right)
+}
+
+function applyFormulaFunction(name: string, args: unknown[]): unknown {
+  if (name === 'if') return args[0] ? args[1] : args[2]
+  if (name === 'concat') return args.map((value) => String(value ?? '')).join('')
+  if (name === 'round') { const precision = Math.max(0, Math.min(8, Number(args[1] ?? 0))); const factor = 10 ** precision; return Math.round(Number(args[0]) * factor) / factor }
+  if (name === 'length') return Array.isArray(args[0]) || typeof args[0] === 'string' ? args[0].length : 0
+  throw new Error('Unknown formula function')
+}
+
+function normalizeFormulaResult(value: unknown): PropertyValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (Array.isArray(value)) return value.map(String)
+  return null
 }
 
 export function queryRecords(
@@ -94,6 +240,33 @@ export function queryRecords(
     }
     return 0
   })
+}
+
+/**
+ * Applies deterministic, record-local automations after a user edit. The
+ * engine has no timers, network access or dynamic code execution, so the same
+ * input produces the same patches in the renderer, desktop process and tests.
+ */
+export function runDatabaseAutomations(
+  schema: DatabaseSchema,
+  record: DatabaseRecord,
+  changedPropertyId: string,
+  automations: DatabaseAutomation[],
+): { record: DatabaseRecord; executions: AutomationExecution[] } {
+  let nextRecord = { ...record, values: { ...record.values } }
+  const executions: AutomationExecution[] = []
+  for (const automation of automations.slice(0, 50)) {
+    if (!automation.enabled || automation.trigger.propertyId !== changedPropertyId) continue
+    if (automation.condition && queryRecords([nextRecord], [automation.condition]).length === 0) continue
+    for (const action of automation.actions.slice(0, 20)) {
+      const property = schema.properties.find((candidate) => candidate.id === action.propertyId)
+      if (!property || property.type === 'formula' || property.type === 'rollup') continue
+      const value = normalizePropertyValue(property, action.value)
+      nextRecord = { ...nextRecord, values: { ...nextRecord.values, [property.id]: value } }
+      executions.push({ automationId: automation.id, propertyId: property.id, value })
+    }
+  }
+  return { record: nextRecord, executions }
 }
 
 function matchesFilter(value: PropertyValue, filter: FilterRule) {

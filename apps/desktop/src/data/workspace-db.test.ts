@@ -103,6 +103,18 @@ describe('WorkspaceDatabase', () => {
     expect(updated?.activeViewId).toBe('roadmap-board')
   })
 
+  it('persists validated relations while keeping derived properties read-only', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.updateDatabaseCell('task-1', 'task-dependencies', ['task-2', 'task-2', 'task-4'])
+
+    const updated = database.loadDatabaseByPage('projects')
+    expect(updated?.schema.properties.map((property) => property.type)).toContain('rollup')
+    expect(updated?.schema.properties.map((property) => property.type)).toContain('formula')
+    expect(updated?.records.find((record) => record.id === 'task-1')?.values['task-dependencies']).toEqual(['task-2', 'task-4'])
+    expect(() => database?.updateDatabaseCell('task-1', 'task-risk', '被篡改')).toThrow(/read-only/)
+    expect(() => database?.updateDatabaseCell('task-1', 'task-dependencies', ['missing-record'])).toThrow(/does not exist/)
+  })
+
   it('imports page trees and typed CSV databases in one transaction', () => {
     database = new WorkspaceDatabase(':memory:')
     const now = new Date().toISOString()

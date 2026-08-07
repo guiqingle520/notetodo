@@ -15,14 +15,17 @@ const seedSnapshot: DatabaseSnapshot = {
       { id: 'task-owner', name: '负责人', type: 'text' },
       { id: 'task-due', name: '截止日期', type: 'date' },
       { id: 'task-score', name: '优先级', type: 'number' },
+      { id: 'task-dependencies', name: '依赖任务', type: 'relation', relation: { databaseId: 'roadmap-db' } },
+      { id: 'task-dependency-score', name: '依赖总优先级', type: 'rollup', rollup: { relationPropertyId: 'task-dependencies', targetPropertyId: 'task-score', aggregation: 'sum' } },
+      { id: 'task-risk', name: '风险标签', type: 'formula', formula: { expression: 'if([task-dependency-score] >= 3, "需关注", "正常")' } },
     ],
   },
   records: [
-    record('task-1', ['编辑器交互收尾', 'doing', 'Lin', '2026-08-08', 3]),
-    record('task-2', ['SQLite 数据迁移', 'done', 'Ming', '2026-08-06', 2]),
-    record('task-3', ['数据库 Table View', 'doing', 'Lin', '2026-08-10', 3]),
-    record('task-4', ['模型网关设置页', 'todo', 'Kai', '2026-08-12', 2]),
-    record('task-5', ['桌面安装包签名', 'todo', 'Ming', '2026-08-16', 1]),
+    record('task-1', ['编辑器交互收尾', 'doing', 'Lin', '2026-08-08', 3, ['task-2']]),
+    record('task-2', ['SQLite 数据迁移', 'done', 'Ming', '2026-08-06', 2, []]),
+    record('task-3', ['数据库 Table View', 'doing', 'Lin', '2026-08-10', 3, ['task-1', 'task-2']]),
+    record('task-4', ['模型网关设置页', 'todo', 'Kai', '2026-08-12', 2, ['task-2']]),
+    record('task-5', ['桌面安装包签名', 'todo', 'Ming', '2026-08-16', 1, ['task-3', 'task-4']]),
   ],
   views: [
     { id: 'roadmap-table', databaseId: 'roadmap-db', name: '所有任务', type: 'table', config: {} },
@@ -32,8 +35,8 @@ const seedSnapshot: DatabaseSnapshot = {
   activeViewId: 'roadmap-table',
 }
 
-function record(id: string, values: [string, string, string, string, number]): DatabaseRecord {
-  return { id, values: Object.fromEntries(['task-title', 'task-status', 'task-owner', 'task-due', 'task-score'].map((key, index) => [key, values[index]])), createdAt: now, updatedAt: now }
+function record(id: string, values: [string, string, string, string, number, string[]]): DatabaseRecord {
+  return { id, values: Object.fromEntries(['task-title', 'task-status', 'task-owner', 'task-due', 'task-score', 'task-dependencies'].map((key, index) => [key, values[index]])), createdAt: now, updatedAt: now }
 }
 
 class DatabaseRepository {
@@ -67,4 +70,3 @@ class DatabaseRepository {
 }
 
 export const databaseRepository = new DatabaseRepository()
-

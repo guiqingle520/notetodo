@@ -36,6 +36,7 @@ import {
   ListTree,
   ListTodo,
   Lightbulb,
+  LayoutTemplate,
   MessageSquare,
   Minus,
   MoreHorizontal,
@@ -72,6 +73,7 @@ import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/re
 import { normalizeEmbedUrl, safeHttpsUrl } from './editor/rich-blocks'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
 import { diffHistoryHtml, historyTextLines } from './data/page-history'
+import { pageTemplates } from './data/page-templates'
 
 type PagePermission = { subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
 type PageComment = { id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }
@@ -180,6 +182,7 @@ function Sidebar({
   notificationCount: number
 }) {
   const { pages, addPage, setActivePage } = useWorkspace()
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
   const topLevel = pages.filter((page) => page.parentId === null && !page.archivedAt)
   const favorites = pages.filter((page) => page.favorite && !page.archivedAt)
 
@@ -217,7 +220,14 @@ function Sidebar({
       </div>
 
       <div className="sidebar-section page-section">
-        <div className="section-label"><span>空间</span><button onClick={() => addPage(null)}><Plus size={14} /></button></div>
+        <div className="section-label"><span>空间</span><button aria-label="从模板新建页面" onClick={() => setTemplateMenuOpen((value) => !value)}><Plus size={14} /></button></div>
+        {templateMenuOpen && <div className="template-quick-menu">
+          <header><LayoutTemplate size={13} /><span>选择起点</span><small>LOCAL TEMPLATES</small></header>
+          {pageTemplates.map((template) => {
+            const TemplateIcon = iconMap[template.icon]
+            return <button key={template.id} onClick={() => { addPage(null, template.id); setTemplateMenuOpen(false) }}><TemplateIcon size={14} /><span><strong>{template.name}</strong><small>{template.description}</small></span></button>
+          })}
+        </div>}
         <div className="page-tree">
           {topLevel.map((page) => <PageRow key={page.id} page={page} />)}
         </div>

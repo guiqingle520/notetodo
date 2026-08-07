@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Content Parity, Import & Retrieval Alpha — **进行中**
+Content Parity, Import & Retrieval Alpha — **已完成**
 
 ### 已交付
 
@@ -82,11 +82,15 @@ Content Parity, Import & Retrieval Alpha — **进行中**
 - 权限过滤后的 BM25/余弦 Reciprocal Rank Fusion，离线即可完成混合召回。
 - AI 提问自动注入至多 6 个授权片段，使用 `[S1]` 编号并展示可点击页面引用。
 - 页面更新、导入和历史恢复均在同一事务内重建检索索引。
+- 数据库 Relation、Rollup 与 Formula 派生属性，公式由有界解释器执行而非 JavaScript `eval`。
+- Relation 目标记录强校验、派生字段只读持久化边界，以及旧工作区幂等数据补齐。
+- 空白页、会议纪要、项目简报和每周计划本地模板库。
+- 确定性基础自动化引擎：属性变更触发、条件匹配、有界动作与派生字段写入拦截。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：19 个测试文件、75 个测试通过。
+- Vitest：20 个测试文件、82 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -122,8 +126,10 @@ Content Parity, Import & Retrieval Alpha — **进行中**
 - 图片尺寸/说明 Yjs 往返、附件 URL 哈希校验和协作文件名路径逃逸防护：通过。
 - 页面自动版本合并、恢复前快照、历史附件保护和有界文本差异：通过。
 - 检索分块清洗、中文本地语义相似度、RRF 融合和页面权限隔离：通过。
+- Relation 持久化、Rollup 先于 Formula 求值、任意 JavaScript 拒绝与自动化边界：通过。
+- 本地 Chromium：新增关联后汇总值与风险公式实时更新，控制台无警告或错误。
 - 隔离 Electron 烟雾测试：Schema v7、CSP、Preload、SQLite 与协作票据链路通过，退出码 0。
-- 全工作区：19 个测试文件、75 项测试通过。
+- 全工作区：20 个测试文件、82 项测试通过。
 
 ## 当前里程碑余项
 
@@ -134,7 +140,16 @@ Content Parity, Import & Retrieval Alpha
 3. Notion ZIP/HTML/Markdown/CSV、附件、链接重写、事务写入、进度取消和可恢复报告已完成。
 4. 页面历史、快照浏览、差异比较与可逆恢复已完成。
 5. 权限过滤的全文/本地向量混合检索和 AI 引用定位已完成；后续允许模型提供商覆盖嵌入实现。
-6. 增加模板库、数据库关联/Rollup/公式和基础自动化。
+6. 模板库、数据库 Relation/Rollup/Formula 和基础自动化已完成。
+
+## 下一里程碑
+
+Open Platform & External Automation Alpha
+
+1. 工作区 REST API 与细粒度令牌权限。
+2. 可签名、可重试、可观测的 Webhook Outbox。
+3. 用户可编辑自动化规则、执行日志和失败重放。
+4. MCP Server 读写工作区与自定义模型工具调用闭环。
 
 ## 已知技术债
 

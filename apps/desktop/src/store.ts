@@ -3,13 +3,14 @@ import seedWorkspace from '../shared/seed-workspace.json'
 import { createUntitledPage, type WorkspacePage, type WorkspaceSnapshot } from './domain'
 import { SaveScheduler } from './data/save-scheduler'
 import { workspaceRepository } from './data/workspace-repository'
+import { createPageFromTemplate, type PageTemplate } from './data/page-templates'
 
 interface WorkspaceActions {
   hydrated: boolean
   searchResults: WorkspacePage[]
   hydrate: () => Promise<void>
   setActivePage: (id: string) => void
-  addPage: (parentId?: string | null) => void
+  addPage: (parentId?: string | null, templateId?: PageTemplate['id']) => void
   updatePage: (id: string, patch: Partial<Pick<WorkspacePage, 'title' | 'content' | 'favorite'>>) => void
   toggleFavorite: (id: string) => void
   archivePage: (id: string) => void
@@ -39,8 +40,8 @@ export const useWorkspace = create<WorkspaceSnapshot & WorkspaceActions>((set, g
     void workspaceRepository.setActivePage(activePageId)
   },
 
-  addPage: (parentId = null) => {
-    const page = createUntitledPage(parentId)
+  addPage: (parentId = null, templateId = 'blank') => {
+    const page = templateId === 'blank' ? createUntitledPage(parentId) : createPageFromTemplate(parentId, templateId)
     set({ pages: [...get().pages, page], activePageId: page.id })
     void workspaceRepository.upsertPage(page)
     void workspaceRepository.setActivePage(page.id)
@@ -81,4 +82,3 @@ export const useWorkspace = create<WorkspaceSnapshot & WorkspaceActions>((set, g
 }))
 
 export { saveScheduler }
-
