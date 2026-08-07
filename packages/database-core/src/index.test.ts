@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, normalizePropertyValue, queryRecords, resolveDerivedRecords, runDatabaseAutomations, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, layoutTimelineRecords, normalizePropertyValue, queryRecords, resolveDerivedRecords, runDatabaseAutomations, timelineDays, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -44,6 +44,17 @@ describe('database query engine', () => {
     const start = performance.now(); const grouped = groupRecordsByDate(many, 'due')
     expect(grouped.unscheduled).toHaveLength(1_000)
     expect(Object.values(grouped.groups).flat()).toHaveLength(9_000)
+    expect(performance.now() - start).toBeLessThan(250)
+  })
+
+  it('clips and caps timeline ranges without scanning records repeatedly', () => {
+    const many = Array.from({ length: 10_000 }, (_, index): DatabaseRecord => ({ ...records[0]!, id: String(index), values: { start: index % 3 ? '2026-08-01' : null, end: index % 5 ? '2026-08-20' : null } }))
+    const start = performance.now(); const layout = layoutTimelineRecords(many, 'start', 'end', '2026-08-03', 28, 120)
+    expect(layout.items).toHaveLength(120)
+    expect(layout.matchingCount).toBe(8_000)
+    expect(layout.truncatedCount).toBe(7_880)
+    expect(layout.items[0]).toMatchObject({ startIndex: 0, endIndex: 17, startsBeforeRange: true })
+    expect(timelineDays('2026-08-03', 2)).toEqual([{ date: '2026-08-03', day: 3, weekday: 1, month: 8 }, { date: '2026-08-04', day: 4, weekday: 2, month: 8 }])
     expect(performance.now() - start).toBeLessThan(250)
   })
 

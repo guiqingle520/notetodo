@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Activity, ArrowUpDown, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Filter, Link2, List, Plus, RotateCcw, Sigma, Table2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, groupRecordsByDate, queryRecords, resolveDerivedRecords, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type PropertyValue } from '@notetodo/database-core'
+import { useEffect, useMemo, useState, type DragEvent } from 'react'
+import { Activity, ArrowUpDown, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Filter, Link2, List, Plus, RotateCcw, Sigma, Table2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, groupRecordsByDate, layoutTimelineRecords, queryRecords, resolveDerivedRecords, timelineDays, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type PropertyValue } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -65,7 +65,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
     const id = crypto.randomUUID()
     const record: DatabaseRecord = {
       id,
-      values: { 'task-title': '新任务', 'task-status': 'todo', 'task-owner': '', 'task-due': '', 'task-score': 1, 'task-dependencies': [] },
+      values: { 'task-title': '新任务', 'task-status': 'todo', 'task-owner': '', 'task-start': new Date().toISOString().slice(0, 10), 'task-due': '', 'task-score': 1, 'task-dependencies': [] },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -86,7 +86,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       <div className="database-viewbar">
         <div className="database-tabs">
           {snapshot.views.map((view) => {
-            const Icon = view.type === 'table' ? Table2 : view.type === 'board' ? Columns3 : view.type === 'calendar' ? CalendarDays : List
+            const Icon = view.type === 'table' ? Table2 : view.type === 'board' ? Columns3 : view.type === 'calendar' ? CalendarDays : view.type === 'timeline' ? ChartNoAxesGantt : List
             return <button className={view.id === activeView.id ? 'is-active' : ''} key={view.id} onClick={() => setView(view.id)}><Icon size={13} />{view.name}</button>
           })}
         </div>
@@ -102,6 +102,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
       {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
+      {activeView.type === 'timeline' && <TimelineView records={records} schema={snapshot.schema} startDatePropertyId={activeView.config.startDatePropertyId} endDatePropertyId={activeView.config.endDatePropertyId} updateCell={updateCell} />}
       {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
         if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
         else setAutomations((current) => [...current.filter((item) => item.id !== rule.id), rule])
@@ -117,6 +118,58 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
     </section>
   )
 }
+
+const TIMELINE_DAYS = 28
+const TIMELINE_DAY_WIDTH = 36
+
+export function TimelineView({ records, schema, startDatePropertyId, endDatePropertyId, updateCell }: { records: DatabaseRecord[]; schema: DatabaseSchema; startDatePropertyId?: string; endDatePropertyId?: string; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const dateProperties = schema.properties.filter((property) => property.type === 'date')
+  const startProperty = dateProperties.find((property) => property.id === startDatePropertyId) ?? dateProperties.at(-1)
+  const endProperty = dateProperties.find((property) => property.id === endDatePropertyId) ?? dateProperties[0]
+  const titleProperty = schema.properties.find((property) => property.type === 'title')
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const [rangeStart, setRangeStart] = useState(() => startOfWeekIso(todayIso))
+  const days = useMemo(() => timelineDays(rangeStart, TIMELINE_DAYS), [rangeStart])
+  const layout = useMemo(() => startProperty && endProperty ? layoutTimelineRecords(records, startProperty.id, endProperty.id, rangeStart, TIMELINE_DAYS) : { items: [], unscheduled: records, matchingCount: 0, truncatedCount: 0 }, [records, startProperty, endProperty, rangeStart])
+  const todayIndex = days.findIndex((day) => day.date === todayIso)
+  const rangeLabel = `${formatTimelineDate(days[0]?.date)} — ${formatTimelineDate(days.at(-1)?.date)}`
+  const reschedule = (event: DragEvent<HTMLDivElement>) => {
+    const recordId = event.dataTransfer.getData('application/x-notetodo-record')
+    const duration = Number(event.dataTransfer.getData('application/x-notetodo-duration'))
+    if (!recordId || !Number.isFinite(duration)) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const pointerX = Number.isFinite(event.clientX) ? event.clientX : rect.left
+    const index = Math.max(0, Math.min(TIMELINE_DAYS - 1, Math.floor((pointerX - rect.left) / TIMELINE_DAY_WIDTH)))
+    const nextStart = days[index]?.date
+    if (!nextStart) return
+    // Move both endpoints together so a drag never changes task duration.
+    updateCell(recordId, startProperty!.id, nextStart)
+    updateCell(recordId, endProperty!.id, shiftIsoDate(nextStart, Math.max(0, duration - 1)))
+  }
+
+  if (!startProperty || !endProperty || !titleProperty) return <div className="calendar-missing"><ChartNoAxesGantt size={22} /><strong>需要开始与截止日期</strong><span>Timeline 视图会使用数据库中的日期属性绘制任务范围。</span></div>
+
+  return <div className="database-timeline">
+    <header className="timeline-toolbar"><div><small>PRODUCTION RUN / 28 DAYS</small><strong>{rangeLabel}</strong></div><span>{layout.matchingCount} 条带 · {layout.unscheduled.length} 待排期</span><nav aria-label="切换时间范围"><button aria-label="前两周" onClick={() => setRangeStart(shiftIsoDate(rangeStart, -14))}><ChevronLeft size={14} /></button><button onClick={() => setRangeStart(startOfWeekIso(todayIso))}>今天</button><button aria-label="后两周" onClick={() => setRangeStart(shiftIsoDate(rangeStart, 14))}><ChevronRight size={14} /></button></nav></header>
+    <div className="timeline-scroll">
+      <div className="timeline-canvas" style={{ width: 168 + TIMELINE_DAYS * TIMELINE_DAY_WIDTH }}>
+        <div className="timeline-scale"><strong>任务 / OWNER</strong><div>{days.map((day) => <time className={`${day.weekday === 0 || day.weekday === 6 ? 'is-weekend' : ''} ${day.date === todayIso ? 'is-today' : ''}`} dateTime={day.date} key={day.date}><b>{day.month}/{day.day}</b><small>{['日', '一', '二', '三', '四', '五', '六'][day.weekday]}</small></time>)}</div></div>
+        <div className="timeline-rows">{layout.items.map((item) => <div className="timeline-row" key={item.record.id}>
+          <header><i className={`status-dot status-${item.record.values['task-status'] ?? 'todo'}`} /><span><strong>{item.record.values[titleProperty.id] || '无标题'}</strong><small>{item.record.values['task-owner'] || '未分配'}</small></span></header>
+          <div className="timeline-track" onDragOver={(event) => event.preventDefault()} onDrop={reschedule}>
+            {todayIndex >= 0 && <i className="timeline-today-line" style={{ left: todayIndex * TIMELINE_DAY_WIDTH + TIMELINE_DAY_WIDTH / 2 }} />}
+            <article className={`${item.startsBeforeRange ? 'starts-before' : ''} ${item.endsAfterRange ? 'ends-after' : ''} status-${item.record.values['task-status'] ?? 'todo'}`} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-notetodo-record', item.record.id); event.dataTransfer.setData('application/x-notetodo-duration', String(item.durationDays)) }} style={{ left: item.startIndex * TIMELINE_DAY_WIDTH + 3, width: Math.max(30, (item.endIndex - item.startIndex + 1) * TIMELINE_DAY_WIDTH - 6) }} title={`${item.record.values[startProperty.id] ?? '—'} → ${item.record.values[endProperty.id] ?? '—'}；拖动可整体改期`}><span>{item.record.values[titleProperty.id] || '无标题'}</span><em>{item.durationDays}D</em></article>
+          </div>
+        </div>)}</div>
+      </div>
+    </div>
+    {(layout.unscheduled.length > 0 || layout.truncatedCount > 0) && <footer className="timeline-foot"><span>{layout.unscheduled.length} 项缺少日期</span>{layout.truncatedCount > 0 && <span>另有 {layout.truncatedCount} 项已裁剪，缩小筛选范围后显示</span>}</footer>}
+  </div>
+}
+
+function startOfWeekIso(value: string) { const date = new Date(`${value}T00:00:00Z`); const offset = (date.getUTCDay() + 6) % 7; date.setUTCDate(date.getUTCDate() - offset); return date.toISOString().slice(0, 10) }
+function shiftIsoDate(value: string, days: number) { const date = new Date(`${value}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10) }
+function formatTimelineDate(value?: string) { if (!value) return '—'; const [, month, day] = value.split('-'); return `${month}.${day}` }
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 

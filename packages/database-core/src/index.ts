@@ -35,12 +35,14 @@ export interface DatabaseView {
   id: string
   databaseId: string
   name: string
-  type: 'table' | 'board' | 'list' | 'calendar'
+  type: 'table' | 'board' | 'list' | 'calendar' | 'timeline'
   config: {
     filters?: FilterRule[]
     sorts?: SortRule[]
     groupByPropertyId?: string
     datePropertyId?: string
+    startDatePropertyId?: string
+    endDatePropertyId?: string
   }
 }
 
@@ -48,6 +50,15 @@ export interface CalendarDay {
   date: string
   day: number
   inCurrentMonth: boolean
+}
+
+export interface TimelineItem {
+  record: DatabaseRecord
+  startIndex: number
+  endIndex: number
+  durationDays: number
+  startsBeforeRange: boolean
+  endsAfterRange: boolean
 }
 
 export interface DatabaseSnapshot {
@@ -279,6 +290,41 @@ function isValidIsoDate(value: string) {
   if (!year || !month || !day) return false
   const parsed = new Date(Date.UTC(year, month - 1, day))
   return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+}
+
+/**
+ * Clips record ranges to a bounded timeline window in one pass. The result cap
+ * prevents a pathological database from creating thousands of DOM rows.
+ */
+export function layoutTimelineRecords(records: DatabaseRecord[], startPropertyId: string, endPropertyId: string, rangeStart: string, rangeDays = 28, limit = 200) {
+  const startMs = isoDateMilliseconds(rangeStart)
+  if (startMs === null || !Number.isInteger(rangeDays) || rangeDays < 1 || rangeDays > 366) throw new TypeError('Invalid timeline range.')
+  const rangeEndMs = startMs + (rangeDays - 1) * 86_400_000
+  const items: TimelineItem[] = []; const unscheduled: DatabaseRecord[] = []; let matchingCount = 0
+  for (const record of records) {
+    const rawStart = record.values[startPropertyId]; const rawEnd = record.values[endPropertyId]
+    const recordStart = typeof rawStart === 'string' ? isoDateMilliseconds(rawStart.slice(0, 10)) : null
+    const recordEnd = typeof rawEnd === 'string' ? isoDateMilliseconds(rawEnd.slice(0, 10)) : null
+    if (recordStart === null && recordEnd === null) { unscheduled.push(record); continue }
+    const normalizedStart = recordStart ?? recordEnd!; const normalizedEnd = Math.max(normalizedStart, recordEnd ?? normalizedStart)
+    if (normalizedEnd < startMs || normalizedStart > rangeEndMs) continue
+    matchingCount += 1
+    if (items.length >= Math.max(1, Math.min(500, limit))) continue
+    items.push({ record, startIndex: Math.max(0, Math.floor((normalizedStart - startMs) / 86_400_000)), endIndex: Math.min(rangeDays - 1, Math.floor((normalizedEnd - startMs) / 86_400_000)), durationDays: Math.floor((normalizedEnd - normalizedStart) / 86_400_000) + 1, startsBeforeRange: normalizedStart < startMs, endsAfterRange: normalizedEnd > rangeEndMs })
+  }
+  return { items, unscheduled, matchingCount, truncatedCount: matchingCount - items.length }
+}
+
+export function timelineDays(rangeStart: string, count = 28) {
+  const start = isoDateMilliseconds(rangeStart)
+  if (start === null || !Number.isInteger(count) || count < 1 || count > 366) throw new TypeError('Invalid timeline range.')
+  return Array.from({ length: count }, (_, index) => { const date = new Date(start + index * 86_400_000); return { date: date.toISOString().slice(0, 10), day: date.getUTCDate(), weekday: date.getUTCDay(), month: date.getUTCMonth() + 1 } })
+}
+
+function isoDateMilliseconds(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value) || !isValidIsoDate(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  return Date.UTC(year!, month! - 1, day!)
 }
 
 /**

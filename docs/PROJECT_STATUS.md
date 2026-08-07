@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Database Views & Layout Beta — **进行中（1/4）**
+Database Views & Layout Beta — **进行中（Calendar / Timeline 已交付）**
 
 ### 已交付
 
@@ -104,11 +104,14 @@ Database Views & Layout Beta — **进行中（1/4）**
 - Calendar 数据库视图：Monday-first 固定六周网格、月份导航、今天定位和跨月日期。
 - 日期记录一次性 O(n) 分组、单格有界卡片渲染、未排期收纳和拖放改期。
 - Calendar 配置与活动视图持久化；旧工作区启动时幂等补齐交付日历。
+- Timeline 数据库视图：28 天制作排期尺、双周导航、今天标线与固定任务目录。
+- 开始/截止日期任务条带、跨窗口裁剪、拖动整体改期和持续天数保持。
+- Timeline 单次 O(n) 范围布局、最多 200 个 DOM 条带，以及旧 SQLite/浏览器快照幂等升级。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：26 个测试文件、109 个测试通过。
+- Vitest：27 个测试文件、111 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -149,6 +152,7 @@ Database Views & Layout Beta — **进行中（1/4）**
 - 隔离 Electron 烟雾测试：Schema v7、CSP、Preload、SQLite 与协作票据链路通过，退出码 0。
 - 自动化规则校验、条件计划、事务执行、失败隔离与修正后重放：通过。
 - Calendar 一万条记录日期分组性能、SQLite 配置回归和 Chromium 三栏布局：通过。
+- Timeline 一万条记录范围裁剪、组件拖放改期、浏览器持久化与双层工具带：通过。
 
 ## 已完成里程碑归档
 
@@ -174,7 +178,7 @@ Open Platform & External Automation Alpha
 
 Database Views & Layout Beta
 
-1. Calendar 数据库视图已交付 Beta；Timeline 与 Gallery 待开发。
+1. Calendar 与 Timeline 数据库视图已交付 Beta；Gallery 待开发。
 2. 多条件筛选、排序、分组与已保存视图配置。
 3. 页面多栏布局、页面提及和关联数据库视图。
 4. 大型数据库增量计算、虚拟化和交互性能压测。
