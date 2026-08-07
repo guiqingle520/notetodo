@@ -6,10 +6,11 @@ import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { collectUnusedAssets, detectMimeType, isRenderableImage, storeLocalAsset } = require('../../electron/asset-store.cjs') as {
+const { collectUnusedAssets, detectMimeType, isRenderableImage, safeDisplayName, storeLocalAsset } = require('../../electron/asset-store.cjs') as {
   collectUnusedAssets: (database: { listUnreferencedAttachments: (cutoff: string) => Array<{ hash: string; relativePath: string }>; deleteAttachmentIfUnreferenced: (hash: string, cutoff: string) => boolean }, root: string, graceMs?: number) => Promise<number>
   detectMimeType: (name: string, bytes: Buffer) => string
   isRenderableImage: (asset: { mimeType: string }) => boolean
+  safeDisplayName: (value: string) => string
   storeLocalAsset: (source: string, root: string, options?: { maxBytes?: number; onProgress?: (completed: number, total: number) => void }) => Promise<{ hash: string; size: number; mimeType: string; relativePath: string; displayName: string }>
 }
 
@@ -39,6 +40,12 @@ describe('local content-addressed asset store', () => {
     expect(detectMimeType('renamed.txt', png)).toBe('image/png')
     expect(isRenderableImage({ mimeType: 'image/png' })).toBe(true)
     expect(isRenderableImage({ mimeType: 'image/svg+xml' })).toBe(false)
+  })
+
+  it('reduces untrusted collaborative names to one safe path segment', () => {
+    expect(safeDisplayName('../../outside/brief.pdf')).toBe('brief.pdf')
+    expect(safeDisplayName('..\\..\\payload.exe')).toBe('payload.exe')
+    expect(safeDisplayName('..')).toBe('附件')
   })
 
   it('rejects a file before copying when it exceeds the configured limit', async () => {

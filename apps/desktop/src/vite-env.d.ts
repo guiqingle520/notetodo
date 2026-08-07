@@ -66,6 +66,8 @@ interface Window {
     attachments: {
       pickAndStore: (pageId: string, kind: 'image' | 'file', onProgress: (progress: { completed: number; total: number; currentName: string }) => void) => Promise<Array<{ hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }>>
       storeDropped: (pageId: string, files: File[], onProgress: (progress: { completed: number; total: number; currentName: string }) => void) => Promise<Array<{ hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }>>
+      open: (hash: string, displayName: string) => Promise<void>
+      export: (hash: string, displayName: string) => Promise<boolean>
     }
     model: {
       getConfig: () => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>

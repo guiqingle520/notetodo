@@ -87,8 +87,9 @@ function detectMimeType(fileName, bytes) {
 }
 
 function safeDisplayName(value) {
-  const normalized = value.replace(/[\u0000-\u001f\u007f]/gu, '').trim()
-  return (normalized || '附件').slice(0, 240)
+  const leaf = path.win32.basename(String(value).replaceAll('/', '\\'))
+  const normalized = leaf.replace(/[\u0000-\u001f\u007f]/gu, '').trim()
+  return (!normalized || normalized === '.' || normalized === '..' ? '附件' : normalized).slice(0, 240)
 }
 
 function formatLimit(bytes) {

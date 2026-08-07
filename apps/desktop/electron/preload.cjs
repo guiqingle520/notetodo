@@ -78,6 +78,8 @@ contextBridge.exposeInMainWorld('notetodo', {
       if (memoryBacked.length) stored.push(...await invokeAttachmentStore('attachments:store-memory', pageId, memoryBacked, onProgress))
       return stored
     },
+    open: (hash, displayName) => ipcRenderer.invoke('attachments:open', hash, displayName),
+    export: (hash, displayName) => ipcRenderer.invoke('attachments:export', hash, displayName),
   },
   model: {
     getConfig: () => ipcRenderer.invoke('model:get-config'),

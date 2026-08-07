@@ -4,7 +4,7 @@ const path = require('node:path')
 const { Readable } = require('node:stream')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { ModelService } = require('./model-service.cjs')
-const { collectUnusedAssets, isRenderableImage, storeLocalAsset } = require('./asset-store.cjs')
+const { collectUnusedAssets, isRenderableImage, safeDisplayName, storeLocalAsset } = require('./asset-store.cjs')
 const { signRoomTicket } = require('@notetodo/auth-core')
 const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomUUID } = require('node:crypto')
@@ -48,6 +48,16 @@ function assertId(id) {
 }
 
 function registerWorkspaceIpc(database) {
+  function resolveAttachment(hash) {
+    if (typeof hash !== 'string' || !/^[0-9a-f]{64}$/u.test(hash)) throw new TypeError('Invalid attachment hash.')
+    const attachment = database.getAttachment(hash)
+    if (!attachment) throw new Error('附件不存在或已被清理。')
+    const assetRoot = path.resolve(app.getPath('userData'), 'attachments')
+    const sourcePath = path.resolve(assetRoot, attachment.relativePath)
+    if (!sourcePath.startsWith(`${assetRoot}${path.sep}`)) throw new Error('附件路径无效。')
+    return { attachment, sourcePath }
+  }
+
   async function storeAttachmentPaths(event, pageId, filePaths, requestId, requireImages = false, displayNames = []) {
     assertId(pageId); assertId(requestId)
     if (!Array.isArray(filePaths) || filePaths.length > 20 || filePaths.some((filePath) => typeof filePath !== 'string' || !path.isAbsolute(filePath))) {
@@ -193,6 +203,30 @@ function registerWorkspaceIpc(database) {
     } finally {
       await fs.promises.rm(temporaryDir, { recursive: true, force: true })
     }
+  })
+  ipcMain.handle('attachments:open', async (_event, hash, requestedName) => {
+    const { sourcePath } = resolveAttachment(hash)
+    if (typeof requestedName !== 'string') throw new TypeError('Invalid attachment name.')
+    const displayName = safeDisplayName(requestedName)
+    const extension = path.extname(displayName).toLowerCase()
+    if (['.exe', '.msi', '.bat', '.cmd', '.com', '.scr', '.ps1', '.vbs', '.js', '.lnk'].includes(extension)) {
+      throw new Error('出于安全考虑，可执行或脚本附件需要先导出后再手动打开。')
+    }
+    const openDirectory = path.join(app.getPath('temp'), 'NoteTodo-open', hash)
+    const openPath = path.join(openDirectory, displayName)
+    await fs.promises.mkdir(openDirectory, { recursive: true })
+    await fs.promises.copyFile(sourcePath, openPath)
+    const errorMessage = await shell.openPath(openPath)
+    if (errorMessage) throw new Error(errorMessage)
+  })
+  ipcMain.handle('attachments:export', async (_event, hash, requestedName) => {
+    const { sourcePath } = resolveAttachment(hash)
+    if (typeof requestedName !== 'string') throw new TypeError('Invalid attachment name.')
+    const displayName = safeDisplayName(requestedName)
+    const selected = await dialog.showSaveDialog({ title: '导出附件', defaultPath: displayName, buttonLabel: '导出' })
+    if (selected.canceled || !selected.filePath) return false
+    await fs.promises.copyFile(sourcePath, selected.filePath)
+    return true
   })
   ipcMain.handle('database:load-by-page', (_event, pageId) => {
     assertId(pageId)

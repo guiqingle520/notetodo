@@ -12,26 +12,67 @@ const RichImage = Image.extend({
         parseHTML: (element) => element.getAttribute('data-preview-src'),
         renderHTML: (attributes) => attributes.previewSrc ? { 'data-preview-src': attributes.previewSrc } : {},
       },
+      width: {
+        default: 100,
+        parseHTML: (element) => clampImageWidth(Number(element.getAttribute('data-width') ?? 100)),
+        renderHTML: (attributes) => ({ 'data-width': clampImageWidth(Number(attributes.width)) }),
+      },
+      caption: {
+        default: '',
+        parseHTML: (element) => element.getAttribute('data-caption') ?? '',
+        renderHTML: (attributes) => attributes.caption ? { 'data-caption': String(attributes.caption).slice(0, 500) } : {},
+      },
     }
   },
   addNodeView() {
-    return ({ node }) => {
-      const dom = document.createElement('img')
-      dom.className = 'rich-image'
+    return ({ node, editor, getPos }) => {
+      const dom = document.createElement('figure')
+      dom.className = 'rich-image-frame'
+      const image = document.createElement('img')
+      image.className = 'rich-image'
+      image.draggable = false
+      const controls = document.createElement('div')
+      controls.className = 'image-controls'
+      controls.contentEditable = 'false'
+      const sizeLabel = document.createElement('span')
+      const range = document.createElement('input')
+      range.type = 'range'; range.min = '35'; range.max = '100'; range.step = '5'; range.setAttribute('aria-label', '图片宽度')
+      const caption = document.createElement('input')
+      caption.className = 'image-caption'; caption.placeholder = '添加图片说明…'; caption.maxLength = 500; caption.setAttribute('aria-label', '图片说明')
+      controls.append(sizeLabel, range)
+      dom.append(image, controls, caption)
       let currentNode = node
       let loader: HTMLImageElement | undefined
+      let captionTimer: number | undefined
+      const updateAttributes = (attributes: Record<string, unknown>) => {
+        if (!editor.isEditable) return
+        const position = getPos()
+        if (typeof position !== 'number') return
+        editor.view.dispatch(editor.state.tr.setNodeMarkup(position, undefined, { ...currentNode.attrs, ...attributes }))
+      }
       const render = () => {
-        dom.alt = currentNode.attrs.alt ?? ''
-        dom.title = currentNode.attrs.title ?? ''
-        dom.dataset.previewSrc = currentNode.attrs.previewSrc ?? ''
-        dom.src = currentNode.attrs.previewSrc || currentNode.attrs.src
+        const width = clampImageWidth(Number(currentNode.attrs.width))
+        dom.style.width = `${width}%`
+        image.alt = currentNode.attrs.alt ?? ''
+        image.title = currentNode.attrs.title ?? ''
+        image.dataset.previewSrc = currentNode.attrs.previewSrc ?? ''
+        image.src = currentNode.attrs.previewSrc || currentNode.attrs.src
+        range.value = String(width); sizeLabel.textContent = `${width}%`
+        range.disabled = !editor.isEditable; caption.readOnly = !editor.isEditable
+        if (document.activeElement !== caption) caption.value = currentNode.attrs.caption ?? ''
         if (currentNode.attrs.previewSrc && currentNode.attrs.src !== currentNode.attrs.previewSrc) {
           loader = new window.Image()
           const expectedSource = currentNode.attrs.src
-          loader.onload = () => { if (currentNode.attrs.src === expectedSource) dom.src = expectedSource }
+          loader.onload = () => { if (currentNode.attrs.src === expectedSource) image.src = expectedSource }
           loader.src = expectedSource
         }
       }
+      range.addEventListener('input', () => updateAttributes({ width: clampImageWidth(Number(range.value)) }))
+      caption.addEventListener('input', () => {
+        window.clearTimeout(captionTimer)
+        captionTimer = window.setTimeout(() => updateAttributes({ caption: caption.value.slice(0, 500) }), 180)
+      })
+      caption.addEventListener('blur', () => { window.clearTimeout(captionTimer); updateAttributes({ caption: caption.value.slice(0, 500) }) })
       render()
       return {
         dom,
@@ -41,7 +82,9 @@ const RichImage = Image.extend({
           render()
           return true
         },
-        destroy: () => { if (loader) loader.onload = null },
+        stopEvent: (event) => controls.contains(event.target as globalThis.Node) || caption.contains(event.target as globalThis.Node),
+        ignoreMutation: () => true,
+        destroy: () => { if (loader) loader.onload = null; window.clearTimeout(captionTimer) },
       }
     }
   },
@@ -134,6 +177,46 @@ export const FileBlock = Node.create({
       target: '_blank',
       rel: 'noreferrer',
     }), ['span', { class: 'file-monogram' }, 'FILE'], ['span', { class: 'file-copy' }, ['strong', {}, name], ['small', {}, formatFileMeta(mimeType, size)]]]
+  },
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('article')
+      dom.className = 'rich-file'
+      const monogram = document.createElement('span'); monogram.className = 'file-monogram'; monogram.textContent = 'FILE'
+      const copy = document.createElement('span'); copy.className = 'file-copy'
+      const title = document.createElement('strong')
+      const meta = document.createElement('small')
+      copy.append(title, meta)
+      const actions = document.createElement('span'); actions.className = 'file-actions'; actions.contentEditable = 'false'
+      const open = document.createElement('button'); open.type = 'button'; open.textContent = '打开'
+      const save = document.createElement('button'); save.type = 'button'; save.textContent = '导出'
+      const status = document.createElement('em')
+      actions.append(open, save, status); dom.append(monogram, copy, actions)
+      let currentNode = node
+      let statusTimer: number | undefined
+      const showStatus = (message: string, error = false) => {
+        status.textContent = message; status.dataset.error = error ? 'true' : 'false'
+        window.clearTimeout(statusTimer); statusTimer = window.setTimeout(() => { status.textContent = '' }, 3200)
+      }
+      const run = async (operation: 'open' | 'export') => {
+        const hash = assetHashFromUrl(currentNode.attrs.src)
+        if (!hash || !window.notetodo?.attachments) return showStatus('仅桌面端可用', true)
+        try {
+          const result = await window.notetodo.attachments[operation](hash, currentNode.attrs.name)
+          showStatus(operation === 'export' ? (result === false ? '已取消' : '已导出') : '已打开')
+        } catch (error) { showStatus(error instanceof Error ? error.message.split('Error: ').at(-1) ?? error.message : '操作失败', true) }
+      }
+      open.addEventListener('click', () => { void run('open') }); save.addEventListener('click', () => { void run('export') })
+      const render = () => { title.textContent = currentNode.attrs.name; meta.textContent = formatFileMeta(currentNode.attrs.mimeType, currentNode.attrs.size) }
+      render()
+      return {
+        dom,
+        update: (nextNode) => { if (nextNode.type !== currentNode.type) return false; currentNode = nextNode; render(); return true },
+        stopEvent: (event) => actions.contains(event.target as globalThis.Node),
+        ignoreMutation: () => true,
+        destroy: () => window.clearTimeout(statusTimer),
+      }
+    }
   },
 })
 
@@ -272,6 +355,19 @@ export function normalizeEmbedUrl(value: string) {
   if (['youtube.com', 'www.youtube.com'].includes(url.hostname) && url.pathname === '/watch' && url.searchParams.get('v')) return `https://www.youtube.com/embed/${encodeURIComponent(url.searchParams.get('v')!)}`
   const allowed = ['youtube.com', 'vimeo.com', 'player.vimeo.com', 'figma.com', 'www.figma.com', 'loom.com', 'www.loom.com', 'maps.google.com', 'www.google.com']
   return allowed.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`)) ? url.toString() : ''
+}
+
+export function assetHashFromUrl(value: unknown) {
+  if (typeof value !== 'string') return ''
+  try {
+    const url = new URL(value)
+    return url.protocol === 'notetodo-asset:' && /^[0-9a-f]{64}$/u.test(url.hostname) ? url.hostname : ''
+  } catch { return '' }
+}
+
+function clampImageWidth(value: number) {
+  if (!Number.isFinite(value)) return 100
+  return Math.min(100, Math.max(35, Math.round(value / 5) * 5))
 }
 
 function hostLabel(value: string) {
