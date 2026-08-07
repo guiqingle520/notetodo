@@ -92,6 +92,8 @@ describe('streaming ZIP preflight', () => {
     const asset = bundle.attachments[0]
     expect(home?.content).toContain(`notetodo-page:${child?.id}`)
     expect(home?.content).toContain(`notetodo-asset://${asset?.hash}/cover.png`)
+    expect(home?.content).toContain('data-preview-src=')
+    expect(home?.content).toContain('variant=thumbnail')
     expect(asset?.referencedBy).toEqual([home?.id])
     expect(await readFile(join(assetStoreDir, asset!.relativePath), 'utf8')).toBe('same-image-bytes')
   })

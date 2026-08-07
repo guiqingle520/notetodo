@@ -65,7 +65,7 @@ describe('native Tiptap collaboration document', () => {
     migrateHtmlToNativeFragment(source, `
       <aside data-notetodo-callout data-tone="warning" data-icon="!" class="rich-callout"><p>发布前检查</p></aside>
       <details data-notetodo-toggle open><summary>技术细节</summary><div><p>离线优先</p></div></details>
-      <img src="notetodo-asset://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cover.png" alt="Cover">
+      <img src="notetodo-asset://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cover.png" data-preview-src="notetodo-asset://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cover.png?variant=thumbnail" alt="Cover">
       <a data-notetodo-file data-name="brief.pdf" data-size="2048" data-mime="application/pdf" href="notetodo-asset://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/brief.pdf">brief.pdf</a>
     `)
     const remote = new Y.Doc()
@@ -76,6 +76,7 @@ describe('native Tiptap collaboration document', () => {
     expect(json.content?.map((node) => node.type).slice(0, 4)).toEqual(['callout', 'toggle', 'image', 'fileAttachment'])
     expect(json.content?.[0]?.attrs).toMatchObject({ tone: 'warning', icon: '!' })
     expect(json.content?.[1]?.attrs).toMatchObject({ title: '技术细节', open: true })
+    expect(json.content?.[2]?.attrs?.previewSrc).toContain('variant=thumbnail')
     expect(json.content?.[3]?.attrs).toMatchObject({ name: 'brief.pdf', size: 2048, mimeType: 'application/pdf' })
     editor.destroy(); source.destroy(); remote.destroy()
   })

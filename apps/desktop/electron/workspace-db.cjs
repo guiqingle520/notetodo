@@ -437,17 +437,25 @@ class WorkspaceDatabase {
   }
 
   upsertPage(page) {
-    this.statements.upsertPage.run(
-      page.id,
-      page.title,
-      page.icon,
-      page.parentId,
-      page.favorite ? 1 : 0,
-      page.content,
-      page.updatedAt,
-      page.lastVisitedAt,
-      page.archivedAt,
-    )
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.statements.upsertPage.run(
+        page.id,
+        page.title,
+        page.icon,
+        page.parentId,
+        page.favorite ? 1 : 0,
+        page.content,
+        page.updatedAt,
+        page.lastVisitedAt,
+        page.archivedAt,
+      )
+      this.reconcilePageAttachments(page.id, page.content)
+      this.database.exec('COMMIT')
+    } catch (error) {
+      this.database.exec('ROLLBACK')
+      throw error
+    }
     return page
   }
 
@@ -554,6 +562,39 @@ class WorkspaceDatabase {
       this.database.exec('ROLLBACK')
       throw error
     }
+  }
+
+  /**
+   * Makes the serialized document the source of truth for reference counts.
+   * Imported and manually selected assets share the same URL shape, so stale
+   * references disappear after the normal debounced page save.
+   */
+  reconcilePageAttachments(pageId, content) {
+    const referenced = extractAttachmentHashes(content)
+    const existing = this.database.prepare('SELECT attachment_hash AS hash, display_name AS displayName FROM page_attachments WHERE page_id=?').all(pageId)
+    const existingByHash = new Map(existing.map((item) => [item.hash, item]))
+    const removeReference = this.database.prepare('DELETE FROM page_attachments WHERE page_id=? AND attachment_hash=?')
+    const insertReference = this.database.prepare('INSERT OR IGNORE INTO page_attachments(page_id, attachment_hash, source_path, display_name) SELECT ?, hash, ?, ? FROM attachments WHERE hash=?')
+    for (const item of existing) if (!referenced.has(item.hash)) removeReference.run(pageId, item.hash)
+    for (const hash of referenced) if (!existingByHash.has(hash)) insertReference.run(pageId, hash, `document/${hash}`, '附件', hash)
+  }
+
+  listUnreferencedAttachments(cutoff) {
+    return this.database.prepare(`
+      SELECT a.hash, a.relative_path AS relativePath
+      FROM attachments a
+      LEFT JOIN page_attachments pa ON pa.attachment_hash = a.hash
+      WHERE pa.attachment_hash IS NULL AND a.created_at < ?
+      ORDER BY a.created_at
+    `).all(cutoff)
+  }
+
+  deleteAttachmentIfUnreferenced(hash, cutoff) {
+    return this.database.prepare(`
+      DELETE FROM attachments
+      WHERE hash=? AND created_at < ?
+        AND NOT EXISTS (SELECT 1 FROM page_attachments WHERE attachment_hash=attachments.hash)
+    `).run(hash, cutoff).changes > 0
   }
 
   setActivePage(id) {
@@ -802,4 +843,11 @@ function mapPageRow(row) {
   }
 }
 
-module.exports = { WorkspaceDatabase }
+function extractAttachmentHashes(content) {
+  const hashes = new Set()
+  const pattern = /notetodo-asset:\/\/([0-9a-f]{64})(?:[/?#]|$)/giu
+  for (const match of content.matchAll(pattern)) hashes.add(match[1].toLowerCase())
+  return hashes
+}
+
+module.exports = { WorkspaceDatabase, extractAttachmentHashes }

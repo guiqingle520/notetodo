@@ -3,6 +3,50 @@ import Image from '@tiptap/extension-image'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
+const RichImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      previewSrc: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-preview-src'),
+        renderHTML: (attributes) => attributes.previewSrc ? { 'data-preview-src': attributes.previewSrc } : {},
+      },
+    }
+  },
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('img')
+      dom.className = 'rich-image'
+      let currentNode = node
+      let loader: HTMLImageElement | undefined
+      const render = () => {
+        dom.alt = currentNode.attrs.alt ?? ''
+        dom.title = currentNode.attrs.title ?? ''
+        dom.dataset.previewSrc = currentNode.attrs.previewSrc ?? ''
+        dom.src = currentNode.attrs.previewSrc || currentNode.attrs.src
+        if (currentNode.attrs.previewSrc && currentNode.attrs.src !== currentNode.attrs.previewSrc) {
+          loader = new window.Image()
+          const expectedSource = currentNode.attrs.src
+          loader.onload = () => { if (currentNode.attrs.src === expectedSource) dom.src = expectedSource }
+          loader.src = expectedSource
+        }
+      }
+      render()
+      return {
+        dom,
+        update: (nextNode) => {
+          if (nextNode.type !== currentNode.type) return false
+          currentNode = nextNode
+          render()
+          return true
+        },
+        destroy: () => { if (loader) loader.onload = null },
+      }
+    }
+  },
+})
+
 /**
  * Rich blocks use schema-native attributes so they survive Yjs sync, history
  * snapshots and export without depending on React component state.
@@ -205,7 +249,7 @@ export const EmbedBlock = Node.create({
 
 export function richBlockExtensions(): Extensions {
   return [
-    Image.configure({ inline: false, allowBase64: false, HTMLAttributes: { class: 'rich-image' } }),
+    RichImage.configure({ inline: false, allowBase64: false, HTMLAttributes: { class: 'rich-image' } }),
     CalloutBlock,
     ToggleBlock,
     FileBlock,

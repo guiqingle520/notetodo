@@ -64,7 +64,7 @@ interface Window {
       listJobs: () => Promise<Array<{ id: string; sourceName: string; status: 'converting' | 'committing' | 'completed' | 'failed' | 'cancelled'; report: Record<string, number>; errorMessage: string | null; createdAt: string; updatedAt: string }>>
     }
     attachments: {
-      pickAndStore: (pageId: string, kind: 'image' | 'file', onProgress: (progress: { completed: number; total: number; currentName: string }) => void) => Promise<Array<{ hash: string; size: number; mimeType: string; displayName: string; url: string }>>
+      pickAndStore: (pageId: string, kind: 'image' | 'file', onProgress: (progress: { completed: number; total: number; currentName: string }) => void) => Promise<Array<{ hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }>>
     }
     model: {
       getConfig: () => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>

@@ -95,4 +95,31 @@ function formatLimit(bytes) {
   return `${Math.round(bytes / 1024 / 1024)} MB`
 }
 
-module.exports = { MAX_FILE_BYTES, detectMimeType, isRenderableImage, safeDisplayName, storeLocalAsset }
+/**
+ * Quarantines files synchronously before deleting their database rows. This
+ * closes the race where a duplicate upload could re-reference a hash between
+ * the final reference check and physical removal.
+ */
+async function collectUnusedAssets(database, assetRoot, graceMs = 7 * 24 * 60 * 60_000) {
+  const cutoff = new Date(Date.now() - graceMs).toISOString()
+  const candidates = database.listUnreferencedAttachments(cutoff)
+  const trashRoot = path.join(assetRoot, '.trash')
+  fs.mkdirSync(trashRoot, { recursive: true })
+  const quarantined = []
+  for (const candidate of candidates) {
+    const source = path.resolve(assetRoot, candidate.relativePath)
+    if (!source.startsWith(`${path.resolve(assetRoot)}${path.sep}`)) continue
+    const quarantine = path.join(trashRoot, `${candidate.hash}-${randomUUID()}`)
+    try { fs.renameSync(source, quarantine) } catch (error) { if (error?.code !== 'ENOENT') continue }
+    if (database.deleteAttachmentIfUnreferenced(candidate.hash, cutoff)) {
+      quarantined.push(quarantine, path.join(assetRoot, 'thumbnails', candidate.hash.slice(0, 2), `${candidate.hash}.png`))
+    } else if (fs.existsSync(quarantine)) {
+      fs.mkdirSync(path.dirname(source), { recursive: true })
+      fs.renameSync(quarantine, source)
+    }
+  }
+  await Promise.all(quarantined.map((target) => fs.promises.rm(target, { force: true }).catch(() => {})))
+  return candidates.length
+}
+
+module.exports = { MAX_FILE_BYTES, collectUnusedAssets, detectMimeType, isRenderableImage, safeDisplayName, storeLocalAsset }

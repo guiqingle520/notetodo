@@ -1,10 +1,10 @@
-const { app, BrowserWindow, dialog, ipcMain, protocol, safeStorage, shell } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, nativeImage, protocol, safeStorage, shell } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 const { Readable } = require('node:stream')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { ModelService } = require('./model-service.cjs')
-const { isRenderableImage, storeLocalAsset } = require('./asset-store.cjs')
+const { collectUnusedAssets, isRenderableImage, storeLocalAsset } = require('./asset-store.cjs')
 const { signRoomTicket } = require('@notetodo/auth-core')
 const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomUUID } = require('node:crypto')
@@ -16,6 +16,7 @@ const activeModelRuns = new Map()
 // Renderer receives opaque IDs only; local archive paths never cross preload.
 const importSources = new Map()
 const activeImports = new Map()
+let assetGcTimer
 
 protocol.registerSchemesAsPrivileged([{
   scheme: 'notetodo-asset',
@@ -145,6 +146,7 @@ function registerWorkspaceIpc(database) {
         },
       })
       if (kind === 'image' && !isRenderableImage(attachment)) throw new TypeError(`${attachment.displayName} 不是受支持的图片。`)
+      if (isRenderableImage(attachment)) attachment.hasThumbnail = await createAssetThumbnail(assetRoot, attachment)
       attachments.push(attachment)
       completedBeforeFile += attachment.size
     }
@@ -153,6 +155,7 @@ function registerWorkspaceIpc(database) {
       ...attachment,
       relativePath: undefined,
       url: `notetodo-asset://${attachment.hash}/${encodeURIComponent(attachment.displayName)}`,
+      previewUrl: attachment.hasThumbnail ? `notetodo-asset://${attachment.hash}/${encodeURIComponent(attachment.displayName)}?variant=thumbnail` : null,
     }))
   })
   ipcMain.handle('database:load-by-page', (_event, pageId) => {
@@ -335,6 +338,33 @@ function validateModelRequest(value) {
   if (totalLength > 1_000_000) throw new TypeError('Model context is too large.')
 }
 
+async function createAssetThumbnail(assetRoot, attachment) {
+  const sourcePath = path.resolve(assetRoot, attachment.relativePath)
+  if (!sourcePath.startsWith(`${path.resolve(assetRoot)}${path.sep}`)) return false
+  const thumbnailPath = path.join(assetRoot, 'thumbnails', attachment.hash.slice(0, 2), `${attachment.hash}.png`)
+  try {
+    await fs.promises.access(thumbnailPath)
+    return true
+  } catch {
+    try {
+      const thumbnail = await nativeImage.createThumbnailFromPath(sourcePath, { width: 1600, height: 1200 })
+      if (thumbnail.isEmpty()) return false
+      await fs.promises.mkdir(path.dirname(thumbnailPath), { recursive: true })
+      const temporaryPath = `${thumbnailPath}.${randomUUID()}.pending`
+      await fs.promises.writeFile(temporaryPath, thumbnail.toPNG(), { flag: 'wx' })
+      try { await fs.promises.rename(temporaryPath, thumbnailPath) } catch (error) {
+        await fs.promises.rm(temporaryPath, { force: true })
+        if (error?.code !== 'EEXIST') throw error
+      }
+      return true
+    } catch {
+      // A preview is an optimization. Unsupported or malformed image data must
+      // never prevent the original attachment from being inserted.
+      return false
+    }
+  }
+}
+
 function createWindow() {
   const window = new BrowserWindow({
     show: process.env.NOTETODO_SMOKE_TEST !== '1',
@@ -424,18 +454,35 @@ ipcMain.handle('app:info', () => ({
 app.whenReady().then(() => {
   workspaceDatabase = new WorkspaceDatabase(path.join(app.getPath('userData'), 'workspace.db'))
   protocol.handle('notetodo-asset', async (request) => {
-    const hash = new URL(request.url).hostname.toLowerCase()
+    const assetUrl = new URL(request.url)
+    const hash = assetUrl.hostname.toLowerCase()
     const attachment = workspaceDatabase.getAttachment(hash)
     if (!attachment) return new Response('Not found', { status: 404 })
     const assetRoot = path.resolve(app.getPath('userData'), 'attachments')
-    const target = path.resolve(assetRoot, attachment.relativePath)
+    let thumbnail = assetUrl.searchParams.get('variant') === 'thumbnail'
+    let target = thumbnail
+      ? path.resolve(assetRoot, 'thumbnails', hash.slice(0, 2), `${hash}.png`)
+      : path.resolve(assetRoot, attachment.relativePath)
     if (!target.startsWith(`${assetRoot}${path.sep}`)) return new Response('Forbidden', { status: 403 })
     try {
+      if (thumbnail) {
+        try { await fs.promises.access(target) } catch {
+          if (!await createAssetThumbnail(assetRoot, attachment)) {
+            thumbnail = false
+            target = path.resolve(assetRoot, attachment.relativePath)
+          }
+        }
+      }
       await fs.promises.access(target, fs.constants.R_OK)
-      return new Response(Readable.toWeb(fs.createReadStream(target)), { headers: { 'Content-Type': attachment.mimeType, 'Content-Length': String(attachment.size), 'Cache-Control': 'public, max-age=31536000, immutable' } })
+      const stat = await fs.promises.stat(target)
+      return new Response(Readable.toWeb(fs.createReadStream(target)), { headers: { 'Content-Type': thumbnail ? 'image/png' : attachment.mimeType, 'Content-Length': String(stat.size), 'Cache-Control': 'public, max-age=31536000, immutable' } })
     } catch { return new Response('Not found', { status: 404 }) }
   })
   registerWorkspaceIpc(workspaceDatabase)
+  const assetRoot = path.join(app.getPath('userData'), 'attachments')
+  void collectUnusedAssets(workspaceDatabase, assetRoot)
+  assetGcTimer = setInterval(() => { void collectUnusedAssets(workspaceDatabase, assetRoot) }, 6 * 60 * 60_000)
+  assetGcTimer.unref()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -446,4 +493,4 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => workspaceDatabase?.close())
+app.on('before-quit', () => { clearInterval(assetGcTimer); workspaceDatabase?.close() })

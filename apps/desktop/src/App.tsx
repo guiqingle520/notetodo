@@ -709,7 +709,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
       })
       if (!attachments.length) return setUploadState(null)
       const content = attachments.map((attachment) => kind === 'image'
-        ? { type: 'image', attrs: { src: attachment.url, alt: attachment.displayName, title: attachment.displayName } }
+        ? { type: 'image', attrs: { src: attachment.url, previewSrc: attachment.previewUrl, alt: attachment.displayName, title: attachment.displayName } }
         : { type: 'fileAttachment', attrs: { src: attachment.url, name: attachment.displayName, size: attachment.size, mimeType: attachment.mimeType } })
       activeEditor.chain().focus().insertContent(content).run()
       setUploadState({ phase: 'complete', percent: 100, name: attachments.at(-1)?.displayName ?? '', message: `已插入 ${attachments.length} 个${kind === 'image' ? '图片' : '文件'}` })

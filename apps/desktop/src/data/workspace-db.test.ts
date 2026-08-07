@@ -42,6 +42,8 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     loadImportJobs(): Array<{ id: string; status: string; report: Record<string, number> }>
     getAttachment(hash: string): null | { hash: string; relativePath: string; mimeType: string }
     registerPageAttachments(pageId: string, attachments: Array<{ hash: string; size: number; mimeType: string; relativePath: string; displayName: string }>): void
+    listUnreferencedAttachments(cutoff: string): Array<{ hash: string; relativePath: string }>
+    deleteAttachmentIfUnreferenced(hash: string, cutoff: string): boolean
     close(): void
   }
 }
@@ -141,6 +143,21 @@ describe('WorkspaceDatabase', () => {
     const attachment = { hash: 'b'.repeat(64), size: 128, mimeType: 'application/pdf', relativePath: `bb/${'b'.repeat(64)}`, displayName: 'brief.pdf' }
     database.registerPageAttachments('welcome', [attachment, attachment])
     expect(database.getAttachment(attachment.hash)).toMatchObject({ hash: attachment.hash, size: 128, mimeType: 'application/pdf' })
+  })
+
+  it('reconciles attachment references from serialized page content', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const hash = 'c'.repeat(64)
+    const attachment = { hash, size: 64, mimeType: 'image/png', relativePath: `cc/${hash}`, displayName: 'cover.png' }
+    database.registerPageAttachments('welcome', [attachment])
+    const page = database.loadWorkspace().pages.find((candidate) => candidate.id === 'welcome')!
+    database.upsertPage({ ...page, content: `<img src="notetodo-asset://${hash}/cover.png">` })
+    expect(database.listUnreferencedAttachments('9999-01-01T00:00:00.000Z')).toHaveLength(0)
+
+    database.upsertPage({ ...page, content: '<p>附件块已删除</p>' })
+    expect(database.listUnreferencedAttachments('9999-01-01T00:00:00.000Z')).toContainEqual({ hash, relativePath: `cc/${hash}` })
+    expect(database.deleteAttachmentIfUnreferenced(hash, '9999-01-01T00:00:00.000Z')).toBe(true)
+    expect(database.getAttachment(hash)).toBeNull()
   })
 
   it('replays incremental sync updates and compacts them into one durable snapshot', () => {
