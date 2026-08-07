@@ -24,6 +24,12 @@ interface Window {
       issueToken: (name: string, scopes: import('@notetodo/auth-core').ApiScope[]) => Promise<{ id: string; name: string; rawToken: string; prefix: string; scopes: import('@notetodo/auth-core').ApiScope[]; createdAt: string }>
       revokeToken: (id: string) => Promise<boolean>
     }
+    webhooks: {
+      list: () => Promise<Array<{ id: string; name: string; url: string; events: import('@notetodo/webhook-core').WebhookEvent[]; active: boolean; pendingCount: number; deadCount: number; createdAt: string; updatedAt: string }>>
+      create: (name: string, url: string, events: import('@notetodo/webhook-core').WebhookEvent[]) => Promise<{ id: string; name: string; url: string; events: import('@notetodo/webhook-core').WebhookEvent[]; active: boolean; secret: string }>
+      setActive: (id: string, active: boolean) => Promise<boolean>
+      listDeliveries: (endpointId: string) => Promise<Array<{ id: string; event: import('@notetodo/webhook-core').WebhookEvent; status: 'pending' | 'leased' | 'delivered' | 'dead'; attempts: number; nextAttemptAt: string; lastError: string | null; createdAt: string; deliveredAt: string | null }>>
+    }
     database: {
       loadByPage: (pageId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot | null>
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<void>

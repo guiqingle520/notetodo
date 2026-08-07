@@ -90,11 +90,15 @@ Content Parity, Import & Retrieval Alpha — **已完成**
 - SQLite Schema v10：API 令牌与不含凭据/正文的请求审计账本。
 - 只监听本机的 REST API：页面读写、数据库读取、单元格更新、统一错误、1 MiB 请求上限和每令牌限流。
 - 桌面设置页 API 凭证台账：作用域选择、签发、一次性复制、最近使用与撤销。
+- SQLite Schema v11：Webhook 端点、事务 Outbox、投递租约和分次尝试账本。
+- 页面/数据库事务同步生成事件，快速未投递更新按资源幂等合并。
+- Webhook Worker：HMAC-SHA256 签名、DNS 私网防护、10 秒超时、有界指数退避和 8 次后死信。
+- 系统密钥库加密 Webhook 密钥，桌面投递台支持事件选择、启停与队列状态。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：21 个测试文件、90 个测试通过。
+- Vitest：23 个测试文件、96 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -151,7 +155,7 @@ Content Parity, Import & Retrieval Alpha
 Open Platform & External Automation Alpha
 
 1. 工作区 REST API 与细粒度令牌权限已交付 Alpha；后续补充分页、ETag 与公开 OpenAPI 文档。
-2. 可签名、可重试、可观测的 Webhook Outbox。
+2. 可签名、可重试、可观测的 Webhook Outbox 已交付 Alpha；后续增加手动死信重放。
 3. 用户可编辑自动化规则、执行日志和失败重放。
 4. MCP Server 读写工作区与自定义模型工具调用闭环。
 

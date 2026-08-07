@@ -32,6 +32,12 @@ contextBridge.exposeInMainWorld('notetodo', {
     issueToken: (name, scopes) => ipcRenderer.invoke('platform:issue-token', name, scopes),
     revokeToken: (id) => ipcRenderer.invoke('platform:revoke-token', id),
   },
+  webhooks: {
+    list: () => ipcRenderer.invoke('webhooks:list'),
+    create: (name, url, events) => ipcRenderer.invoke('webhooks:create', name, url, events),
+    setActive: (id, active) => ipcRenderer.invoke('webhooks:set-active', id, active),
+    listDeliveries: (endpointId) => ipcRenderer.invoke('webhooks:list-deliveries', endpointId),
+  },
   database: {
     loadByPage: (pageId) => ipcRenderer.invoke('database:load-by-page', pageId),
     updateCell: (recordId, propertyId, value) => ipcRenderer.invoke('database:update-cell', recordId, propertyId, value),

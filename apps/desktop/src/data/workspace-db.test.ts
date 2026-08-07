@@ -54,6 +54,13 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     revokeApiToken(id: string): boolean
     recordApiAudit(entry: { requestId: string; tokenId: string | null; method: string; path: string; status: number; durationMs: number }): void
     listApiAudit(limit?: number): Array<{ requestId: string; status: number; durationMs: number }>
+    createWebhookEndpoint(name: string, url: string, events: string[], encryptedSecret: Buffer): { id: string; url: string; events: string[] }
+    listWebhookEndpoints(): Array<{ id: string; pendingCount: number; deadCount: number }>
+    setWebhookEndpointActive(id: string, active: boolean): boolean
+    enqueueWebhookEvent(event: string, resourceKey: string, data: unknown, occurredAt?: string): void
+    claimWebhookDeliveries(workerId: string, limit?: number, leaseMs?: number, now?: string): Array<{ id: string; payload: string; encryptedSecret: Buffer }>
+    completeWebhookDelivery(deliveryId: string, workerId: string, result: { statusCode: number | null; durationMs: number; responsePreview?: string; errorMessage?: string }): { status: string; attempt: number }
+    listWebhookDeliveries(endpointId: string): Array<{ id: string; status: string; attempts: number }>
     close(): void
   }
 }
@@ -235,6 +242,27 @@ describe('WorkspaceDatabase', () => {
     database = new WorkspaceDatabase(':memory:')
     database.recordApiAudit({ requestId: 'request-1', tokenId: null, method: 'GET', path: '/v1/pages', status: 200, durationMs: 4.4 })
     expect(database.listApiAudit()).toEqual([expect.objectContaining({ requestId: 'request-1', status: 200, durationMs: 4 })])
+  })
+
+  it('coalesces transactional webhook events and recovers delivery through a lease', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const endpoint = database.createWebhookEndpoint('Product events', 'https://hooks.example.com/notetodo', ['page.updated'], Buffer.from('encrypted-secret'))
+    const original = database.loadWorkspace().pages.find((page) => page.id === 'welcome')!
+    database.upsertPage({ ...original, title: 'First event', updatedAt: '2026-08-07T01:00:00.000Z' })
+    database.upsertPage({ ...original, title: 'Coalesced event', updatedAt: '2026-08-07T01:00:01.000Z' })
+
+    expect(database.listWebhookEndpoints()[0]).toMatchObject({ id: endpoint.id, pendingCount: 1, deadCount: 0 })
+    expect(database.setWebhookEndpointActive(endpoint.id, false)).toBe(true)
+    expect(database.claimWebhookDeliveries('paused-worker', 10, 30_000, '2026-08-07T01:00:02.000Z')).toHaveLength(0)
+    database.setWebhookEndpointActive(endpoint.id, true)
+    const [delivery] = database.claimWebhookDeliveries('worker-1', 10, 30_000, '2026-08-07T01:00:02.000Z')
+    expect(JSON.parse(delivery!.payload)).toMatchObject({ event: 'page.updated', data: { page: { title: 'Coalesced event' } } })
+    expect(delivery!.encryptedSecret.toString()).toBe('encrypted-secret')
+    expect(database.completeWebhookDelivery(delivery!.id, 'worker-1', { statusCode: 503, durationMs: 12, errorMessage: 'temporary' })).toMatchObject({ status: 'pending', attempt: 1 })
+
+    const [retry] = database.claimWebhookDeliveries('worker-2', 10, 30_000, '9999-01-01T00:00:00.000Z')
+    expect(database.completeWebhookDelivery(retry!.id, 'worker-2', { statusCode: 204, durationMs: 4 })).toMatchObject({ status: 'delivered', attempt: 2 })
+    expect(database.listWebhookDeliveries(endpoint.id)[0]).toMatchObject({ status: 'delivered', attempts: 2 })
   })
 
   it('replays incremental sync updates and compacts them into one durable snapshot', () => {

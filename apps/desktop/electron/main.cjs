@@ -3,11 +3,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { Readable } = require('node:stream')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
+const { WebhookWorker } = require('./webhook-worker.cjs')
 const { ModelService } = require('./model-service.cjs')
 const { collectUnusedAssets, isRenderableImage, safeDisplayName, storeLocalAsset } = require('./asset-store.cjs')
 const { API_SCOPES, signRoomTicket } = require('@notetodo/auth-core')
 const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
-const { randomUUID } = require('node:crypto')
+const { randomBytes, randomUUID } = require('node:crypto')
 
 const isDev = !app.isPackaged
 let workspaceDatabase
@@ -17,6 +18,7 @@ const activeModelRuns = new Map()
 const importSources = new Map()
 const activeImports = new Map()
 let assetGcTimer
+let webhookWorker
 
 protocol.registerSchemesAsPrivileged([{
   scheme: 'notetodo-asset',
@@ -123,6 +125,15 @@ function registerWorkspaceIpc(database) {
     return database.issueApiToken(name, scopes)
   })
   ipcMain.handle('platform:revoke-token', (_event, id) => { assertId(id); return database.revokeApiToken(id) })
+  ipcMain.handle('webhooks:list', () => database.listWebhookEndpoints())
+  ipcMain.handle('webhooks:create', (_event, name, url, events) => {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('系统密钥库不可用，无法安全保存 Webhook 签名密钥。')
+    const secret = randomBytes(32).toString('base64url')
+    const endpoint = database.createWebhookEndpoint(name, url, events, safeStorage.encryptString(secret))
+    return { ...endpoint, secret }
+  })
+  ipcMain.handle('webhooks:set-active', (_event, id, active) => { assertId(id); if (typeof active !== 'boolean') throw new TypeError('Invalid webhook state.'); return database.setWebhookEndpointActive(id, active) })
+  ipcMain.handle('webhooks:list-deliveries', (_event, endpointId) => { assertId(endpointId); return database.listWebhookDeliveries(endpointId) })
   ipcMain.handle('history:list', (_event, pageId) => { assertId(pageId); return database.listPageVersions(pageId) })
   ipcMain.handle('history:get', (_event, pageId, versionId) => {
     assertId(pageId)
@@ -574,6 +585,8 @@ app.whenReady().then(() => {
     } catch { return new Response('Not found', { status: 404 }) }
   })
   registerWorkspaceIpc(workspaceDatabase)
+  webhookWorker = new WebhookWorker(workspaceDatabase, (ciphertext) => safeStorage.decryptString(ciphertext))
+  webhookWorker.start()
   const assetRoot = path.join(app.getPath('userData'), 'attachments')
   void collectUnusedAssets(workspaceDatabase, assetRoot)
   assetGcTimer = setInterval(() => { void collectUnusedAssets(workspaceDatabase, assetRoot) }, 6 * 60 * 60_000)
@@ -588,4 +601,4 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => { clearInterval(assetGcTimer); workspaceDatabase?.close() })
+app.on('before-quit', () => { clearInterval(assetGcTimer); webhookWorker?.stop(); workspaceDatabase?.close() })

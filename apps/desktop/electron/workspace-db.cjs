@@ -3,8 +3,9 @@ const { randomUUID } = require('node:crypto')
 const seedWorkspace = require('../shared/seed-workspace.json')
 const { chunkPage, cosineSimilarity, embedText, fuseRankings } = require('./retrieval-core.cjs')
 const { createApiToken, verifyApiToken } = require('@notetodo/auth-core')
+const { WEBHOOK_EVENTS, createWebhookEnvelope, nextWebhookAttempt, stableJson, validateWebhookUrl } = require('@notetodo/webhook-core')
 
-const LATEST_SCHEMA_VERSION = 10
+const LATEST_SCHEMA_VERSION = 11
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -358,6 +359,53 @@ class WorkspaceDatabase {
       `)
     }
 
+    if (currentVersion < 11) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE webhook_endpoints (
+          id TEXT PRIMARY KEY CHECK(length(id) = 36),
+          name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
+          url TEXT NOT NULL CHECK(length(url) <= 2048),
+          secret_ciphertext BLOB NOT NULL,
+          events_json TEXT NOT NULL,
+          active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE webhook_outbox (
+          id TEXT PRIMARY KEY CHECK(length(id) = 36),
+          endpoint_id TEXT NOT NULL REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
+          event TEXT NOT NULL,
+          resource_key TEXT NOT NULL,
+          payload_json TEXT NOT NULL CHECK(length(payload_json) <= 262144),
+          status TEXT NOT NULL CHECK(status IN ('pending', 'leased', 'delivered', 'dead')),
+          attempts INTEGER NOT NULL DEFAULT 0,
+          next_attempt_at TEXT NOT NULL,
+          lease_owner TEXT,
+          lease_until TEXT,
+          last_error TEXT,
+          created_at TEXT NOT NULL,
+          delivered_at TEXT
+        );
+        CREATE INDEX webhook_outbox_due ON webhook_outbox(status, next_attempt_at, lease_until);
+        CREATE INDEX webhook_outbox_endpoint ON webhook_outbox(endpoint_id, created_at DESC);
+        CREATE TABLE webhook_delivery_attempts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          delivery_id TEXT NOT NULL REFERENCES webhook_outbox(id) ON DELETE CASCADE,
+          attempt_number INTEGER NOT NULL,
+          status_code INTEGER,
+          duration_ms INTEGER NOT NULL,
+          response_preview TEXT,
+          error_message TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX webhook_attempts_delivery ON webhook_delivery_attempts(delivery_id, attempt_number DESC);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '11')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
     if (currentVersion > LATEST_SCHEMA_VERSION) {
       throw new Error(`Workspace schema ${currentVersion} is newer than this app supports.`)
     }
@@ -575,6 +623,7 @@ class WorkspaceDatabase {
       )
       this.reconcilePageAttachments(page.id, page.content)
       if (retrievalChanged) this.indexPageForRetrieval(page.id, page.title, page.content)
+      this.enqueueWebhookEvent(current ? 'page.updated' : 'page.created', page.id, { page: { id: page.id, title: page.title, icon: page.icon, parentId: page.parentId, updatedAt: page.updatedAt, archivedAt: page.archivedAt } }, page.updatedAt)
       this.database.exec('COMMIT')
     } catch (error) {
       this.database.exec('ROLLBACK')
@@ -746,6 +795,7 @@ class WorkspaceDatabase {
       this.database.prepare('UPDATE pages SET title=?, content=?, updated_at=? WHERE id=?').run(version.title, version.content, now, pageId)
       this.reconcilePageAttachments(pageId, version.content)
       this.indexPageForRetrieval(pageId, version.title, version.content)
+      this.enqueueWebhookEvent('page.updated', pageId, { page: { id: pageId, title: version.title, updatedAt: now, restoredFromVersionId: versionId } }, now)
       this.database.exec('COMMIT')
       return mapPageRow(this.database.prepare('SELECT * FROM pages WHERE id=?').get(pageId))
     } catch (error) {
@@ -835,11 +885,22 @@ class WorkspaceDatabase {
 
   archivePage(id) {
     const now = new Date().toISOString()
-    this.statements.archivePage.run(now, now, id)
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.statements.archivePage.run(now, now, id)
+      this.enqueueWebhookEvent('page.archived', id, { page: { id, archivedAt: now, updatedAt: now } }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
   }
 
   restorePage(id) {
-    this.statements.restorePage.run(new Date().toISOString(), id)
+    const now = new Date().toISOString()
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.statements.restorePage.run(now, id)
+      this.enqueueWebhookEvent('page.updated', id, { page: { id, archivedAt: null, updatedAt: now } }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
   }
 
   searchPages(query, limit = 30) {
@@ -921,19 +982,29 @@ class WorkspaceDatabase {
       }
       else textValue = String(value)
     }
-    this.database.prepare(`
-      INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(record_id, property_id) DO UPDATE SET text_value=excluded.text_value, number_value=excluded.number_value,
-        boolean_value=excluded.boolean_value, json_value=excluded.json_value, updated_at=excluded.updated_at
-    `).run(recordId, propertyId, textValue, numberValue, booleanValue, jsonValue, now)
-    this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, recordId)
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.database.prepare(`
+        INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(record_id, property_id) DO UPDATE SET text_value=excluded.text_value, number_value=excluded.number_value,
+          boolean_value=excluded.boolean_value, json_value=excluded.json_value, updated_at=excluded.updated_at
+      `).run(recordId, propertyId, textValue, numberValue, booleanValue, jsonValue, now)
+      this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, recordId)
+      this.enqueueWebhookEvent('database.record.updated', recordId, { record: { id: recordId, propertyId, value, updatedAt: now } }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
   }
 
   createDatabaseRecord(databaseId, recordId) {
     const now = new Date().toISOString()
-    const nextPosition = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
-    this.database.prepare('INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(recordId, databaseId, nextPosition, now, now)
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const nextPosition = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
+      this.database.prepare('INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(recordId, databaseId, nextPosition, now, now)
+      this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, createdAt: now } }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
   }
 
   setActiveDatabaseView(databaseId, viewId) {
@@ -946,6 +1017,112 @@ class WorkspaceDatabase {
 
   setSetting(key, value) {
     this.database.prepare('INSERT INTO app_meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+  }
+
+  createWebhookEndpoint(name, url, events, encryptedSecret) {
+    const safeName = String(name).trim()
+    if (!safeName || safeName.length > 100) throw new TypeError('Webhook name must contain 1 to 100 characters.')
+    const safeUrl = validateWebhookUrl(url)
+    if (!Array.isArray(events) || !events.length || events.some((event) => !WEBHOOK_EVENTS.includes(event))) throw new TypeError('Webhook requires valid subscribed events.')
+    if (!Buffer.isBuffer(encryptedSecret) || encryptedSecret.length < 1 || encryptedSecret.length > 16_384) throw new TypeError('Webhook secret must be encrypted before storage.')
+    const id = randomUUID(); const now = new Date().toISOString()
+    this.database.prepare(`
+      INSERT INTO webhook_endpoints(id, name, url, secret_ciphertext, events_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, safeName, safeUrl, encryptedSecret, JSON.stringify([...new Set(events)]), now, now)
+    return { id, name: safeName, url: safeUrl, events: [...new Set(events)], active: true, createdAt: now, updatedAt: now }
+  }
+
+  listWebhookEndpoints() {
+    return this.database.prepare(`
+      SELECT endpoint.id, endpoint.name, endpoint.url, endpoint.events_json, endpoint.active,
+             endpoint.created_at, endpoint.updated_at,
+             SUM(CASE WHEN outbox.status='pending' THEN 1 ELSE 0 END) AS pending_count,
+             SUM(CASE WHEN outbox.status='dead' THEN 1 ELSE 0 END) AS dead_count
+      FROM webhook_endpoints endpoint LEFT JOIN webhook_outbox outbox ON outbox.endpoint_id=endpoint.id
+      GROUP BY endpoint.id ORDER BY endpoint.created_at DESC
+    `).all().map((row) => ({ id: row.id, name: row.name, url: row.url, events: JSON.parse(row.events_json), active: Boolean(row.active), createdAt: row.created_at, updatedAt: row.updated_at, pendingCount: Number(row.pending_count), deadCount: Number(row.dead_count) }))
+  }
+
+  setWebhookEndpointActive(id, active) {
+    const result = this.database.prepare('UPDATE webhook_endpoints SET active=?, updated_at=? WHERE id=?').run(active ? 1 : 0, new Date().toISOString(), id)
+    return result.changes > 0
+  }
+
+  /** Adds events inside the caller's business transaction and coalesces rapid unsent updates. */
+  enqueueWebhookEvent(event, resourceKey, data, occurredAt = new Date().toISOString()) {
+    if (!WEBHOOK_EVENTS.includes(event)) throw new TypeError('Unsupported webhook event.')
+    const serializedData = stableJson(data)
+    if (Buffer.byteLength(serializedData, 'utf8') > 240_000) throw new RangeError('Webhook event data exceeds 240 KiB.')
+    const endpoints = this.database.prepare('SELECT id, events_json FROM webhook_endpoints WHERE active=1').all()
+    const findPending = this.database.prepare("SELECT id FROM webhook_outbox WHERE endpoint_id=? AND event=? AND resource_key=? AND status='pending' ORDER BY created_at DESC LIMIT 1")
+    const updatePending = this.database.prepare('UPDATE webhook_outbox SET payload_json=?, next_attempt_at=?, created_at=? WHERE id=?')
+    const insert = this.database.prepare(`
+      INSERT INTO webhook_outbox(id, endpoint_id, event, resource_key, payload_json, status, next_attempt_at, created_at)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+    `)
+    for (const endpoint of endpoints) {
+      if (!JSON.parse(endpoint.events_json).includes(event)) continue
+      const existing = findPending.get(endpoint.id, event, resourceKey)
+      const deliveryId = existing?.id ?? randomUUID()
+      const payload = stableJson(createWebhookEnvelope(event, deliveryId, occurredAt, JSON.parse(serializedData)))
+      if (existing) updatePending.run(payload, occurredAt, occurredAt, deliveryId)
+      else insert.run(deliveryId, endpoint.id, event, resourceKey, payload, occurredAt, occurredAt)
+    }
+  }
+
+  claimWebhookDeliveries(workerId, limit = 10, leaseMs = 30_000, now = new Date().toISOString()) {
+    if (typeof workerId !== 'string' || !workerId || workerId.length > 128) throw new TypeError('Invalid webhook worker id.')
+    const leaseUntil = new Date(Date.parse(now) + Math.max(5_000, Math.min(300_000, leaseMs))).toISOString()
+    const boundedLimit = Math.max(1, Math.min(50, Number(limit) || 10))
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.database.prepare("UPDATE webhook_outbox SET status='pending', lease_owner=NULL, lease_until=NULL WHERE status='leased' AND lease_until<=?").run(now)
+      const due = this.database.prepare(`
+        SELECT outbox.id FROM webhook_outbox outbox
+        JOIN webhook_endpoints endpoint ON endpoint.id=outbox.endpoint_id AND endpoint.active=1
+        WHERE outbox.status='pending' AND outbox.next_attempt_at<=?
+        ORDER BY outbox.next_attempt_at, outbox.created_at LIMIT ?
+      `).all(now, boundedLimit)
+      const lease = this.database.prepare("UPDATE webhook_outbox SET status='leased', lease_owner=?, lease_until=? WHERE id=? AND status='pending'")
+      for (const item of due) lease.run(workerId, leaseUntil, item.id)
+      const rows = due.length ? this.database.prepare(`
+        SELECT outbox.id, outbox.endpoint_id, outbox.event, outbox.payload_json, outbox.attempts,
+               endpoint.url, endpoint.secret_ciphertext
+        FROM webhook_outbox outbox JOIN webhook_endpoints endpoint ON endpoint.id=outbox.endpoint_id
+        WHERE outbox.lease_owner=? AND outbox.lease_until=? ORDER BY outbox.created_at
+      `).all(workerId, leaseUntil) : []
+      this.database.exec('COMMIT')
+      return rows.map((row) => ({ id: row.id, endpointId: row.endpoint_id, event: row.event, payload: row.payload_json, attempts: row.attempts, url: row.url, encryptedSecret: Buffer.from(row.secret_ciphertext) }))
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+  }
+
+  completeWebhookDelivery(deliveryId, workerId, result) {
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const delivery = this.database.prepare("SELECT attempts FROM webhook_outbox WHERE id=? AND status='leased' AND lease_owner=?").get(deliveryId, workerId)
+      if (!delivery) throw new Error('Webhook delivery lease is no longer owned by this worker.')
+      const attempt = delivery.attempts + 1; const now = new Date().toISOString()
+      const success = result.statusCode >= 200 && result.statusCode < 300
+      const dead = !success && attempt >= 8
+      this.database.prepare(`
+        INSERT INTO webhook_delivery_attempts(delivery_id, attempt_number, status_code, duration_ms, response_preview, error_message, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(deliveryId, attempt, result.statusCode ?? null, Math.max(0, Math.round(result.durationMs)), String(result.responsePreview ?? '').slice(0, 2000) || null, String(result.errorMessage ?? '').slice(0, 2000) || null, now)
+      this.database.prepare(`
+        UPDATE webhook_outbox SET status=?, attempts=?, next_attempt_at=?, lease_owner=NULL, lease_until=NULL,
+          last_error=?, delivered_at=? WHERE id=?
+      `).run(success ? 'delivered' : dead ? 'dead' : 'pending', attempt, success || dead ? now : nextWebhookAttempt(attempt, Date.parse(now)), success ? null : String(result.errorMessage ?? `HTTP ${result.statusCode ?? 0}`).slice(0, 2000), success ? now : null, deliveryId)
+      this.database.exec('COMMIT')
+      return { status: success ? 'delivered' : dead ? 'dead' : 'pending', attempt }
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+  }
+
+  listWebhookDeliveries(endpointId, limit = 100) {
+    return this.database.prepare(`
+      SELECT id, endpoint_id, event, status, attempts, next_attempt_at, last_error, created_at, delivered_at
+      FROM webhook_outbox WHERE endpoint_id=? ORDER BY created_at DESC LIMIT ?
+    `).all(endpointId, Math.max(1, Math.min(500, Number(limit) || 100))).map((row) => ({ id: row.id, endpointId: row.endpoint_id, event: row.event, status: row.status, attempts: row.attempts, nextAttemptAt: row.next_attempt_at, lastError: row.last_error, createdAt: row.created_at, deliveredAt: row.delivered_at }))
   }
 
   issueApiToken(name, scopes, expiresAt = null) {
