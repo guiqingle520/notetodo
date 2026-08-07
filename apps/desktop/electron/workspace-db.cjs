@@ -3,9 +3,10 @@ const { randomUUID } = require('node:crypto')
 const seedWorkspace = require('../shared/seed-workspace.json')
 const { chunkPage, cosineSimilarity, embedText, fuseRankings } = require('./retrieval-core.cjs')
 const { createApiToken, verifyApiToken } = require('@notetodo/auth-core')
+const { planAutomationRuns, validateAutomationRule } = require('@notetodo/automation-core')
 const { WEBHOOK_EVENTS, createWebhookEnvelope, nextWebhookAttempt, stableJson, validateWebhookUrl } = require('@notetodo/webhook-core')
 
-const LATEST_SCHEMA_VERSION = 11
+const LATEST_SCHEMA_VERSION = 12
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -406,6 +407,45 @@ class WorkspaceDatabase {
       `)
     }
 
+    if (currentVersion < 12) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE database_automations (
+          id TEXT PRIMARY KEY CHECK(length(id) BETWEEN 1 AND 128),
+          database_id TEXT NOT NULL REFERENCES databases(id) ON DELETE CASCADE,
+          name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
+          enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+          trigger_property_id TEXT NOT NULL,
+          condition_json TEXT,
+          actions_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX database_automations_trigger ON database_automations(database_id, enabled, trigger_property_id);
+        CREATE TABLE automation_runs (
+          id TEXT PRIMARY KEY CHECK(length(id) = 36),
+          automation_id TEXT REFERENCES database_automations(id) ON DELETE SET NULL,
+          automation_name TEXT NOT NULL,
+          database_id TEXT NOT NULL REFERENCES databases(id) ON DELETE CASCADE,
+          record_id TEXT NOT NULL,
+          trigger_property_id TEXT NOT NULL,
+          rule_json TEXT NOT NULL,
+          input_json TEXT NOT NULL,
+          output_json TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('succeeded', 'failed')),
+          error_message TEXT,
+          replay_of TEXT REFERENCES automation_runs(id) ON DELETE SET NULL,
+          created_at TEXT NOT NULL,
+          completed_at TEXT NOT NULL
+        );
+        CREATE INDEX automation_runs_database_time ON automation_runs(database_id, created_at DESC);
+        CREATE INDEX automation_runs_status ON automation_runs(status, created_at DESC);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '12')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
     if (currentVersion > LATEST_SCHEMA_VERSION) {
       throw new Error(`Workspace schema ${currentVersion} is newer than this app supports.`)
     }
@@ -533,6 +573,10 @@ class WorkspaceDatabase {
         ['task-1', ['task-2']], ['task-2', []], ['task-3', ['task-1', 'task-2']],
         ['task-4', ['task-2']], ['task-5', ['task-3', 'task-4']],
       ]) relationProperty.run(recordId, JSON.stringify(relatedIds), now)
+      this.database.prepare(`
+        INSERT OR IGNORE INTO database_automations(id, database_id, name, enabled, trigger_property_id, condition_json, actions_json, created_at, updated_at)
+        VALUES ('completed-task-priority', 'roadmap-db', '完成后归档优先级', 1, 'task-status', ?, ?, ?, ?)
+      `).run(JSON.stringify({ propertyId: 'task-status', operator: 'equals', value: 'done' }), JSON.stringify([{ type: 'setProperty', propertyId: 'task-score', value: 1 }]), now, now)
       this.database.exec('COMMIT')
     } catch (error) {
       this.database.exec('ROLLBACK')
@@ -953,7 +997,7 @@ class WorkspaceDatabase {
 
   updateDatabaseCell(recordId, propertyId, value) {
     const property = this.database.prepare(`
-      SELECT property.type, property.config_json
+      SELECT property.type, property.config_json, property.database_id AS databaseId
       FROM database_properties property
       JOIN database_records record ON record.id = ? AND record.database_id = property.database_id
       WHERE property.id = ?
@@ -961,39 +1005,40 @@ class WorkspaceDatabase {
     if (!property) throw new Error('Database property does not exist.')
     if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
     const now = new Date().toISOString()
-    let textValue = null
-    let numberValue = null
-    let booleanValue = null
-    let jsonValue = null
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      this.writeDatabasePropertyValue(recordId, { id: propertyId, ...property }, value, now)
+      this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, recordId)
+      const automationRuns = this.executeDatabaseAutomations(property.databaseId, recordId, propertyId, now)
+      this.enqueueWebhookEvent('database.record.updated', recordId, { record: { id: recordId, propertyId, value, updatedAt: now } }, now)
+      this.database.exec('COMMIT')
+      return { automationRuns }
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+  }
+
+  writeDatabasePropertyValue(recordId, property, value, now) {
+    if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
+    let textValue = null; let numberValue = null; let booleanValue = null; let jsonValue = null
     if (value !== null) {
-      if (property.type === 'number') numberValue = Number(value)
+      if (property.type === 'number') { numberValue = Number(value); if (!Number.isFinite(numberValue)) throw new TypeError('Number property requires a finite value.') }
       else if (property.type === 'checkbox') booleanValue = value ? 1 : 0
       else if (property.type === 'multiSelect') jsonValue = JSON.stringify(value)
       else if (property.type === 'relation') {
-        if (!Array.isArray(value) || value.length > 100 || value.some((id) => typeof id !== 'string' || id.length === 0 || id.length > 128)) {
-          throw new TypeError('Relation value must be an array of at most 100 record IDs.')
-        }
+        if (!Array.isArray(value) || value.length > 100 || value.some((id) => typeof id !== 'string' || id.length === 0 || id.length > 128)) throw new TypeError('Relation value must be an array of at most 100 record IDs.')
         const uniqueIds = [...new Set(value)]
         const relationDatabaseId = JSON.parse(property.config_json).relation?.databaseId
         if (typeof relationDatabaseId !== 'string') throw new Error('Relation property has no target database.')
         const recordExists = this.database.prepare('SELECT 1 FROM database_records WHERE id = ? AND database_id = ?')
         if (uniqueIds.some((id) => !recordExists.get(id, relationDatabaseId))) throw new Error('Relation target does not exist in the configured database.')
         jsonValue = JSON.stringify(uniqueIds)
-      }
-      else textValue = String(value)
+      } else textValue = String(value)
     }
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      this.database.prepare(`
-        INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(record_id, property_id) DO UPDATE SET text_value=excluded.text_value, number_value=excluded.number_value,
-          boolean_value=excluded.boolean_value, json_value=excluded.json_value, updated_at=excluded.updated_at
-      `).run(recordId, propertyId, textValue, numberValue, booleanValue, jsonValue, now)
-      this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, recordId)
-      this.enqueueWebhookEvent('database.record.updated', recordId, { record: { id: recordId, propertyId, value, updatedAt: now } }, now)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    this.database.prepare(`
+      INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(record_id, property_id) DO UPDATE SET text_value=excluded.text_value, number_value=excluded.number_value,
+        boolean_value=excluded.boolean_value, json_value=excluded.json_value, updated_at=excluded.updated_at
+    `).run(recordId, property.id, textValue, numberValue, booleanValue, jsonValue, now)
   }
 
   createDatabaseRecord(databaseId, recordId) {
@@ -1017,6 +1062,118 @@ class WorkspaceDatabase {
 
   setSetting(key, value) {
     this.database.prepare('INSERT INTO app_meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+  }
+
+  databaseAutomationSchema(databaseId) {
+    return { properties: this.database.prepare('SELECT id, type FROM database_properties WHERE database_id=? ORDER BY position').all(databaseId) }
+  }
+
+  listDatabaseAutomations(databaseId) {
+    return this.database.prepare(`
+      SELECT id, name, enabled, trigger_property_id, condition_json, actions_json, created_at, updated_at
+      FROM database_automations WHERE database_id=? ORDER BY created_at, id
+    `).all(databaseId).map((row) => ({ id: row.id, name: row.name, enabled: Boolean(row.enabled), trigger: { type: 'propertyChanged', propertyId: row.trigger_property_id }, condition: row.condition_json ? JSON.parse(row.condition_json) : undefined, actions: JSON.parse(row.actions_json), createdAt: row.created_at, updatedAt: row.updated_at }))
+  }
+
+  saveDatabaseAutomation(databaseId, rule) {
+    const normalized = { ...rule, id: rule.id || randomUUID() }
+    // 规则 ID 是全局主键。更新前确认归属，避免调用方用已知 ID 覆盖其他数据库的规则。
+    const existing = this.database.prepare('SELECT database_id FROM database_automations WHERE id=?').get(normalized.id)
+    if (existing && existing.database_id !== databaseId) throw new Error('Automation rule belongs to another database.')
+    const issues = validateAutomationRule(this.databaseAutomationSchema(databaseId), normalized)
+    if (issues.length) throw new TypeError(issues.join(' '))
+    const now = new Date().toISOString()
+    this.database.prepare(`
+      INSERT INTO database_automations(id, database_id, name, enabled, trigger_property_id, condition_json, actions_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, enabled=excluded.enabled, trigger_property_id=excluded.trigger_property_id,
+        condition_json=excluded.condition_json, actions_json=excluded.actions_json, updated_at=excluded.updated_at
+    `).run(normalized.id, databaseId, normalized.name.trim(), normalized.enabled ? 1 : 0, normalized.trigger.propertyId, normalized.condition ? JSON.stringify(normalized.condition) : null, JSON.stringify(normalized.actions), now, now)
+    return this.listDatabaseAutomations(databaseId).find((item) => item.id === normalized.id)
+  }
+
+  setDatabaseAutomationEnabled(id, enabled) {
+    return this.database.prepare('UPDATE database_automations SET enabled=?, updated_at=? WHERE id=?').run(enabled ? 1 : 0, new Date().toISOString(), id).changes > 0
+  }
+
+  loadAutomationRecord(recordId) {
+    const values = {}
+    for (const row of this.database.prepare('SELECT property_id, text_value, number_value, boolean_value, json_value FROM property_values WHERE record_id=?').all(recordId)) {
+      values[row.property_id] = row.text_value ?? row.number_value ?? (row.boolean_value === null ? null : Boolean(row.boolean_value))
+      if (row.json_value !== null) values[row.property_id] = JSON.parse(row.json_value)
+    }
+    return { id: recordId, values }
+  }
+
+  executeDatabaseAutomations(databaseId, recordId, changedPropertyId, now) {
+    const rules = this.listDatabaseAutomations(databaseId).filter((rule) => rule.enabled && rule.trigger.propertyId === changedPropertyId)
+    const plan = planAutomationRuns(this.databaseAutomationSchema(databaseId), this.loadAutomationRecord(recordId), changedPropertyId, rules)
+    const runIds = []
+    for (const run of plan.runs) {
+      const rule = rules.find((candidate) => candidate.id === run.automationId)
+      const runId = randomUUID(); runIds.push(runId)
+      this.database.exec('SAVEPOINT automation_rule')
+      try {
+        for (const patch of run.patches) {
+          const property = this.database.prepare('SELECT id, type, config_json FROM database_properties WHERE id=? AND database_id=?').get(patch.propertyId, databaseId)
+          if (!property) throw new Error('Automation action property no longer exists.')
+          this.writeDatabasePropertyValue(recordId, property, patch.value, now)
+        }
+        this.database.prepare('UPDATE database_records SET updated_at=? WHERE id=?').run(now, recordId)
+        this.insertAutomationRun({ id: runId, rule, databaseId, recordId, changedPropertyId, input: run.input, output: run.patches, status: 'succeeded', error: null, replayOf: null, now })
+        this.database.exec('RELEASE SAVEPOINT automation_rule')
+      } catch (error) {
+        this.database.exec('ROLLBACK TO SAVEPOINT automation_rule'); this.database.exec('RELEASE SAVEPOINT automation_rule')
+        this.insertAutomationRun({ id: runId, rule, databaseId, recordId, changedPropertyId, input: run.input, output: run.patches, status: 'failed', error: error instanceof Error ? error.message : 'Automation failed.', replayOf: null, now })
+      }
+    }
+    return runIds
+  }
+
+  insertAutomationRun(entry) {
+    this.database.prepare(`
+      INSERT INTO automation_runs(id, automation_id, automation_name, database_id, record_id, trigger_property_id, rule_json, input_json, output_json, status, error_message, replay_of, created_at, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(entry.id, entry.rule?.id ?? null, entry.rule?.name ?? '已删除规则', entry.databaseId, entry.recordId, entry.changedPropertyId, JSON.stringify(entry.rule), JSON.stringify(entry.input), JSON.stringify(entry.output), entry.status, entry.error, entry.replayOf, entry.now, entry.now)
+  }
+
+  listAutomationRuns(databaseId, limit = 100) {
+    return this.database.prepare(`
+      SELECT id, automation_id, automation_name, record_id, trigger_property_id, output_json, status, error_message, replay_of, created_at, completed_at
+      FROM automation_runs WHERE database_id=? ORDER BY created_at DESC, id DESC LIMIT ?
+    `).all(databaseId, Math.max(1, Math.min(500, Number(limit) || 100))).map((row) => ({ id: row.id, automationId: row.automation_id, automationName: row.automation_name, recordId: row.record_id, triggerPropertyId: row.trigger_property_id, output: JSON.parse(row.output_json), status: row.status, errorMessage: row.error_message, replayOf: row.replay_of, createdAt: row.created_at, completedAt: row.completed_at }))
+  }
+
+  replayAutomationRun(runId) {
+    const source = this.database.prepare('SELECT * FROM automation_runs WHERE id=? AND status=\'failed\'').get(runId)
+    if (!source) throw new Error('Only failed automation runs can be replayed.')
+    const currentRule = source.automation_id ? this.listDatabaseAutomations(source.database_id).find((rule) => rule.id === source.automation_id) : null
+    const rule = currentRule ?? JSON.parse(source.rule_json)
+    const input = JSON.parse(source.input_json)
+    const plan = planAutomationRuns(this.databaseAutomationSchema(source.database_id), { id: source.record_id, values: input.values }, input.changedPropertyId, [{ ...rule, enabled: true }])
+    if (!plan.runs.length) throw new Error('The corrected rule no longer matches the captured input.')
+    const run = plan.runs[0]; const replayId = randomUUID(); const now = new Date().toISOString()
+    this.database.exec('BEGIN IMMEDIATE')
+    this.database.exec('SAVEPOINT automation_replay')
+    try {
+      for (const patch of run.patches) {
+        const property = this.database.prepare('SELECT id, type, config_json FROM database_properties WHERE id=? AND database_id=?').get(patch.propertyId, source.database_id)
+        if (!property) throw new Error('Automation action property no longer exists.')
+        this.writeDatabasePropertyValue(source.record_id, property, patch.value, now)
+      }
+      this.database.prepare('UPDATE database_records SET updated_at=? WHERE id=?').run(now, source.record_id)
+      this.insertAutomationRun({ id: replayId, rule, databaseId: source.database_id, recordId: source.record_id, changedPropertyId: source.trigger_property_id, input, output: run.patches, status: 'succeeded', error: null, replayOf: runId, now })
+      this.database.exec('RELEASE SAVEPOINT automation_replay')
+      this.database.exec('COMMIT')
+      return replayId
+    } catch (error) {
+      // 回滚业务写入，但在同一外层事务中保留失败磁带，便于修正规则后继续重放。
+      this.database.exec('ROLLBACK TO SAVEPOINT automation_replay')
+      this.database.exec('RELEASE SAVEPOINT automation_replay')
+      this.insertAutomationRun({ id: replayId, rule, databaseId: source.database_id, recordId: source.record_id, changedPropertyId: source.trigger_property_id, input, output: run.patches, status: 'failed', error: error instanceof Error ? error.message : 'Automation replay failed.', replayOf: runId, now })
+      this.database.exec('COMMIT')
+      return replayId
+    }
   }
 
   createWebhookEndpoint(name, url, events, encryptedSecret) {

@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Content Parity, Import & Retrieval Alpha — **已完成**
+Open Platform & External Automation Alpha — **进行中（3/4）**
 
 ### 已交付
 
@@ -94,11 +94,15 @@ Content Parity, Import & Retrieval Alpha — **已完成**
 - 页面/数据库事务同步生成事件，快速未投递更新按资源幂等合并。
 - Webhook Worker：HMAC-SHA256 签名、DNS 私网防护、10 秒超时、有界指数退避和 8 次后死信。
 - 系统密钥库加密 Webhook 密钥，桌面投递台支持事件选择、启停与队列状态。
+- SQLite Schema v12：数据库自动化规则与不可变执行磁带持久化。
+- 用户可编辑“当 / 如果 / 就”规则，支持属性变更触发、七类条件和类型化属性写入。
+- 自动化逐规则 Savepoint 隔离，失败不回滚用户编辑，并保留错误、输入、输出与规则快照。
+- 失败执行可基于捕获输入重放；重放结果继续留档，规则 ID 不能跨数据库覆盖。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：23 个测试文件、96 个测试通过。
+- Vitest：24 个测试文件、102 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -137,7 +141,7 @@ Content Parity, Import & Retrieval Alpha — **已完成**
 - Relation 持久化、Rollup 先于 Formula 求值、任意 JavaScript 拒绝与自动化边界：通过。
 - 本地 Chromium：新增关联后汇总值与风险公式实时更新，控制台无警告或错误。
 - 隔离 Electron 烟雾测试：Schema v7、CSP、Preload、SQLite 与协作票据链路通过，退出码 0。
-- 全工作区：20 个测试文件、82 项测试通过。
+- 自动化规则校验、条件计划、事务执行、失败隔离与修正后重放：通过。
 
 ## 当前里程碑余项
 
@@ -156,7 +160,7 @@ Open Platform & External Automation Alpha
 
 1. 工作区 REST API 与细粒度令牌权限已交付 Alpha；后续补充分页、ETag 与公开 OpenAPI 文档。
 2. 可签名、可重试、可观测的 Webhook Outbox 已交付 Alpha；后续增加手动死信重放。
-3. 用户可编辑自动化规则、执行日志和失败重放。
+3. 用户可编辑自动化规则、执行日志和失败重放已交付 Alpha。
 4. MCP Server 读写工作区与自定义模型工具调用闭环。
 
 ## 已知技术债

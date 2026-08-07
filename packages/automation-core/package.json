@@ -1,0 +1,9 @@
+{
+  "name": "@notetodo/automation-core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.cjs",
+  "types": "index.d.ts",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "vitest": "^4.1.10" }
+}

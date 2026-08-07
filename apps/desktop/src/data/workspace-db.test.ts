@@ -14,7 +14,7 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     restorePage(id: string): void
     searchPages(query: string, limit?: number): WorkspacePage[]
     loadDatabaseByPage(pageId: string): DatabaseSnapshot | null
-    updateDatabaseCell(recordId: string, propertyId: string, value: unknown): void
+    updateDatabaseCell(recordId: string, propertyId: string, value: unknown): { automationRuns: string[] }
     createDatabaseRecord(databaseId: string, recordId: string): void
     setActiveDatabaseView(databaseId: string, viewId: string): void
     loadSyncDocument(pageId: string): {
@@ -61,6 +61,11 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     claimWebhookDeliveries(workerId: string, limit?: number, leaseMs?: number, now?: string): Array<{ id: string; payload: string; encryptedSecret: Buffer }>
     completeWebhookDelivery(deliveryId: string, workerId: string, result: { statusCode: number | null; durationMs: number; responsePreview?: string; errorMessage?: string }): { status: string; attempt: number }
     listWebhookDeliveries(endpointId: string): Array<{ id: string; status: string; attempts: number }>
+    listDatabaseAutomations(databaseId: string): Array<{ id: string; name: string; enabled: boolean; trigger: { propertyId: string }; actions: Array<{ propertyId: string; value: unknown }> }>
+    saveDatabaseAutomation(databaseId: string, rule: any): any
+    setDatabaseAutomationEnabled(id: string, enabled: boolean): boolean
+    listAutomationRuns(databaseId: string): Array<{ id: string; automationId: string; status: string; errorMessage: string | null; replayOf: string | null }>
+    replayAutomationRun(runId: string): string
     close(): void
   }
 }
@@ -126,6 +131,40 @@ describe('WorkspaceDatabase', () => {
     expect(updated?.records.find((record) => record.id === 'task-1')?.values['task-dependencies']).toEqual(['task-2', 'task-4'])
     expect(() => database?.updateDatabaseCell('task-1', 'task-risk', '被篡改')).toThrow(/read-only/)
     expect(() => database?.updateDatabaseCell('task-1', 'task-dependencies', ['missing-record'])).toThrow(/does not exist/)
+  })
+
+  it('executes persisted automations transactionally and records successful runs', () => {
+    database = new WorkspaceDatabase(':memory:')
+    expect(database.listDatabaseAutomations('roadmap-db')).toEqual([expect.objectContaining({ id: 'completed-task-priority', enabled: true })])
+    const result = database.updateDatabaseCell('task-4', 'task-status', 'done')
+    expect(result.automationRuns).toHaveLength(1)
+    expect(database.loadDatabaseByPage('projects')?.records.find((record) => record.id === 'task-4')?.values['task-score']).toBe(1)
+    expect(database.listAutomationRuns('roadmap-db')[0]).toMatchObject({ automationId: 'completed-task-priority', status: 'succeeded' })
+  })
+
+  it('isolates failed automation actions and replays captured input with a corrected rule', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const rule = { id: 'failing-relation', name: 'Broken relation', enabled: true, trigger: { type: 'propertyChanged', propertyId: 'task-owner' }, condition: { propertyId: 'task-owner', operator: 'equals', value: 'boom' }, actions: [{ type: 'setProperty', propertyId: 'task-dependencies', value: ['missing-record'] }] }
+    database.saveDatabaseAutomation('roadmap-db', rule)
+    database.updateDatabaseCell('task-1', 'task-owner', 'boom')
+    const failed = database.listAutomationRuns('roadmap-db').find((run) => run.automationId === rule.id)!
+    expect(failed).toMatchObject({ status: 'failed' })
+    expect(database.loadDatabaseByPage('projects')?.records.find((record) => record.id === 'task-1')?.values['task-owner']).toBe('boom')
+
+    const failedReplayId = database.replayAutomationRun(failed.id)
+    expect(database.listAutomationRuns('roadmap-db').find((run) => run.id === failedReplayId)).toMatchObject({ status: 'failed', replayOf: failed.id })
+
+    database.saveDatabaseAutomation('roadmap-db', { ...rule, actions: [{ type: 'setProperty', propertyId: 'task-score', value: 2 }] })
+    const replayId = database.replayAutomationRun(failed.id)
+    expect(database.listAutomationRuns('roadmap-db').find((run) => run.id === replayId)).toMatchObject({ status: 'succeeded', replayOf: failed.id })
+    expect(database.loadDatabaseByPage('projects')?.records.find((record) => record.id === 'task-1')?.values['task-score']).toBe(2)
+  })
+
+  it('prevents an automation id from overwriting a rule in another database', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const existing = database.listDatabaseAutomations('roadmap-db')[0]!
+    expect(() => database?.saveDatabaseAutomation('another-db', existing)).toThrow(/another database/)
+    expect(database.listDatabaseAutomations('roadmap-db')[0]).toMatchObject({ id: existing.id, name: existing.name })
   })
 
   it('imports page trees and typed CSV databases in one transaction', () => {

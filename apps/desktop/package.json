@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@notetodo/automation-core": "*",
     "@fontsource/dm-mono": "^5.1.1",
     "@fontsource/gelasio": "^5.1.1",
     "@fontsource/manrope": "^5.1.1",

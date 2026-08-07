@@ -134,6 +134,11 @@ function registerWorkspaceIpc(database) {
   })
   ipcMain.handle('webhooks:set-active', (_event, id, active) => { assertId(id); if (typeof active !== 'boolean') throw new TypeError('Invalid webhook state.'); return database.setWebhookEndpointActive(id, active) })
   ipcMain.handle('webhooks:list-deliveries', (_event, endpointId) => { assertId(endpointId); return database.listWebhookDeliveries(endpointId) })
+  ipcMain.handle('automations:list', (_event, databaseId) => { assertId(databaseId); return database.listDatabaseAutomations(databaseId) })
+  ipcMain.handle('automations:save', (_event, databaseId, rule) => { assertId(databaseId); if (!rule || typeof rule !== 'object') throw new TypeError('Invalid automation rule.'); return database.saveDatabaseAutomation(databaseId, rule) })
+  ipcMain.handle('automations:set-enabled', (_event, id, enabled) => { assertId(id); if (typeof enabled !== 'boolean') throw new TypeError('Invalid automation state.'); return database.setDatabaseAutomationEnabled(id, enabled) })
+  ipcMain.handle('automations:list-runs', (_event, databaseId) => { assertId(databaseId); return database.listAutomationRuns(databaseId) })
+  ipcMain.handle('automations:replay', (_event, runId) => { assertId(runId); return database.replayAutomationRun(runId) })
   ipcMain.handle('history:list', (_event, pageId) => { assertId(pageId); return database.listPageVersions(pageId) })
   ipcMain.handle('history:get', (_event, pageId, versionId) => {
     assertId(pageId)

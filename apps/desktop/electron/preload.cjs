@@ -38,6 +38,13 @@ contextBridge.exposeInMainWorld('notetodo', {
     setActive: (id, active) => ipcRenderer.invoke('webhooks:set-active', id, active),
     listDeliveries: (endpointId) => ipcRenderer.invoke('webhooks:list-deliveries', endpointId),
   },
+  automations: {
+    list: (databaseId) => ipcRenderer.invoke('automations:list', databaseId),
+    save: (databaseId, rule) => ipcRenderer.invoke('automations:save', databaseId, rule),
+    setEnabled: (id, enabled) => ipcRenderer.invoke('automations:set-enabled', id, enabled),
+    listRuns: (databaseId) => ipcRenderer.invoke('automations:list-runs', databaseId),
+    replay: (runId) => ipcRenderer.invoke('automations:replay', runId),
+  },
   database: {
     loadByPage: (pageId) => ipcRenderer.invoke('database:load-by-page', pageId),
     updateCell: (recordId, propertyId, value) => ipcRenderer.invoke('database:update-cell', recordId, propertyId, value),

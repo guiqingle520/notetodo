@@ -52,6 +52,7 @@ class DatabaseRepository {
   async updateCell(snapshot: DatabaseSnapshot, recordId: string, propertyId: string, value: PropertyValue) {
     if (window.notetodo?.database) return window.notetodo.database.updateCell(recordId, propertyId, value)
     this.write(snapshot)
+    return undefined
   }
 
   async createRecord(snapshot: DatabaseSnapshot, recordId: string) {

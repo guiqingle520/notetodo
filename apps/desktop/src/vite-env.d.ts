@@ -30,9 +30,16 @@ interface Window {
       setActive: (id: string, active: boolean) => Promise<boolean>
       listDeliveries: (endpointId: string) => Promise<Array<{ id: string; event: import('@notetodo/webhook-core').WebhookEvent; status: 'pending' | 'leased' | 'delivered' | 'dead'; attempts: number; nextAttemptAt: string; lastError: string | null; createdAt: string; deliveredAt: string | null }>>
     }
+    automations: {
+      list: (databaseId: string) => Promise<Array<import('@notetodo/automation-core').AutomationRule & { createdAt: string; updatedAt: string }>>
+      save: (databaseId: string, rule: import('@notetodo/automation-core').AutomationRule) => Promise<import('@notetodo/automation-core').AutomationRule>
+      setEnabled: (id: string, enabled: boolean) => Promise<boolean>
+      listRuns: (databaseId: string) => Promise<Array<{ id: string; automationId: string | null; automationName: string; recordId: string; triggerPropertyId: string; output: Array<{ propertyId: string; value: import('@notetodo/automation-core').AutomationValue }>; status: 'succeeded' | 'failed'; errorMessage: string | null; replayOf: string | null; createdAt: string; completedAt: string }>>
+      replay: (runId: string) => Promise<string>
+    }
     database: {
       loadByPage: (pageId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot | null>
-      updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<void>
+      updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<{ automationRuns: string[] }>
       createRecord: (databaseId: string, recordId: string) => Promise<void>
       setActiveView: (databaseId: string, viewId: string) => Promise<void>
     }

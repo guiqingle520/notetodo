@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpDown, Columns3, Filter, Link2, List, Plus, Sigma, Table2, Zap } from 'lucide-react'
-import { queryRecords, resolveDerivedRecords, runDatabaseAutomations, type DatabaseAutomation, type DatabaseRecord, type DatabaseSnapshot, type PropertyValue } from '@notetodo/database-core'
+import { Activity, ArrowUpDown, CheckCircle2, CircleAlert, Columns3, Filter, Link2, List, Plus, RotateCcw, Sigma, Table2, X, Zap } from 'lucide-react'
+import { queryRecords, resolveDerivedRecords, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type PropertyValue } from '@notetodo/database-core'
+import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
 const ROW_HEIGHT = 42
@@ -11,21 +12,23 @@ const statuses = [
   { id: 'doing', label: '进行中' },
   { id: 'done', label: '已完成' },
 ]
-const databaseAutomations: DatabaseAutomation[] = [{
-  id: 'completed-task-priority',
-  name: '完成后归档优先级',
-  enabled: true,
-  trigger: { type: 'propertyChanged', propertyId: 'task-status' },
-  condition: { propertyId: 'task-status', operator: 'equals', value: 'done' },
-  actions: [{ type: 'setProperty', propertyId: 'task-score', value: 1 }],
-}]
+type AutomationRun = Awaited<ReturnType<NonNullable<typeof window.notetodo>['automations']['listRuns']>>[number]
+const previewAutomation: AutomationRule = { id: 'completed-task-priority', name: '完成后归档优先级', enabled: true, trigger: { type: 'propertyChanged', propertyId: 'task-status' }, condition: { propertyId: 'task-status', operator: 'equals', value: 'done' }, actions: [{ type: 'setProperty', propertyId: 'task-score', value: 1 }] }
 
 export function DatabaseBlock({ pageId }: { pageId: string }) {
   const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [dueAscending, setDueAscending] = useState(true)
+  const [automationOpen, setAutomationOpen] = useState(false)
+  const [automations, setAutomations] = useState<AutomationRule[]>([])
+  const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([])
 
   useEffect(() => { void databaseRepository.loadByPage(pageId).then(setSnapshot) }, [pageId])
+  useEffect(() => {
+    if (!snapshot) return
+    if (window.notetodo?.automations) void Promise.all([window.notetodo.automations.list(snapshot.schema.id), window.notetodo.automations.listRuns(snapshot.schema.id)]).then(([rules, runs]) => { setAutomations(rules); setAutomationRuns(runs) })
+    else setAutomations([previewAutomation])
+  }, [snapshot?.schema.id])
 
   // Rollups and formulas are computed once per snapshot, never persisted back.
   // This keeps sort/filter cheap while making every view consume identical data.
@@ -43,16 +46,19 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
     const sourceRecord = snapshot.records.find((record) => record.id === recordId)
     if (!sourceRecord) return
     const editedRecord = { ...sourceRecord, values: { ...sourceRecord.values, [propertyId]: value }, updatedAt: new Date().toISOString() }
-    const automated = runDatabaseAutomations(snapshot.schema, editedRecord, propertyId, databaseAutomations)
     const next: DatabaseSnapshot = {
       ...snapshot,
       records: snapshot.records.map((record) => record.id === recordId
-        ? automated.record
+        ? editedRecord
         : record),
     }
     setSnapshot(next)
-    void databaseRepository.updateCell(next, recordId, propertyId, value)
-    for (const execution of automated.executions) void databaseRepository.updateCell(next, recordId, execution.propertyId, execution.value)
+    void databaseRepository.updateCell(next, recordId, propertyId, value).then(async (result) => {
+      // Desktop automation runs in the same SQLite transaction as the user's
+      // edit. Reload only when a rule actually ran so normal typing stays cheap.
+      if (result?.automationRuns?.length) setSnapshot(await databaseRepository.loadByPage(pageId))
+      if (result?.automationRuns?.length && window.notetodo?.automations) setAutomationRuns(await window.notetodo.automations.listRuns(snapshot.schema.id))
+    })
   }
 
   const addRecord = () => {
@@ -87,7 +93,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
         <div className="database-tools">
           <button className={statusFilter !== 'all' ? 'is-active' : ''} onClick={() => setStatusFilter((value) => value === 'all' ? 'doing' : value === 'doing' ? 'done' : 'all')}><Filter size={13} />{statusFilter === 'all' ? '筛选' : statuses.find((status) => status.id === statusFilter)?.label}</button>
           <button onClick={() => setDueAscending((value) => !value)}><ArrowUpDown size={13} />截止日期</button>
-          <button className="database-automation" title="规则：任务进入已完成时，优先级自动归档为 1"><Zap size={13} />自动化 · 1</button>
+          <button className="database-automation" onClick={() => setAutomationOpen(true)}><Zap size={13} />自动化 · {automations.filter((rule) => rule.enabled).length}</button>
           <button className="database-new" onClick={addRecord}><Plus size={13} />新建</button>
         </div>
       </div>
@@ -95,8 +101,71 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       {activeView.type === 'table' && <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} />}
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
+      {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
+        if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
+        else setAutomations((current) => [...current.filter((item) => item.id !== rule.id), rule])
+      }} onToggle={async (rule) => {
+        if (window.notetodo?.automations) { await window.notetodo.automations.setEnabled(rule.id, !rule.enabled); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
+        else setAutomations((current) => current.map((item) => item.id === rule.id ? { ...item, enabled: !item.enabled } : item))
+      }} onReplay={async (runId) => {
+        if (!window.notetodo?.automations) return
+        await window.notetodo.automations.replay(runId)
+        setAutomationRuns(await window.notetodo.automations.listRuns(snapshot.schema.id))
+        setSnapshot(await databaseRepository.loadByPage(pageId))
+      }} />}
     </section>
   )
+}
+
+function AutomationPanel({ schema, rules, runs, onClose, onSave, onToggle, onReplay }: { schema: DatabaseSchema; rules: AutomationRule[]; runs: AutomationRun[]; onClose: () => void; onSave: (rule: AutomationRule) => Promise<void>; onToggle: (rule: AutomationRule) => Promise<void>; onReplay: (runId: string) => Promise<void> }) {
+  const writable = schema.properties.filter((property) => property.type !== 'formula' && property.type !== 'rollup')
+  const defaultTrigger = schema.properties.find((property) => property.type === 'select') ?? writable[0]!
+  const defaultAction = schema.properties.find((property) => property.type === 'number') ?? writable[0]!
+  const blankRule = (): AutomationRule => ({ id: crypto.randomUUID(), name: '新自动化', enabled: true, trigger: { type: 'propertyChanged', propertyId: defaultTrigger.id }, condition: { propertyId: defaultTrigger.id, operator: 'equals', value: '' }, actions: [{ type: 'setProperty', propertyId: defaultAction.id, value: null }] })
+  const [draft, setDraft] = useState<AutomationRule>(() => rules[0] ? structuredClone(rules[0]) : blankRule())
+  const [tab, setTab] = useState<'rules' | 'runs'>('rules')
+  const [message, setMessage] = useState('')
+  const [replayingId, setReplayingId] = useState<string | null>(null)
+
+  const setCondition = (patch: Partial<NonNullable<AutomationRule['condition']>>) => setDraft((current) => ({ ...current, condition: { propertyId: current.condition?.propertyId ?? defaultTrigger.id, operator: current.condition?.operator ?? 'equals', ...current.condition, ...patch } }))
+  const setAction = (patch: Partial<AutomationRule['actions'][number]>) => setDraft((current) => ({ ...current, actions: [{ ...current.actions[0]!, ...patch }] }))
+  const save = async () => {
+    try { await onSave(draft); setMessage('规则已保存，下一次属性变更即生效。') }
+    catch (error) { setMessage(error instanceof Error ? error.message : '规则无法保存。') }
+  }
+  const replay = async (runId: string) => {
+    setReplayingId(runId); setMessage('')
+    try { await onReplay(runId); setMessage('重放已完成，最新结果已写入执行磁带。') }
+    catch (error) { setMessage(error instanceof Error ? error.message : '执行记录无法重放。') }
+    finally { setReplayingId(null) }
+  }
+
+  return <div className="automation-backdrop" onMouseDown={onClose}>
+    <section className="automation-panel" role="dialog" aria-modal="true" aria-label="数据库自动化" onMouseDown={(event) => event.stopPropagation()}>
+      <header><div><span><Zap size={15} /></span><div><small>AUTOMATION DESK / {schema.name.toLocaleUpperCase()}</small><strong>规则与执行磁带</strong></div></div><button onClick={onClose}><X size={16} /></button></header>
+      <nav><button className={tab === 'rules' ? 'is-active' : ''} onClick={() => setTab('rules')}><Zap size={12} />规则 {rules.length}</button><button className={tab === 'runs' ? 'is-active' : ''} onClick={() => setTab('runs')}><Activity size={12} />运行 {runs.length}</button></nav>
+      {tab === 'rules' ? <div className="automation-layout">
+        <aside><button className="automation-new" onClick={() => setDraft(blankRule())}><Plus size={12} />新建规则</button>{rules.map((rule) => <button className={draft.id === rule.id ? 'is-selected' : ''} key={rule.id} onClick={() => setDraft(structuredClone(rule))}><i className={rule.enabled ? 'is-live' : ''} /><span><strong>{rule.name}</strong><small>{propertyName(schema.properties, rule.trigger.propertyId)} 变更时</small></span><em onClick={(event) => { event.stopPropagation(); void onToggle(rule) }}>{rule.enabled ? 'ON' : 'OFF'}</em></button>)}</aside>
+        <main>
+          <label className="automation-name"><span>规则名称</span><input value={draft.name} maxLength={100} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+          <div className="automation-sentence"><b>当</b><label><span>触发属性</span><select value={draft.trigger.propertyId} onChange={(event) => setDraft({ ...draft, trigger: { type: 'propertyChanged', propertyId: event.target.value } })}>{writable.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label><output>发生变更</output></div>
+          <div className="automation-sentence"><b>如果</b><label><span>条件属性</span><select value={draft.condition?.propertyId} onChange={(event) => setCondition({ propertyId: event.target.value })}>{writable.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label><label><span>比较</span><select value={draft.condition?.operator} onChange={(event) => setCondition({ operator: event.target.value as NonNullable<AutomationRule['condition']>['operator'] })}><option value="equals">等于</option><option value="notEquals">不等于</option><option value="contains">包含</option><option value="greaterThan">大于</option><option value="lessThan">小于</option><option value="isEmpty">为空</option><option value="isNotEmpty">不为空</option></select></label>{!['isEmpty', 'isNotEmpty'].includes(draft.condition?.operator ?? '') && <label><span>条件值</span><input value={displayAutomationValue(draft.condition?.value)} onChange={(event) => setCondition({ value: parseAutomationValue(schema.properties.find((property) => property.id === draft.condition?.propertyId), event.target.value) })} /></label>}</div>
+          <div className="automation-sentence"><b>就</b><label><span>写入属性</span><select value={draft.actions[0]?.propertyId} onChange={(event) => setAction({ propertyId: event.target.value })}>{writable.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label><label className="automation-grow"><span>写入值</span><input value={displayAutomationValue(draft.actions[0]?.value)} onChange={(event) => setAction({ value: parseAutomationValue(schema.properties.find((property) => property.id === draft.actions[0]?.propertyId), event.target.value) })} /></label></div>
+          <footer><span>{message || '规则最多执行 20 个写入动作；公式与 Rollup 始终只读。'}</span><button onClick={() => void save()}>保存规则</button></footer>
+        </main>
+      </div> : <div className="automation-runs">{message && <div className="automation-run-message">{message}</div>}{runs.map((run) => <article className={`is-${run.status}`} key={run.id}><i>{run.status === 'succeeded' ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}</i><span><strong>{run.automationName}</strong><small>{new Date(run.createdAt).toLocaleString('zh-CN')} · {run.recordId}</small><code>{run.status === 'failed' ? run.errorMessage : run.output.map((patch) => `${propertyName(schema.properties, patch.propertyId)} → ${displayAutomationValue(patch.value)}`).join(' · ')}</code></span><em>{run.replayOf ? 'REPLAY' : run.status.toLocaleUpperCase()}</em>{run.status === 'failed' && <button disabled={replayingId !== null} onClick={() => void replay(run.id)}><RotateCcw size={12} />{replayingId === run.id ? '重放中' : '重放'}</button>}</article>)}{!runs.length && <div className="automation-empty"><Activity size={22} /><strong>尚无执行记录</strong><span>数据库属性变更后，运行磁带会在这里留档。</span></div>}</div>}
+    </section>
+  </div>
+}
+
+function propertyName(properties: DatabaseProperty[], id: string) { return properties.find((property) => property.id === id)?.name ?? id }
+function displayAutomationValue(value: AutomationValue | undefined) { return Array.isArray(value) ? value.join(', ') : value === null || value === undefined ? '' : String(value) }
+function parseAutomationValue(property: DatabaseProperty | undefined, value: string): AutomationValue {
+  if (!value) return null
+  if (property?.type === 'number') return Number.isFinite(Number(value)) ? Number(value) : null
+  if (property?.type === 'checkbox') return ['true', '1', '是'].includes(value.toLocaleLowerCase())
+  if (property?.type === 'relation' || property?.type === 'multiSelect') return value.split(',').map((item) => item.trim()).filter(Boolean)
+  return value
 }
 
 function VirtualTable({ records, allRecords, updateCell }: { records: DatabaseRecord[]; allRecords: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
