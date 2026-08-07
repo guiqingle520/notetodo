@@ -2,7 +2,7 @@ const { DatabaseSync } = require('node:sqlite')
 const { randomUUID } = require('node:crypto')
 const seedWorkspace = require('../shared/seed-workspace.json')
 
-const LATEST_SCHEMA_VERSION = 6
+const LATEST_SCHEMA_VERSION = 7
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -14,6 +14,7 @@ class WorkspaceDatabase {
     this.database = new DatabaseSync(databasePath)
     this.configure()
     this.migrate()
+    this.recoverInterruptedImports()
     this.seedIfEmpty()
     this.seedDatabaseIfEmpty()
     this.prepareStatements()
@@ -243,6 +244,40 @@ class WorkspaceDatabase {
       `)
     }
 
+    if (currentVersion < 7) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE attachments (
+          hash TEXT PRIMARY KEY CHECK(length(hash) = 64),
+          size INTEGER NOT NULL CHECK(size >= 0),
+          mime_type TEXT NOT NULL,
+          relative_path TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL
+        );
+        CREATE TABLE page_attachments (
+          page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+          attachment_hash TEXT NOT NULL REFERENCES attachments(hash) ON DELETE CASCADE,
+          source_path TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          PRIMARY KEY(page_id, attachment_hash, source_path)
+        );
+        CREATE INDEX page_attachments_hash ON page_attachments(attachment_hash);
+        CREATE TABLE import_jobs (
+          id TEXT PRIMARY KEY,
+          source_name TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('converting', 'committing', 'completed', 'failed', 'cancelled')),
+          report_json TEXT NOT NULL DEFAULT '{}',
+          error_message TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX import_jobs_time ON import_jobs(created_at DESC);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '7')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
     if (currentVersion > LATEST_SCHEMA_VERSION) {
       throw new Error(`Workspace schema ${currentVersion} is newer than this app supports.`)
     }
@@ -431,6 +466,8 @@ class WorkspaceDatabase {
     const insertRecord = this.database.prepare('INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
     const insertValue = this.database.prepare('INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     const insertView = this.database.prepare('INSERT INTO database_views(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+    const insertAttachment = this.database.prepare('INSERT INTO attachments(hash, size, mime_type, relative_path, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(hash) DO NOTHING')
+    const insertPageAttachment = this.database.prepare('INSERT OR IGNORE INTO page_attachments(page_id, attachment_hash, source_path, display_name) VALUES (?, ?, ?, ?)')
 
     this.database.exec('BEGIN IMMEDIATE')
     try {
@@ -460,13 +497,44 @@ class WorkspaceDatabase {
         })
         insertView.run(viewId, imported.id, '全部', 'table', 0, '{}')
       }
+      for (const attachment of bundle.attachments ?? []) {
+        insertAttachment.run(attachment.hash, attachment.size, attachment.mimeType, attachment.relativePath, new Date().toISOString())
+        for (const pageId of attachment.referencedBy) insertPageAttachment.run(pageId, attachment.hash, attachment.sourcePath, attachment.displayName)
+      }
       this.statements.setActivePage.run(pages[0].id)
+      this.database.prepare("UPDATE import_jobs SET status='completed', report_json=?, error_message=NULL, updated_at=? WHERE id=?")
+        .run(JSON.stringify(bundle.report ?? {}), new Date().toISOString(), bundle.importId)
       this.database.exec('COMMIT')
       return { rootPageId: pages[0].id, pageCount: pages.length, databaseCount: bundle.databases.length, ...bundle.report }
     } catch (error) {
       this.database.exec('ROLLBACK')
       throw error
     }
+  }
+
+  createImportJob(id, sourceName) {
+    const now = new Date().toISOString()
+    this.database.prepare("INSERT INTO import_jobs(id, source_name, status, created_at, updated_at) VALUES (?, ?, 'converting', ?, ?)").run(id, sourceName, now, now)
+  }
+
+  recoverInterruptedImports() {
+    const now = new Date().toISOString()
+    this.database.prepare("UPDATE import_jobs SET status='failed', error_message='应用在导入完成前退出，未提交的数据库写入已回滚。', updated_at=? WHERE status IN ('converting', 'committing')").run(now)
+  }
+
+  updateImportJob(id, status, errorMessage = null) {
+    if (!['converting', 'committing', 'completed', 'failed', 'cancelled'].includes(status)) throw new TypeError('Invalid import status.')
+    this.database.prepare('UPDATE import_jobs SET status=?, error_message=?, updated_at=? WHERE id=?').run(status, errorMessage?.slice(0, 2000) ?? null, new Date().toISOString(), id)
+  }
+
+  loadImportJobs() {
+    return this.database.prepare('SELECT id, source_name AS sourceName, status, report_json AS reportJson, error_message AS errorMessage, created_at AS createdAt, updated_at AS updatedAt FROM import_jobs ORDER BY created_at DESC LIMIT 50').all()
+      .map((job) => ({ ...job, report: JSON.parse(job.reportJson), reportJson: undefined }))
+  }
+
+  getAttachment(hash) {
+    if (!/^[0-9a-f]{64}$/.test(hash)) return null
+    return this.database.prepare('SELECT hash, size, mime_type AS mimeType, relative_path AS relativePath FROM attachments WHERE hash=?').get(hash) ?? null
   }
 
   setActivePage(id) {

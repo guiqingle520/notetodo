@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('notetodo', {
       const promise = ipcRenderer.invoke('import:start', importId, requestId).finally(() => ipcRenderer.removeListener(channel, listener))
       return { promise, cancel: () => ipcRenderer.send('import:cancel', requestId) }
     },
+    listJobs: () => ipcRenderer.invoke('import:list-jobs'),
   },
   model: {
     getConfig: () => ipcRenderer.invoke('model:get-config'),

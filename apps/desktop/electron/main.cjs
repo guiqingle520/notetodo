@@ -1,5 +1,7 @@
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, protocol, safeStorage, shell } = require('electron')
+const fs = require('node:fs')
 const path = require('node:path')
+const { Readable } = require('node:stream')
 const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { ModelService } = require('./model-service.cjs')
 const { signRoomTicket } = require('@notetodo/auth-core')
@@ -13,6 +15,11 @@ const activeModelRuns = new Map()
 // Renderer receives opaque IDs only; local archive paths never cross preload.
 const importSources = new Map()
 const activeImports = new Map()
+
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'notetodo-asset',
+  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+}])
 
 // Keep OS folders and taskbar identity stable even though npm uses a scoped
 // workspace package name internally.
@@ -81,22 +88,29 @@ function registerWorkspaceIpc(database) {
     const controller = new AbortController()
     activeImports.set(requestId, controller)
     const channel = `import:progress:${requestId}`
+    database.createImportJob(importId, path.basename(source.filePath))
     try {
       const bundle = await convertZipArchive(source.filePath, {
         importId,
+        assetStoreDir: path.join(app.getPath('userData'), 'attachments'),
         signal: controller.signal,
         onProgress: (progress) => { if (!event.sender.isDestroyed()) event.sender.send(channel, progress) },
       })
       if (controller.signal.aborted) throw new Error('IMPORT_CANCELLED')
       if (!event.sender.isDestroyed()) event.sender.send(channel, { phase: 'commit', completed: 0, total: 1 })
+      database.updateImportJob(importId, 'committing')
       const result = database.importWorkspaceBundle(bundle)
       if (!event.sender.isDestroyed()) event.sender.send(channel, { phase: 'done', completed: 1, total: 1 })
       importSources.delete(importId)
       return result
+    } catch (error) {
+      database.updateImportJob(importId, controller.signal.aborted || error?.message === 'IMPORT_CANCELLED' ? 'cancelled' : 'failed', error?.message ?? String(error))
+      throw error
     } finally {
       activeImports.delete(requestId)
     }
   })
+  ipcMain.handle('import:list-jobs', () => database.loadImportJobs())
   ipcMain.on('import:cancel', (_event, requestId) => {
     if (typeof requestId === 'string') activeImports.get(requestId)?.abort()
   })
@@ -368,6 +382,18 @@ ipcMain.handle('app:info', () => ({
 
 app.whenReady().then(() => {
   workspaceDatabase = new WorkspaceDatabase(path.join(app.getPath('userData'), 'workspace.db'))
+  protocol.handle('notetodo-asset', async (request) => {
+    const hash = new URL(request.url).hostname.toLowerCase()
+    const attachment = workspaceDatabase.getAttachment(hash)
+    if (!attachment) return new Response('Not found', { status: 404 })
+    const assetRoot = path.resolve(app.getPath('userData'), 'attachments')
+    const target = path.resolve(assetRoot, attachment.relativePath)
+    if (!target.startsWith(`${assetRoot}${path.sep}`)) return new Response('Forbidden', { status: 403 })
+    try {
+      await fs.promises.access(target, fs.constants.R_OK)
+      return new Response(Readable.toWeb(fs.createReadStream(target)), { headers: { 'Content-Type': attachment.mimeType, 'Content-Length': String(attachment.size), 'Cache-Control': 'public, max-age=31536000, immutable' } })
+    } catch { return new Response('Not found', { status: 404 }) }
+  })
   registerWorkspaceIpc(workspaceDatabase)
   createWindow()
   app.on('activate', () => {

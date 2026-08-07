@@ -36,6 +36,11 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     loadNotifications(recipientId: string): Array<{ id: string; readAt: string | null; pageTitle: string; body: string }>
     markNotificationRead(id: string, recipientId: string): void
     importWorkspaceBundle(bundle: any): { rootPageId: string; pageCount: number; databaseCount: number }
+    createImportJob(id: string, sourceName: string): void
+    recoverInterruptedImports(): void
+    updateImportJob(id: string, status: string, errorMessage?: string | null): void
+    loadImportJobs(): Array<{ id: string; status: string; report: Record<string, number> }>
+    getAttachment(hash: string): null | { hash: string; relativePath: string; mimeType: string }
     close(): void
   }
 }
@@ -95,16 +100,21 @@ describe('WorkspaceDatabase', () => {
     database = new WorkspaceDatabase(':memory:')
     const now = new Date().toISOString()
     const page = (id: string, parentId: string | null, icon: 'book' | 'grid') => ({ id, title: id, icon, parentId, favorite: false, content: '<p>imported</p>', updatedAt: now, lastVisitedAt: now, archivedAt: null })
+    database.createImportJob('import-job', 'Workspace.zip')
     const result = database.importWorkspaceBundle({
+      importId: 'import-job',
       pages: [page('import-root', null, 'book'), page('import-table', 'import-root', 'grid')],
       databases: [{ id: 'import-db', pageId: 'import-table', name: 'Tasks', headers: ['Name', 'Score', 'Done'], rows: [{ Name: 'Ship', Score: '3', Done: 'true' }], inferredTypes: { Name: 'text', Score: 'number', Done: 'checkbox' } }],
-      report: {},
+      attachments: [{ hash: 'a'.repeat(64), size: 42, mimeType: 'image/png', relativePath: `aa/${'a'.repeat(64)}`, sourcePath: 'assets/cover.png', displayName: 'cover.png', referencedBy: ['import-root'] }],
+      report: { importedAssets: 1 },
     })
 
     expect(result).toMatchObject({ rootPageId: 'import-root', pageCount: 2, databaseCount: 1 })
     expect(database.loadWorkspace().activePageId).toBe('import-root')
     const imported = database.loadDatabaseByPage('import-table')
     expect(imported?.records[0]?.values).toEqual({ 'import-db-p0': 'Ship', 'import-db-p1': 3, 'import-db-p2': true })
+    expect(database.getAttachment('a'.repeat(64))).toMatchObject({ mimeType: 'image/png', relativePath: `aa/${'a'.repeat(64)}` })
+    expect(database.loadImportJobs()[0]).toMatchObject({ id: 'import-job', status: 'completed', report: { importedAssets: 1 } })
   })
 
   it('rolls back every page when an imported database is invalid', () => {
@@ -116,6 +126,13 @@ describe('WorkspaceDatabase', () => {
       report: {},
     })).toThrow()
     expect(database.loadWorkspace().pages.some((page) => page.id === 'rolled-back-root')).toBe(false)
+  })
+
+  it('marks interrupted imports as failed for recovery reporting', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.createImportJob('interrupted-job', 'Large workspace.zip')
+    database.recoverInterruptedImports()
+    expect(database.loadImportJobs()[0]).toMatchObject({ id: 'interrupted-job', status: 'failed' })
   })
 
   it('replays incremental sync updates and compacts them into one durable snapshot', () => {

@@ -4,6 +4,8 @@ const yauzl = require('yauzl')
 const MarkdownIt = require('markdown-it')
 const sanitizeHtml = require('sanitize-html')
 const { createHash, randomUUID } = require('node:crypto')
+const { Transform } = require('node:stream')
+const { pipeline } = require('node:stream/promises')
 
 const DEFAULT_LIMITS = Object.freeze({
   maxEntries: 50_000,
@@ -67,22 +69,32 @@ async function convertZipArchive(filePath, options = {}) {
   const signal = options.signal
   const onProgress = options.onProgress ?? (() => {})
   const importId = options.importId ?? randomUUID()
+  const assetStoreDir = options.assetStoreDir
   if (signal?.aborted) throw new Error('IMPORT_CANCELLED')
   const inspection = await inspectZipArchive(filePath)
   if (inspection.rejected) throw new Error('IMPORT_PREFLIGHT_REJECTED')
   const convertible = inspection.entries.filter((entry) => entry.kind === 'page' || entry.kind === 'database')
+  const transferable = inspection.entries.filter((entry) => ['page', 'database', 'asset'].includes(entry.kind))
   const plannedByPath = new Map(inspection.entries.map((entry) => [entry.path, entry]))
   const pageIds = new Map(convertible.map((entry) => [stripExtension(entry.path), `${importId}-${shortHash(entry.path)}`]))
   const rootId = `${importId}-root`
   const now = new Date().toISOString()
   const pages = [{ id: rootId, title: path.basename(inspection.fileName, '.zip'), icon: 'book', parentId: null, favorite: false, content: '<p>从 Notion 导入的工作区。</p>', updatedAt: now, lastVisitedAt: now, archivedAt: null }]
   const databases = []
+  const attachments = []
   let completed = 0
 
-  await visitZipEntries(filePath, signal, async (entry, readText) => {
+  if (assetStoreDir) await fs.promises.mkdir(assetStoreDir, { recursive: true })
+  await visitZipEntries(filePath, signal, async (entry, readText, storeAsset) => {
     const normalized = normalizePath(entry.fileName)
     const planned = normalized && plannedByPath.get(normalized)
-    if (!planned || (planned.kind !== 'page' && planned.kind !== 'database')) return
+    if (!planned || !['page', 'database', 'asset'].includes(planned.kind)) return
+    if (planned.kind === 'asset') {
+      if (assetStoreDir) attachments.push({ ...(await storeAsset(assetStoreDir)), sourcePath: normalized, displayName: path.basename(normalized), referencedBy: [] })
+      completed += 1
+      onProgress({ phase: 'convert', completed, total: transferable.length, path: normalized })
+      return
+    }
     const raw = await readText()
     const title = path.basename(stripExtension(normalized)).replace(/(?:\s|_)[0-9a-f]{32}$/i, '').trim() || '无标题'
     const pageId = pageIds.get(stripExtension(normalized))
@@ -90,17 +102,26 @@ async function convertZipArchive(filePath, options = {}) {
     if (planned.kind === 'page') {
       const extension = path.extname(normalized).toLowerCase()
       const rendered = extension === '.md' || extension === '.markdown' ? renderMarkdown(raw) : raw
-      pages.push({ id: pageId, title, icon: 'note', parentId, favorite: false, content: sanitizeImportedHtml(rendered), updatedAt: now, lastVisitedAt: now, archivedAt: null })
+      pages.push({ id: pageId, sourcePath: normalized, title, icon: 'note', parentId, favorite: false, content: sanitizeImportedHtml(rendered), updatedAt: now, lastVisitedAt: now, archivedAt: null })
     } else {
       const table = parseCsv(raw)
       pages.push({ id: pageId, title, icon: 'grid', parentId, favorite: false, content: '<p></p>', updatedAt: now, lastVisitedAt: now, archivedAt: null })
       databases.push({ id: `${pageId}-db`, pageId, name: title, headers: table.headers, rows: table.rows, inferredTypes: inferTypes(table.headers, table.rows) })
     }
     completed += 1
-    onProgress({ phase: 'convert', completed, total: convertible.length, path: normalized })
+    onProgress({ phase: 'convert', completed, total: transferable.length, path: normalized })
   })
 
-  return { importId, pages, databases, report: { importedPages: pages.length - 1, importedDatabases: databases.length, skippedAssets: inspection.summary.asset, unsupported: inspection.summary.unsupported } }
+  const assetsByPath = new Map(attachments.map((asset) => [asset.sourcePath, asset]))
+  let unresolvedLinks = 0
+  for (const page of pages) {
+    if (!page.sourcePath) continue
+    const rewritten = rewriteImportedLinks(page.content, page.sourcePath, page.id, pageIds, assetsByPath)
+    page.content = rewritten.html
+    unresolvedLinks += rewritten.unresolved
+    delete page.sourcePath
+  }
+  return { importId, pages, databases, attachments, report: { importedPages: pages.length - 1, importedDatabases: databases.length, importedAssets: attachments.length, skippedAssets: inspection.summary.asset - attachments.length, unsupported: inspection.summary.unsupported, unresolvedLinks } }
 }
 
 function visitZipEntries(filePath, signal, visitor) {
@@ -125,11 +146,83 @@ function visitZipEntries(filePath, signal, visitor) {
       archive.on('entry', (entry) => {
         if (entry.fileName.endsWith('/')) { archive.readEntry(); return }
         const readText = () => readEntryText(archive, entry, signal)
-        Promise.resolve(visitor(entry, readText)).then(() => archive.readEntry(), fail)
+        const storeAsset = (directory) => storeEntryContent(archive, entry, directory, signal)
+        Promise.resolve(visitor(entry, readText, storeAsset)).then(() => archive.readEntry(), fail)
       })
       archive.readEntry()
     })
   })
+}
+
+async function storeEntryContent(archive, entry, storeDir, signal) {
+  if (signal?.aborted) throw new Error('IMPORT_CANCELLED')
+  const temporaryPath = path.join(storeDir, `.import-${randomUUID()}`)
+  const hash = createHash('sha256')
+  const hasher = new Transform({ transform(chunk, _encoding, callback) { hash.update(chunk); callback(null, chunk) } })
+  const stream = await new Promise((resolve, reject) => archive.openReadStream(entry, (error, opened) => error || !opened ? reject(error ?? new Error('ZIP_STREAM_FAILED')) : resolve(opened)))
+  const abort = () => stream.destroy(new Error('IMPORT_CANCELLED'))
+  signal?.addEventListener('abort', abort, { once: true })
+  try {
+    await pipeline(stream, hasher, fs.createWriteStream(temporaryPath, { flags: 'wx' }))
+    const digest = hash.digest('hex')
+    const relativePath = `${digest.slice(0, 2)}/${digest}`
+    const targetPath = path.join(storeDir, relativePath)
+    await fs.promises.mkdir(path.dirname(targetPath), { recursive: true })
+    try { await fs.promises.rename(temporaryPath, targetPath) }
+    catch (error) {
+      if (!['EEXIST', 'EPERM'].includes(error.code)) throw error
+      await fs.promises.access(targetPath)
+      await fs.promises.rm(temporaryPath, { force: true })
+    }
+    return { hash: digest, size: entry.uncompressedSize, mimeType: mimeTypeFor(entry.fileName), relativePath }
+  } catch (error) {
+    await fs.promises.rm(temporaryPath, { force: true }).catch(() => {})
+    throw error
+  } finally {
+    signal?.removeEventListener('abort', abort)
+  }
+}
+
+function rewriteImportedLinks(html, sourcePath, pageId, pageIds, assetsByPath) {
+  let unresolved = 0
+  const transform = (tagName, attribs) => {
+    const attribute = tagName === 'a' ? 'href' : 'src'
+    const raw = attribs[attribute]
+    if (!raw || /^(?:[a-z]+:|#)/i.test(raw)) return { tagName, attribs }
+    const resolved = resolveRelativeImportPath(sourcePath, raw)
+    if (!resolved) { unresolved += 1; return { tagName, attribs } }
+    const targetPageId = pageIds.get(stripExtension(resolved))
+    if (targetPageId) attribs[attribute] = `notetodo-page:${targetPageId}`
+    else {
+      const asset = assetsByPath.get(resolved)
+      if (asset) {
+        attribs[attribute] = `notetodo-asset://${asset.hash}/${encodeURIComponent(asset.displayName)}`
+        if (!asset.referencedBy.includes(pageId)) asset.referencedBy.push(pageId)
+      } else unresolved += 1
+    }
+    return { tagName, attribs }
+  }
+  return {
+    html: sanitizeHtml(html, {
+      allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption', 'img', 'source'],
+      allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class'], a: ['href', 'name', 'target'], img: ['src', 'alt', 'title', 'width', 'height'] },
+      allowedSchemes: ['http', 'https', 'mailto', 'notetodo-page', 'notetodo-asset'],
+      allowProtocolRelative: false,
+      transformTags: { a: transform, img: transform, source: transform },
+    }),
+    unresolved,
+  }
+}
+
+function resolveRelativeImportPath(sourcePath, raw) {
+  let decoded
+  try { decoded = decodeURIComponent(raw.split(/[?#]/, 1)[0]) } catch { return null }
+  const joined = path.posix.normalize(path.posix.join(path.posix.dirname(sourcePath), decoded.replaceAll('\\', '/')))
+  return joined.startsWith('../') || joined.startsWith('/') ? null : normalizePath(joined)
+}
+
+function mimeTypeFor(fileName) {
+  return ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', pdf: 'application/pdf', mp4: 'video/mp4', mov: 'video/quicktime', mp3: 'audio/mpeg', wav: 'audio/wav', zip: 'application/zip' })[path.extname(fileName).slice(1).toLowerCase()] ?? 'application/octet-stream'
 }
 
 function readEntryText(archive, entry, signal) {
@@ -153,7 +246,7 @@ function renderMarkdown(markdown) {
 
 function sanitizeImportedHtml(html) {
   return sanitizeHtml(html, {
-    allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption'],
+    allowedTags: [...sanitizeHtml.defaults.allowedTags, 'details', 'summary', 'figure', 'figcaption', 'img', 'source'],
     allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, '*': ['class'], a: ['href', 'name', 'target'], img: ['src', 'alt', 'title', 'width', 'height'] },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowProtocolRelative: false,

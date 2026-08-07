@@ -66,6 +66,7 @@ type WorkspaceNotification = { id: string; type: 'mention' | 'comment'; readAt: 
 type SelectionContext = { from: number; to: number; text: string }
 type AIPatchProposal = { text: string; operation: 'insert-paragraphs' | 'replace-selection'; range?: { from: number; to: number } }
 type ImportInspection = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['pickAndInspect']>>>
+type ImportJob = Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['listJobs']>>[number]
 
 const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
   spark: Sparkles,
@@ -214,8 +215,13 @@ function ImportPanel({ onClose, onImported }: { onClose: () => void; onImported:
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'importing' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
   const [progress, setProgress] = useState({ phase: 'convert', completed: 0, total: 1, path: '' })
-  const [result, setResult] = useState<{ pageCount: number; databaseCount: number; skippedAssets: number } | null>(null)
+  const [result, setResult] = useState<{ pageCount: number; databaseCount: number; importedAssets: number; skippedAssets: number; unresolvedLinks: number } | null>(null)
+  const [recentJobs, setRecentJobs] = useState<ImportJob[]>([])
   const cancelImportRef = useRef<null | (() => void)>(null)
+
+  useEffect(() => {
+    if (window.notetodo?.imports) void window.notetodo.imports.listJobs().then(setRecentJobs).catch(() => {})
+  }, [])
 
   const pickArchive = async () => {
     if (!window.notetodo?.imports) {
@@ -247,6 +253,7 @@ function ImportPanel({ onClose, onImported }: { onClose: () => void; onImported:
       setResult(completed)
       setStatus('done')
       await onImported()
+      setRecentJobs(await window.notetodo.imports.listJobs())
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason)
       setError(message.includes('IMPORT_CANCELLED') ? '导入已取消，工作区没有发生部分写入。' : message)
@@ -280,6 +287,7 @@ function ImportPanel({ onClose, onImported }: { onClose: () => void; onImported:
               <Upload size={15} />{status === 'loading' ? '正在读取目录…' : '选择 Notion 导出包'}
             </button>
             <div className="import-footnote"><ShieldCheck size={13} />路径逃逸、重复文件和解压体积会在写入前被拦截</div>
+            {recentJobs.length > 0 && <div className="import-ledger"><header><span>最近迁移</span><small>LOCAL IMPORT LEDGER</small></header>{recentJobs.slice(0, 3).map((job) => <div key={job.id}><i data-status={job.status} /><span><strong>{job.sourceName}</strong><small>{new Date(job.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} · {job.status === 'completed' ? `完成 ${job.report.importedPages ?? 0} 页` : job.status === 'cancelled' ? '已取消' : job.status === 'failed' ? '已回滚' : '处理中'}</small></span><em>{job.status === 'completed' ? '完成' : job.status === 'failed' ? '失败' : job.status === 'cancelled' ? '取消' : '中断'}</em></div>)}</div>}
           </div>
         )}
 
@@ -319,7 +327,7 @@ function ImportPanel({ onClose, onImported }: { onClose: () => void; onImported:
           </div>
         )}
         {status === 'done' && result && (
-          <div className="import-complete"><CheckCircle2 size={32} /><p>迁移完成</p><h2>知识已经回到你手中。</h2><div><span><strong>{result.pageCount}</strong>页面</span><span><strong>{result.databaseCount}</strong>数据库</span><span><strong>{result.skippedAssets}</strong>附件待迁移</span></div><button className="import-primary" onClick={onClose}>打开导入空间</button></div>
+          <div className="import-complete"><CheckCircle2 size={32} /><p>迁移完成</p><h2>知识已经回到你手中。</h2><div><span><strong>{result.pageCount}</strong>页面</span><span><strong>{result.databaseCount}</strong>数据库</span><span><strong>{result.importedAssets}</strong>附件</span></div>{(result.skippedAssets > 0 || result.unresolvedLinks > 0) && <small>{result.skippedAssets} 个附件跳过 · {result.unresolvedLinks} 个链接待检查</small>}<button className="import-primary" onClick={onClose}>打开导入空间</button></div>
         )}
       </section>
     </div>
@@ -657,7 +665,7 @@ function AIPanel({ onClose, selectionContext, onApplyPatch, onUndoPatch }: { onC
 }
 
 function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: (editor: Editor | null) => void; onSelectionChange: (selection: SelectionContext | null) => void }) {
-  const { pages, activePageId, updatePage, toggleFavorite, archivePage } = useWorkspace()
+  const { pages, activePageId, updatePage, toggleFavorite, archivePage, setActivePage } = useWorkspace()
   const page = pages.find((candidate) => candidate.id === activePageId) ?? pages[0]
   const breadcrumbs = useMemo(() => pageBreadcrumbs(pages, page.id), [pages, page.id])
   const [slashMenu, setSlashMenu] = useState<null | { from: number; left: number; top: number; query: string; index: number }>(null)
@@ -690,6 +698,16 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
     editable: Boolean(syncSession) && ['editor', 'owner'].includes(pageRole),
     immediatelyRender: false,
     editorProps: {
+      handleClick: (_view, _position, event) => {
+        const anchor = (event.target as HTMLElement).closest('a[href^="notetodo-page:"]')
+        const href = anchor?.getAttribute('href')
+        if (!href) return false
+        const targetPageId = href.slice('notetodo-page:'.length)
+        if (!pages.some((candidate) => candidate.id === targetPageId)) return false
+        event.preventDefault()
+        setActivePage(targetPageId)
+        return true
+      },
       handleKeyDown: (view, event) => {
         if (event.key !== '/' || !view.state.selection.empty) return false
         const position = view.state.selection.from

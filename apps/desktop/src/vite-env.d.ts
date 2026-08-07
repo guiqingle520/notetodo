@@ -58,9 +58,10 @@ interface Window {
         importId: string,
         onProgress: (progress: { phase: 'convert' | 'commit' | 'done'; completed: number; total: number; path?: string }) => void,
       ) => {
-        promise: Promise<{ rootPageId: string; pageCount: number; databaseCount: number; importedPages: number; importedDatabases: number; skippedAssets: number; unsupported: number }>
+        promise: Promise<{ rootPageId: string; pageCount: number; databaseCount: number; importedPages: number; importedDatabases: number; importedAssets: number; skippedAssets: number; unsupported: number; unresolvedLinks: number }>
         cancel: () => void
       }
+      listJobs: () => Promise<Array<{ id: string; sourceName: string; status: 'converting' | 'committing' | 'completed' | 'failed' | 'cancelled'; report: Record<string, number>; errorMessage: string | null; createdAt: string; updatedAt: string }>>
     }
     model: {
       getConfig: () => Promise<{ provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; hasApiKey: boolean }>

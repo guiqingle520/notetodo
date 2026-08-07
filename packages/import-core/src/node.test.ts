@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -13,9 +13,10 @@ const { convertZipArchive, inspectZipArchive } = require('../node.cjs') as {
     rejected: boolean
     summary: Record<string, number>
   }>
-  convertZipArchive: (path: string, options?: { importId?: string; signal?: AbortSignal; onProgress?: (progress: { completed: number }) => void }) => Promise<{
+  convertZipArchive: (path: string, options?: { importId?: string; assetStoreDir?: string; signal?: AbortSignal; onProgress?: (progress: { completed: number }) => void }) => Promise<{
     pages: Array<{ id: string; title: string; content: string; parentId: string | null }>
     databases: Array<{ headers: string[]; rows: Array<Record<string, string>> }>
+    attachments: Array<{ hash: string; relativePath: string; referencedBy: string[] }>
   }>
 }
 const temporaryDirectories: string[] = []
@@ -72,6 +73,27 @@ describe('streaming ZIP preflight', () => {
       signal: controller.signal,
       onProgress: () => controller.abort(),
     })).rejects.toThrow('IMPORT_CANCELLED')
+  })
+
+  it('stores assets by content hash and rewrites local page and asset links', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'notetodo-assets-'))
+    temporaryDirectories.push(directory)
+    const archivePath = join(directory, 'Assets.zip')
+    const assetStoreDir = join(directory, 'store')
+    await writeFile(archivePath, createStoredZip([
+      ['Home.md', '[Child](Child.md)\n\n![Cover](assets/cover.png)'],
+      ['Child.md', 'Child'],
+      ['assets/cover.png', 'same-image-bytes'],
+    ]))
+
+    const bundle = await convertZipArchive(archivePath, { importId: 'asset-import', assetStoreDir })
+    const home = bundle.pages.find((page) => page.title === 'Home')
+    const child = bundle.pages.find((page) => page.title === 'Child')
+    const asset = bundle.attachments[0]
+    expect(home?.content).toContain(`notetodo-page:${child?.id}`)
+    expect(home?.content).toContain(`notetodo-asset://${asset?.hash}/cover.png`)
+    expect(asset?.referencedBy).toEqual([home?.id])
+    expect(await readFile(join(assetStoreDir, asset!.relativePath), 'utf8')).toBe('same-image-bytes')
   })
 })
 
