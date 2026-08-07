@@ -1,4 +1,13 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
+
+function invokeAttachmentStore(channel, pageId, value, onProgress) {
+  const requestId = crypto.randomUUID()
+  const progressChannel = `attachments:progress:${requestId}`
+  const listener = (_event, progress) => onProgress(progress)
+  ipcRenderer.on(progressChannel, listener)
+  return ipcRenderer.invoke(channel, pageId, value, requestId)
+    .finally(() => ipcRenderer.removeListener(progressChannel, listener))
+}
 
 contextBridge.exposeInMainWorld('notetodo', {
   getAppInfo: () => ipcRenderer.invoke('app:info'),
@@ -55,13 +64,19 @@ contextBridge.exposeInMainWorld('notetodo', {
     listJobs: () => ipcRenderer.invoke('import:list-jobs'),
   },
   attachments: {
-    pickAndStore: (pageId, kind, onProgress) => {
-      const requestId = crypto.randomUUID()
-      const channel = `attachments:progress:${requestId}`
-      const listener = (_event, progress) => onProgress(progress)
-      ipcRenderer.on(channel, listener)
-      return ipcRenderer.invoke('attachments:pick-and-store', pageId, kind, requestId)
-        .finally(() => ipcRenderer.removeListener(channel, listener))
+    pickAndStore: (pageId, kind, onProgress) => invokeAttachmentStore('attachments:pick-and-store', pageId, kind, onProgress),
+    storeDropped: async (pageId, files, onProgress) => {
+      const pathBacked = []
+      const memoryBacked = []
+      for (const file of Array.from(files)) {
+        const filePath = webUtils.getPathForFile(file)
+        if (filePath) pathBacked.push(filePath)
+        else memoryBacked.push({ name: file.name || '粘贴图片.png', data: await file.arrayBuffer() })
+      }
+      const stored = []
+      if (pathBacked.length) stored.push(...await invokeAttachmentStore('attachments:store-dropped', pageId, pathBacked, onProgress))
+      if (memoryBacked.length) stored.push(...await invokeAttachmentStore('attachments:store-memory', pageId, memoryBacked, onProgress))
+      return stored
     },
   },
   model: {

@@ -48,6 +48,44 @@ function assertId(id) {
 }
 
 function registerWorkspaceIpc(database) {
+  async function storeAttachmentPaths(event, pageId, filePaths, requestId, requireImages = false, displayNames = []) {
+    assertId(pageId); assertId(requestId)
+    if (!Array.isArray(filePaths) || filePaths.length > 20 || filePaths.some((filePath) => typeof filePath !== 'string' || !path.isAbsolute(filePath))) {
+      throw new TypeError('Invalid local attachment selection.')
+    }
+    if (!filePaths.length) return []
+    const assetRoot = path.join(app.getPath('userData'), 'attachments')
+    const attachments = []
+    const sizes = await Promise.all(filePaths.map((filePath) => fs.promises.stat(filePath).then((stat) => stat.size)))
+    const total = sizes.reduce((sum, size) => sum + size, 0)
+    if (total > 1024 * 1024 * 1024) throw new RangeError('单次附件总大小不能超过 1 GB。')
+    let completedBeforeFile = 0
+    const channel = `attachments:progress:${requestId}`
+    // Sequential disk reads avoid saturating slower SSDs; each individual file
+    // still uses a backpressured stream and reports actual persisted bytes.
+    for (const [index, filePath] of filePaths.entries()) {
+      const attachment = await storeLocalAsset(filePath, assetRoot, {
+        displayName: displayNames[index],
+        onProgress: (completed) => {
+          if (!event.sender.isDestroyed()) event.sender.send(channel, { completed: completedBeforeFile + completed, total, currentName: path.basename(filePath) })
+        },
+      })
+      if (requireImages && !isRenderableImage(attachment)) throw new TypeError(`${attachment.displayName} 不是受支持的图片。`)
+      if (isRenderableImage(attachment)) attachment.hasThumbnail = await createAssetThumbnail(assetRoot, attachment)
+      attachments.push(attachment)
+      completedBeforeFile += attachment.size
+    }
+    database.registerPageAttachments(pageId, attachments)
+    return attachments.map((attachment) => ({
+      hash: attachment.hash,
+      size: attachment.size,
+      mimeType: attachment.mimeType,
+      displayName: attachment.displayName,
+      url: `notetodo-asset://${attachment.hash}/${encodeURIComponent(attachment.displayName)}`,
+      previewUrl: attachment.hasThumbnail ? `notetodo-asset://${attachment.hash}/${encodeURIComponent(attachment.displayName)}?variant=thumbnail` : null,
+    }))
+  }
+
   ipcMain.handle('workspace:load', () => database.loadWorkspace())
   ipcMain.handle('workspace:upsert-page', (_event, page) => {
     assertPage(page)
@@ -128,35 +166,33 @@ function registerWorkspaceIpc(database) {
         : [{ name: '所有文件', extensions: ['*'] }],
     })
     if (selected.canceled || !selected.filePaths.length) return []
-    if (selected.filePaths.length > 20) throw new RangeError('一次最多插入 20 个附件。')
-
+    return storeAttachmentPaths(event, pageId, selected.filePaths, requestId, kind === 'image')
+  })
+  ipcMain.handle('attachments:store-dropped', (event, pageId, filePaths, requestId) => storeAttachmentPaths(event, pageId, filePaths, requestId))
+  ipcMain.handle('attachments:store-memory', async (event, pageId, items, requestId) => {
+    assertId(pageId); assertId(requestId)
+    if (!Array.isArray(items) || items.length > 20) throw new TypeError('Invalid clipboard attachment selection.')
+    const normalized = items.map((item) => {
+      if (!item || typeof item.name !== 'string') throw new TypeError('Invalid clipboard attachment.')
+      const data = Buffer.from(item.data)
+      if (data.length > 25 * 1024 * 1024) throw new RangeError('单个剪贴板附件不能超过 25 MB。')
+      return { name: item.name.slice(0, 240), data }
+    })
+    if (normalized.reduce((sum, item) => sum + item.data.length, 0) > 100 * 1024 * 1024) throw new RangeError('剪贴板附件总大小不能超过 100 MB。')
     const assetRoot = path.join(app.getPath('userData'), 'attachments')
-    // Sequential disk reads avoid saturating slower SSDs when many large files
-    // are selected, while each file itself is copied as a backpressured stream.
-    const attachments = []
-    const sizes = await Promise.all(selected.filePaths.map((filePath) => fs.promises.stat(filePath).then((stat) => stat.size)))
-    const total = sizes.reduce((sum, size) => sum + size, 0)
-    if (total > 1024 * 1024 * 1024) throw new RangeError('单次附件总大小不能超过 1 GB。')
-    let completedBeforeFile = 0
-    const channel = `attachments:progress:${requestId}`
-    for (const filePath of selected.filePaths) {
-      const attachment = await storeLocalAsset(filePath, assetRoot, {
-        onProgress: (completed) => {
-          if (!event.sender.isDestroyed()) event.sender.send(channel, { completed: completedBeforeFile + completed, total, currentName: path.basename(filePath) })
-        },
-      })
-      if (kind === 'image' && !isRenderableImage(attachment)) throw new TypeError(`${attachment.displayName} 不是受支持的图片。`)
-      if (isRenderableImage(attachment)) attachment.hasThumbnail = await createAssetThumbnail(assetRoot, attachment)
-      attachments.push(attachment)
-      completedBeforeFile += attachment.size
+    await fs.promises.mkdir(assetRoot, { recursive: true })
+    const temporaryDir = await fs.promises.mkdtemp(path.join(assetRoot, '.clipboard-'))
+    try {
+      const paths = []
+      for (const item of normalized) {
+        const temporaryPath = path.join(temporaryDir, randomUUID())
+        await fs.promises.writeFile(temporaryPath, item.data, { flag: 'wx' })
+        paths.push(temporaryPath)
+      }
+      return await storeAttachmentPaths(event, pageId, paths, requestId, true, normalized.map((item) => item.name))
+    } finally {
+      await fs.promises.rm(temporaryDir, { recursive: true, force: true })
     }
-    database.registerPageAttachments(pageId, attachments)
-    return attachments.map((attachment) => ({
-      ...attachment,
-      relativePath: undefined,
-      url: `notetodo-asset://${attachment.hash}/${encodeURIComponent(attachment.displayName)}`,
-      previewUrl: attachment.hasThumbnail ? `notetodo-asset://${attachment.hash}/${encodeURIComponent(attachment.displayName)}?variant=thumbnail` : null,
-    }))
   })
   ipcMain.handle('database:load-by-page', (_event, pageId) => {
     assertId(pageId)

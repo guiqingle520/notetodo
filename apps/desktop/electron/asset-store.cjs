@@ -58,7 +58,7 @@ async function storeLocalAsset(sourcePath, assetRoot, options = {}) {
       }
     }
 
-    const displayName = safeDisplayName(path.basename(sourcePath))
+    const displayName = safeDisplayName(options.displayName ?? path.basename(sourcePath))
     const mimeType = detectMimeType(displayName, firstChunk)
     return { hash: digest, size: bytes, mimeType, relativePath, displayName }
   } catch (error) {

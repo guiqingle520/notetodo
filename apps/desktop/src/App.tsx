@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   BookOpen,
   Bot,
   Bookmark,
@@ -14,10 +16,12 @@ import {
   Clock3,
   Code2,
   Command,
+  Copy,
   Cpu,
   FileText,
   FileArchive,
   Grid2X2,
+  GripVertical,
   Heading1,
   Heading2,
   Home,
@@ -65,6 +69,7 @@ import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 import { normalizeEmbedUrl, safeHttpsUrl } from './editor/rich-blocks'
+import { applyBlockAction, type BlockAction } from './editor/block-actions'
 
 type PagePermission = { subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
 type PageComment = { id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }
@@ -73,6 +78,7 @@ type SelectionContext = { from: number; to: number; text: string }
 type AIPatchProposal = { text: string; operation: 'insert-paragraphs' | 'replace-selection'; range?: { from: number; to: number } }
 type ImportInspection = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['pickAndInspect']>>>
 type ImportJob = Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['listJobs']>>[number]
+type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
 
 const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
   spark: Sparkles,
@@ -691,8 +697,23 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [pageRole, setPageRole] = useState<'viewer' | 'commenter' | 'editor' | 'owner'>('owner')
   const [uploadState, setUploadState] = useState<null | { phase: 'working' | 'complete' | 'error'; percent: number; name: string; message: string }>(null)
+  const [dropActive, setDropActive] = useState(false)
+  const [blockToolbar, setBlockToolbar] = useState<null | { index: number; top: number }>(null)
   const uploadBusyRef = useRef(false)
+  const localEditorRef = useRef<Editor | null>(null)
   slashMenuRef.current = slashMenu
+
+  const reportAttachmentProgress = (progress: { completed: number; total: number; currentName: string }) => {
+    const percent = progress.total ? Math.min(100, Math.round(progress.completed / progress.total * 100)) : 0
+    setUploadState({ phase: 'working', percent, name: progress.currentName, message: '正在校验并写入本地资源库' })
+  }
+
+  const insertStoredAttachments = (activeEditor: Editor, attachments: StoredAttachment[], forcedKind?: 'image' | 'file') => {
+    const content = attachments.map((attachment) => forcedKind === 'image' || (!forcedKind && attachment.mimeType.startsWith('image/'))
+      ? { type: 'image', attrs: { src: attachment.url, previewSrc: attachment.previewUrl, alt: attachment.displayName, title: attachment.displayName } }
+      : { type: 'fileAttachment', attrs: { src: attachment.url, name: attachment.displayName, size: attachment.size, mimeType: attachment.mimeType } })
+    activeEditor.chain().focus().insertContent(content).run()
+  }
 
   const pickAndInsertAttachment = async (activeEditor: Editor, kind: 'image' | 'file') => {
     if (uploadBusyRef.current) return
@@ -703,21 +724,33 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
     uploadBusyRef.current = true
     setUploadState({ phase: 'working', percent: 0, name: '', message: '等待选择本地文件…' })
     try {
-      const attachments = await window.notetodo.attachments.pickAndStore(page.id, kind, (progress) => {
-        const percent = progress.total ? Math.min(100, Math.round(progress.completed / progress.total * 100)) : 0
-        setUploadState({ phase: 'working', percent, name: progress.currentName, message: '正在校验并写入本地资源库' })
-      })
+      const attachments = await window.notetodo.attachments.pickAndStore(page.id, kind, reportAttachmentProgress)
       if (!attachments.length) return setUploadState(null)
-      const content = attachments.map((attachment) => kind === 'image'
-        ? { type: 'image', attrs: { src: attachment.url, previewSrc: attachment.previewUrl, alt: attachment.displayName, title: attachment.displayName } }
-        : { type: 'fileAttachment', attrs: { src: attachment.url, name: attachment.displayName, size: attachment.size, mimeType: attachment.mimeType } })
-      activeEditor.chain().focus().insertContent(content).run()
+      insertStoredAttachments(activeEditor, attachments, kind)
       setUploadState({ phase: 'complete', percent: 100, name: attachments.at(-1)?.displayName ?? '', message: `已插入 ${attachments.length} 个${kind === 'image' ? '图片' : '文件'}` })
     } catch (error) {
       const detail = error instanceof Error ? error.message.split('Error: ').at(-1) ?? error.message : '附件写入失败。'
       setUploadState({ phase: 'error', percent: 0, name: '', message: detail })
     } finally {
       uploadBusyRef.current = false
+    }
+  }
+
+  const storeDroppedAttachments = async (activeEditor: Editor, files: File[]) => {
+    if (uploadBusyRef.current || !files.length || !window.notetodo?.attachments) { setDropActive(false); return }
+    uploadBusyRef.current = true
+    setUploadState({ phase: 'working', percent: 0, name: files[0]?.name ?? '', message: '正在接收拖放内容…' })
+    try {
+      const attachments = await window.notetodo.attachments.storeDropped(page.id, files, reportAttachmentProgress)
+      if (!attachments.length) return setUploadState(null)
+      insertStoredAttachments(activeEditor, attachments)
+      setUploadState({ phase: 'complete', percent: 100, name: attachments.at(-1)?.displayName ?? '', message: `已插入 ${attachments.length} 个附件` })
+    } catch (error) {
+      const detail = error instanceof Error ? error.message.split('Error: ').at(-1) ?? error.message : '附件写入失败。'
+      setUploadState({ phase: 'error', percent: 0, name: '', message: detail })
+    } finally {
+      uploadBusyRef.current = false
+      setDropActive(false)
     }
   }
 
@@ -766,6 +799,25 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
         })
         return false
       },
+      handleDrop: (view, event) => {
+        const files = Array.from(event.dataTransfer?.files ?? [])
+        if (!files.length || !window.notetodo?.attachments || !localEditorRef.current?.isEditable) return false
+        event.preventDefault()
+        const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY })
+        const activeEditor = localEditorRef.current
+        if (!activeEditor) return true
+        if (coordinates) activeEditor.commands.setTextSelection(coordinates.pos)
+        void storeDroppedAttachments(activeEditor, files)
+        return true
+      },
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'))
+        if (!files.length || !window.notetodo?.attachments || !localEditorRef.current?.isEditable) return false
+        event.preventDefault()
+        const activeEditor = localEditorRef.current
+        if (activeEditor) void storeDroppedAttachments(activeEditor, files)
+        return true
+      },
     },
     onUpdate: ({ editor: activeEditor }) => {
       const content = activeEditor.getHTML()
@@ -787,6 +839,37 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
       onSelectionChange(selection.empty ? null : { from: selection.from, to: selection.to, text: activeEditor.state.doc.textBetween(selection.from, selection.to, ' ') })
     },
   }, [page.id, syncSession, loadingDocument, pageRole])
+  localEditorRef.current = editor
+
+  const trackHoveredBlock = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!editor?.isEditable) return
+    const root = editor.view.dom
+    let block = event.target as HTMLElement | null
+    while (block?.parentElement && block.parentElement !== root) block = block.parentElement
+    if (!block || block.parentElement !== root) return
+    const index = Array.from(root.children).indexOf(block)
+    if (index < 0) return
+    const documentElement = root.closest('.document')
+    if (!documentElement) return
+    const blockRect = block.getBoundingClientRect()
+    const documentRect = documentElement.getBoundingClientRect()
+    setBlockToolbar((current) => current?.index === index && Math.abs(current.top - (blockRect.top - documentRect.top)) < 1
+      ? current
+      : { index, top: blockRect.top - documentRect.top })
+  }
+
+  const runBlockAction = (action: BlockAction) => {
+    if (!editor || !blockToolbar) return
+    const moved = applyBlockAction(editor, blockToolbar.index, action)
+    if (!moved) return
+    setBlockToolbar((current) => {
+      if (!current) return null
+      if (action === 'move-up') return { ...current, index: Math.max(0, current.index - 1) }
+      if (action === 'move-down') return { ...current, index: Math.min(editor.state.doc.childCount - 1, current.index + 1) }
+      if (action === 'delete') return null
+      return current
+    })
+  }
 
   const runSlashCommand = (command: SlashCommand) => {
     if (!editor || !slashMenu) return
@@ -900,7 +983,25 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
             aria-label="页面标题"
             onChange={(event) => updatePage(page.id, { title: event.target.value })}
           />
-          <EditorContent editor={editor} className="editor-content" />
+          <div
+            className={`editor-stage ${dropActive ? 'is-drop-active' : ''}`}
+            onMouseMove={trackHoveredBlock}
+            onDragEnter={(event) => { if (editor?.isEditable && window.notetodo?.attachments && event.dataTransfer.types.includes('Files')) setDropActive(true) }}
+            onDragOver={(event) => { if (editor?.isEditable && window.notetodo?.attachments && event.dataTransfer.types.includes('Files')) event.preventDefault() }}
+            onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false) }}
+          >
+            <EditorContent editor={editor} className="editor-content" />
+            {dropActive && <div className="editor-drop-guide" aria-hidden="true"><Upload size={18} /><strong>放入工作页</strong><span>图片显示为画面，其他内容成为文件卡片</span></div>}
+          </div>
+          {blockToolbar && editor?.isEditable && (
+            <div className="block-toolbar" style={{ top: blockToolbar.top }} role="toolbar" aria-label="内容块工具栏">
+              <span title="内容块"><GripVertical size={14} /></span>
+              <button onMouseDown={(event) => { event.preventDefault(); runBlockAction('move-up') }} disabled={blockToolbar.index === 0} aria-label="上移内容块"><ArrowUp size={13} /></button>
+              <button onMouseDown={(event) => { event.preventDefault(); runBlockAction('move-down') }} disabled={blockToolbar.index >= editor.state.doc.childCount - 1} aria-label="下移内容块"><ArrowDown size={13} /></button>
+              <button onMouseDown={(event) => { event.preventDefault(); runBlockAction('duplicate') }} aria-label="复制内容块"><Copy size={13} /></button>
+              <button className="is-danger" onMouseDown={(event) => { event.preventDefault(); runBlockAction('delete') }} aria-label="删除内容块"><Trash2 size={13} /></button>
+            </div>
+          )}
           {uploadState && (
             <div className={`asset-progress is-${uploadState.phase}`} role="status" aria-live="polite">
               <span className="asset-progress-mark">{uploadState.phase === 'complete' ? '✓' : uploadState.phase === 'error' ? '!' : <Upload size={13} />}</span>
