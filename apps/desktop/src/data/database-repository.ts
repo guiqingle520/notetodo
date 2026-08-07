@@ -19,6 +19,7 @@ const seedSnapshot: DatabaseSnapshot = {
       { id: 'task-dependency-score', name: '依赖总优先级', type: 'rollup', rollup: { relationPropertyId: 'task-dependencies', targetPropertyId: 'task-score', aggregation: 'sum' } },
       { id: 'task-risk', name: '风险标签', type: 'formula', formula: { expression: 'if([task-dependency-score] >= 3, "需关注", "正常")' } },
       { id: 'task-start', name: '开始日期', type: 'date' },
+      { id: 'task-cover', name: '卡片封面', type: 'url' },
     ],
   },
   records: [
@@ -34,6 +35,7 @@ const seedSnapshot: DatabaseSnapshot = {
     { id: 'roadmap-list', databaseId: 'roadmap-db', name: '紧凑列表', type: 'list', config: {} },
     { id: 'roadmap-calendar', databaseId: 'roadmap-db', name: '交付日历', type: 'calendar', config: { datePropertyId: 'task-due' } },
     { id: 'roadmap-timeline', databaseId: 'roadmap-db', name: '项目时间轴', type: 'timeline', config: { startDatePropertyId: 'task-start', endDatePropertyId: 'task-due' } },
+    { id: 'roadmap-gallery', databaseId: 'roadmap-db', name: '项目画廊', type: 'gallery', config: { coverPropertyId: 'task-cover', visiblePropertyIds: ['task-status', 'task-owner', 'task-due'], cardSize: 'medium' } },
   ],
   activeViewId: 'roadmap-table',
 }

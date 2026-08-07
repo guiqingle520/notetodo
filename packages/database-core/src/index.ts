@@ -35,7 +35,7 @@ export interface DatabaseView {
   id: string
   databaseId: string
   name: string
-  type: 'table' | 'board' | 'list' | 'calendar' | 'timeline'
+  type: 'table' | 'board' | 'list' | 'calendar' | 'timeline' | 'gallery'
   config: {
     filters?: FilterRule[]
     sorts?: SortRule[]
@@ -43,6 +43,9 @@ export interface DatabaseView {
     datePropertyId?: string
     startDatePropertyId?: string
     endDatePropertyId?: string
+    coverPropertyId?: string
+    visiblePropertyIds?: string[]
+    cardSize?: 'small' | 'medium' | 'large'
   }
 }
 
@@ -319,6 +322,26 @@ export function timelineDays(rangeStart: string, count = 28) {
   const start = isoDateMilliseconds(rangeStart)
   if (start === null || !Number.isInteger(count) || count < 1 || count > 366) throw new TypeError('Invalid timeline range.')
   return Array.from({ length: count }, (_, index) => { const date = new Date(start + index * 86_400_000); return { date: date.toISOString().slice(0, 10), day: date.getUTCDate(), weekday: date.getUTCDay(), month: date.getUTCMonth() + 1 } })
+}
+
+/**
+ * Selects a bounded card window for Gallery views. Keeping this operation
+ * separate from React makes the DOM budget explicit and easy to benchmark.
+ */
+export function prepareGalleryRecords(records: DatabaseRecord[], limit = 120) {
+  const safeLimit = Math.max(1, Math.min(300, Math.trunc(limit)))
+  return { records: records.slice(0, safeLimit), truncatedCount: Math.max(0, records.length - safeLimit) }
+}
+
+/**
+ * Allows only renderer-safe local bitmap sources. Remote URLs are deliberately
+ * rejected: database text must not become an unapproved outbound request.
+ */
+export function safeGalleryCover(value: PropertyValue | undefined): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2_000_000) return null
+  if (/^notetodo-asset:\/\/[a-f0-9]{64}(?:\/[^?#]*)?(?:[?#].*)?$/u.test(value)) return value
+  if (/^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=\s]+$/iu.test(value)) return value
+  return null
 }
 
 function isoDateMilliseconds(value: string) {

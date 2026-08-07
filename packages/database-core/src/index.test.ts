@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, layoutTimelineRecords, normalizePropertyValue, queryRecords, resolveDerivedRecords, runDatabaseAutomations, timelineDays, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, layoutTimelineRecords, normalizePropertyValue, prepareGalleryRecords, queryRecords, resolveDerivedRecords, runDatabaseAutomations, safeGalleryCover, timelineDays, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -56,6 +56,18 @@ describe('database query engine', () => {
     expect(layout.items[0]).toMatchObject({ startIndex: 0, endIndex: 17, startsBeforeRange: true })
     expect(timelineDays('2026-08-03', 2)).toEqual([{ date: '2026-08-03', day: 3, weekday: 1, month: 8 }, { date: '2026-08-04', day: 4, weekday: 2, month: 8 }])
     expect(performance.now() - start).toBeLessThan(250)
+  })
+
+  it('caps Gallery cards and accepts only local bitmap cover sources', () => {
+    const many = Array.from({ length: 10_000 }, (_, index) => ({ ...records[0]!, id: String(index) }))
+    const start = performance.now(); const gallery = prepareGalleryRecords(many)
+    expect(gallery.records).toHaveLength(120)
+    expect(gallery.truncatedCount).toBe(9_880)
+    expect(safeGalleryCover('notetodo-asset://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cover.webp')).toContain('notetodo-asset://')
+    expect(safeGalleryCover('data:image/png;base64,iVBORw0KGgo=')).toContain('data:image/png')
+    expect(safeGalleryCover('https://tracker.example/cover.png')).toBeNull()
+    expect(safeGalleryCover('data:image/svg+xml,<svg/>')).toBeNull()
+    expect(performance.now() - start).toBeLessThan(100)
   })
 
   it('evaluates bounded formulas without executing arbitrary JavaScript', () => {

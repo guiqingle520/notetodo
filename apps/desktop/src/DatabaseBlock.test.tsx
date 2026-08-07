@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema } from '@notetodo/database-core'
-import { TimelineView } from './DatabaseBlock'
+import { GalleryView, TimelineView } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -28,5 +28,23 @@ describe('TimelineView', () => {
     fireEvent(track, drop)
     expect(updateCell).toHaveBeenNthCalledWith(1, 'task-1', 'start', '2026-08-05')
     expect(updateCell).toHaveBeenNthCalledWith(2, 'task-1', 'end', '2026-08-07')
+  })
+})
+
+describe('GalleryView', () => {
+  it('rejects remote covers and advances the card status', () => {
+    const updateCell = vi.fn()
+    const gallerySchema: DatabaseSchema = { id: 'gallery', name: 'Gallery', properties: [
+      { id: 'title', name: 'Title', type: 'title' },
+      { id: 'status', name: 'Status', type: 'select' },
+      { id: 'owner', name: 'Owner', type: 'text' },
+      { id: 'cover', name: 'Cover', type: 'url' },
+    ] }
+    const galleryRecord: DatabaseRecord = { id: 'card-1', values: { title: 'Editorial card', status: 'todo', owner: 'Lin', cover: 'https://tracker.example/image.png' }, createdAt: '', updatedAt: '' }
+    const { container, getByRole } = render(<GalleryView records={[galleryRecord]} schema={gallerySchema} coverPropertyId="cover" visiblePropertyIds={['owner']} updateCell={updateCell} />)
+    expect(container.querySelector('.gallery-generated')).not.toBeNull()
+    expect(container.querySelector('.gallery-cover img')).toBeNull()
+    fireEvent.click(getByRole('button', { name: /推进/ }))
+    expect(updateCell).toHaveBeenCalledWith('card-1', 'status', 'doing')
   })
 })

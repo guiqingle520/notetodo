@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from 'react'
-import { Activity, ArrowUpDown, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Filter, Link2, List, Plus, RotateCcw, Sigma, Table2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, groupRecordsByDate, layoutTimelineRecords, queryRecords, resolveDerivedRecords, timelineDays, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type PropertyValue } from '@notetodo/database-core'
+import { Activity, ArrowRight, ArrowUpDown, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Filter, Images, Link2, List, Plus, RotateCcw, Sigma, Table2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, groupRecordsByDate, layoutTimelineRecords, prepareGalleryRecords, queryRecords, resolveDerivedRecords, safeGalleryCover, timelineDays, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type PropertyValue } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -86,7 +86,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       <div className="database-viewbar">
         <div className="database-tabs">
           {snapshot.views.map((view) => {
-            const Icon = view.type === 'table' ? Table2 : view.type === 'board' ? Columns3 : view.type === 'calendar' ? CalendarDays : view.type === 'timeline' ? ChartNoAxesGantt : List
+            const Icon = view.type === 'table' ? Table2 : view.type === 'board' ? Columns3 : view.type === 'calendar' ? CalendarDays : view.type === 'timeline' ? ChartNoAxesGantt : view.type === 'gallery' ? Images : List
             return <button className={view.id === activeView.id ? 'is-active' : ''} key={view.id} onClick={() => setView(view.id)}><Icon size={13} />{view.name}</button>
           })}
         </div>
@@ -103,6 +103,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
       {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
       {activeView.type === 'timeline' && <TimelineView records={records} schema={snapshot.schema} startDatePropertyId={activeView.config.startDatePropertyId} endDatePropertyId={activeView.config.endDatePropertyId} updateCell={updateCell} />}
+      {activeView.type === 'gallery' && <GalleryView records={records} schema={snapshot.schema} coverPropertyId={activeView.config.coverPropertyId} visiblePropertyIds={activeView.config.visiblePropertyIds} cardSize={activeView.config.cardSize} updateCell={updateCell} />}
       {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
         if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
         else setAutomations((current) => [...current.filter((item) => item.id !== rule.id), rule])
@@ -117,6 +118,44 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       }} />}
     </section>
   )
+}
+
+export function GalleryView({ records, schema, coverPropertyId, visiblePropertyIds, cardSize = 'medium', updateCell }: { records: DatabaseRecord[]; schema: DatabaseSchema; coverPropertyId?: string; visiblePropertyIds?: string[]; cardSize?: 'small' | 'medium' | 'large'; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const titleProperty = schema.properties.find((property) => property.type === 'title')
+  const statusProperty = schema.properties.find((property) => property.id === 'task-status' && property.type === 'select') ?? schema.properties.find((property) => property.type === 'select')
+  const metadata = (visiblePropertyIds ?? []).map((id) => schema.properties.find((property) => property.id === id)).filter((property): property is DatabaseProperty => Boolean(property && property.id !== statusProperty?.id)).slice(0, 3)
+  const gallery = useMemo(() => prepareGalleryRecords(records), [records])
+
+  if (!titleProperty) return <div className="gallery-missing"><Images size={22} /><strong>需要标题属性</strong><span>Gallery 视图使用标题属性生成卡片。</span></div>
+  return <div className={`database-gallery size-${cardSize}`}>
+    <header className="gallery-masthead"><div><small>PROJECT CONTACT SHEET / {String(gallery.records.length).padStart(2, '0')}</small><strong>把工作摊开来看</strong></div><p>以卡片浏览项目脉络；封面缺失时使用稳定的本地生成图形。</p></header>
+    <div className="gallery-grid">{gallery.records.map((record, index) => <GalleryCard key={record.id} record={record} index={index} titleProperty={titleProperty} statusProperty={statusProperty} metadata={metadata} coverPropertyId={coverPropertyId} updateCell={updateCell} />)}</div>
+    {gallery.truncatedCount > 0 && <footer className="gallery-foot">已显示前 120 项 · 另有 {gallery.truncatedCount} 项，请使用筛选缩小范围</footer>}
+  </div>
+}
+
+function GalleryCard({ record, index, titleProperty, statusProperty, metadata, coverPropertyId, updateCell }: { record: DatabaseRecord; index: number; titleProperty: DatabaseProperty; statusProperty?: DatabaseProperty; metadata: DatabaseProperty[]; coverPropertyId?: string; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const [coverFailed, setCoverFailed] = useState(false)
+  const cover = coverFailed ? null : safeGalleryCover(coverPropertyId ? record.values[coverPropertyId] : undefined)
+  const status = String(statusProperty ? record.values[statusProperty.id] ?? 'todo' : 'todo')
+  const title = String(record.values[titleProperty.id] || '无标题')
+  const initials = title.replace(/\s+/gu, '').slice(0, 2).toLocaleUpperCase()
+  const nextStatus = status === 'todo' ? 'doing' : status === 'doing' ? 'done' : 'todo'
+  return <article className={`gallery-card status-${status}`}>
+    <div className={`gallery-cover motif-${index % 6}`}>
+      {cover ? <img src={cover} alt="" loading="lazy" decoding="async" onError={() => setCoverFailed(true)} /> : <div className="gallery-generated" aria-hidden="true"><i /><b>{initials}</b><em>{String(index + 1).padStart(2, '0')}</em></div>}
+      <span>{statusLabel(status)}</span>
+    </div>
+    <div className="gallery-card-body"><small>FOLIO {String(index + 1).padStart(2, '0')}</small><strong>{title}</strong><dl>{metadata.map((property) => <div key={property.id}><dt>{property.name}</dt><dd>{formatGalleryValue(record.values[property.id], property)}</dd></div>)}</dl></div>
+    {statusProperty && <button aria-label={`推进“${title}”的状态`} title="推进状态" onClick={() => updateCell(record.id, statusProperty.id, nextStatus)}><span>{statusLabel(status)}</span><ArrowRight size={13} /></button>}
+  </article>
+}
+
+function statusLabel(value: string) { return statuses.find((status) => status.id === value)?.label ?? value }
+function formatGalleryValue(value: PropertyValue | undefined, property: DatabaseProperty) {
+  if (value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) return '—'
+  if (property.type === 'date' && typeof value === 'string') return value.slice(5).replace('-', '.')
+  return Array.isArray(value) ? value.join('、') : String(value)
 }
 
 const TIMELINE_DAYS = 28

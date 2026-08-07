@@ -507,6 +507,7 @@ class WorkspaceDatabase {
       ['task-dependency-score', '依赖总优先级', 'rollup', 6, JSON.stringify({ rollup: { relationPropertyId: 'task-dependencies', targetPropertyId: 'task-score', aggregation: 'sum' } })],
       ['task-risk', '风险标签', 'formula', 7, JSON.stringify({ formula: { expression: 'if([task-dependency-score] >= 3, "需关注", "正常")' } })],
       ['task-start', '开始日期', 'date', 8, '{}'],
+      ['task-cover', '卡片封面', 'url', 9, '{}'],
     ]
     const records = [
       ['task-1', 0, ['编辑器交互收尾', 'doing', 'Lin', '2026-08-08', 3, ['task-2'], null, null, '2026-08-03']],
@@ -539,6 +540,7 @@ class WorkspaceDatabase {
       insertView.run('roadmap-list', 'roadmap-db', '紧凑列表', 'list', 2, '{}')
       insertView.run('roadmap-calendar', 'roadmap-db', '交付日历', 'calendar', 3, JSON.stringify({ datePropertyId: 'task-due' }))
       insertView.run('roadmap-timeline', 'roadmap-db', '项目时间轴', 'timeline', 4, JSON.stringify({ startDatePropertyId: 'task-start', endDatePropertyId: 'task-due' }))
+      insertView.run('roadmap-gallery', 'roadmap-db', '项目画廊', 'gallery', 5, JSON.stringify({ coverPropertyId: 'task-cover', visiblePropertyIds: ['task-status', 'task-owner', 'task-due'], cardSize: 'medium' }))
       this.database.exec('COMMIT')
     } catch (error) {
       this.database.exec('ROLLBACK')
@@ -560,6 +562,7 @@ class WorkspaceDatabase {
       ['task-dependency-score', '依赖总优先级', 'rollup', 6, JSON.stringify({ rollup: { relationPropertyId: 'task-dependencies', targetPropertyId: 'task-score', aggregation: 'sum' } })],
       ['task-risk', '风险标签', 'formula', 7, JSON.stringify({ formula: { expression: 'if([task-dependency-score] >= 3, "需关注", "正常")' } })],
       ['task-start', '开始日期', 'date', 8, '{}'],
+      ['task-cover', '卡片封面', 'url', 9, '{}'],
     ]
     const insertProperty = this.database.prepare(`
       INSERT OR IGNORE INTO database_properties(id, database_id, name, type, position, config_json)
@@ -595,6 +598,10 @@ class WorkspaceDatabase {
         INSERT OR IGNORE INTO database_views(id, database_id, name, type, position, config_json)
         VALUES ('roadmap-timeline', 'roadmap-db', '项目时间轴', 'timeline', 4, ?)
       `).run(JSON.stringify({ startDatePropertyId: 'task-start', endDatePropertyId: 'task-due' }))
+      this.database.prepare(`
+        INSERT OR IGNORE INTO database_views(id, database_id, name, type, position, config_json)
+        VALUES ('roadmap-gallery', 'roadmap-db', '项目画廊', 'gallery', 5, ?)
+      `).run(JSON.stringify({ coverPropertyId: 'task-cover', visiblePropertyIds: ['task-status', 'task-owner', 'task-due'], cardSize: 'medium' }))
       this.database.prepare(`
         INSERT OR IGNORE INTO database_automations(id, database_id, name, enabled, trigger_property_id, condition_json, actions_json, created_at, updated_at)
         VALUES ('completed-task-priority', 'roadmap-db', '完成后归档优先级', 1, 'task-status', ?, ?, ?, ?)
