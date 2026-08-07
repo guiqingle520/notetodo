@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "npm run dev --workspace @notetodo/desktop",
     "dev:api": "npm run dev --workspace @notetodo/platform-api",
+    "dev:mcp": "npm run dev --workspace @notetodo/mcp-server",
+    "build:mcp": "npm run build --workspace @notetodo/mcp-server",
     "build": "npm run build --workspace @notetodo/desktop",
     "package:dir": "npm run package:dir --workspace @notetodo/desktop",
     "package:win": "npm run package:win --workspace @notetodo/desktop",

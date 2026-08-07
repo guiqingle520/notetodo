@@ -59,3 +59,45 @@ Invoke-RestMethod http://127.0.0.1:4790/v1/pages -Headers $headers
 数据库工具栏的“自动化”入口提供本地规则编辑器。规则以属性变更为触发器，可组合等于、不等于、包含、为空、非空和数值大小条件，再写入一个或多个非派生属性。公式与 Rollup 属性始终只读，单条规则最多 20 个动作，单次规划最多处理 50 条规则。
 
 主编辑和自动化规划在同一事务中执行，每条规则使用独立 Savepoint：动作失败不会丢失用户刚完成的编辑。执行磁带保存触发输入、规则快照、计划输出、状态和错误；修正规则后可从失败记录重放原始输入，重放成功或失败都会生成新的关联记录。
+
+## MCP Server
+
+NoteTodo 提供本地 stdio MCP Server，兼容 2025 与 2026 协议客户端。它不会监听网络端口，stdout 只承载 MCP 帧；每次工具调用仍使用桌面端签发的 API 令牌执行作用域检查，并写入相同的 API 审计账本。
+
+先签发所需的最小权限令牌，再构建 Server：
+
+```powershell
+npm run build:mcp
+```
+
+将以下配置加入支持 stdio MCP 的模型客户端，并替换绝对路径、数据库位置和一次性显示的令牌：
+
+```json
+{
+  "mcpServers": {
+    "notetodo": {
+      "command": "node",
+      "args": ["D:\\dev\\notetodo\\apps\\mcp-server\\dist\\index.js"],
+      "env": {
+        "NOTETODO_DATABASE_PATH": "C:\\Users\\you\\AppData\\Roaming\\notetodo\\workspace.db",
+        "NOTETODO_API_TOKEN": "ntd_v1_..."
+      }
+    }
+  }
+}
+```
+
+保护客户端配置文件，因为它包含令牌明文。推荐为每个模型客户端单独签发令牌；不需要写入时只授予 `pages:read` 和 `databases:read`。
+
+首批工具：
+
+| 工具 | 所需作用域 | 说明 |
+| --- | --- | --- |
+| `notetodo_list_pages` | `pages:read` | 列出或搜索页面，返回短摘要 |
+| `notetodo_get_page` | `pages:read` | 有界读取页面正文 |
+| `notetodo_create_page` | `pages:write` | 创建页面与子页面 |
+| `notetodo_update_page` | `pages:write` | 更新标题或正文 |
+| `notetodo_get_database` | `databases:read` | 有界读取数据库记录 |
+| `notetodo_update_database_cell` | `databases:write` | 类型安全地更新单元格 |
+
+工具返回 MCP 文本内容和 `structuredContent`。页面正文最多返回 200,000 字符，数据库单次最多返回 200 条记录，避免模型上下文被意外撑满。写入仍会触发页面历史、检索重建、Webhook 和数据库自动化。

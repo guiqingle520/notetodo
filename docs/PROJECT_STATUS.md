@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Open Platform & External Automation Alpha — **进行中（3/4）**
+Open Platform & External Automation Alpha — **已完成**
 
 ### 已交付
 
@@ -98,11 +98,14 @@ Open Platform & External Automation Alpha — **进行中（3/4）**
 - 用户可编辑“当 / 如果 / 就”规则，支持属性变更触发、七类条件和类型化属性写入。
 - 自动化逐规则 Savepoint 隔离，失败不回滚用户编辑，并保留错误、输入、输出与规则快照。
 - 失败执行可基于捕获输入重放；重放结果继续留档，规则 ID 不能跨数据库覆盖。
+- 基于官方 TypeScript SDK v2 的本地 stdio MCP Server，同时兼容 2025/2026 协议协商。
+- 六个页面/数据库 MCP 工具、结构化输出、响应上限、读写标注与统一参数校验。
+- MCP 调用复用 API 令牌作用域和审计账本；真实协议客户端已完成 SQLite 读写闭环。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：24 个测试文件、102 个测试通过。
+- Vitest：26 个测试文件、108 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -161,7 +164,16 @@ Open Platform & External Automation Alpha
 1. 工作区 REST API 与细粒度令牌权限已交付 Alpha；后续补充分页、ETag 与公开 OpenAPI 文档。
 2. 可签名、可重试、可观测的 Webhook Outbox 已交付 Alpha；后续增加手动死信重放。
 3. 用户可编辑自动化规则、执行日志和失败重放已交付 Alpha。
-4. MCP Server 读写工作区与自定义模型工具调用闭环。
+4. MCP Server 读写工作区与自定义模型工具调用闭环已交付 Alpha。
+
+## 后续里程碑
+
+Database Views & Layout Beta
+
+1. Calendar、Timeline 和 Gallery 数据库视图。
+2. 多条件筛选、排序、分组与已保存视图配置。
+3. 页面多栏布局、页面提及和关联数据库视图。
+4. 大型数据库增量计算、虚拟化和交互性能压测。
 
 ## 已知技术债
 
