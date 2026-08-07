@@ -19,6 +19,11 @@ contextBridge.exposeInMainWorld('notetodo', {
     restorePage: (id) => ipcRenderer.invoke('workspace:restore-page', id),
     search: (query) => ipcRenderer.invoke('workspace:search', query),
   },
+  history: {
+    list: (pageId) => ipcRenderer.invoke('history:list', pageId),
+    get: (pageId, versionId) => ipcRenderer.invoke('history:get', pageId, versionId),
+    restore: (pageId, versionId) => ipcRenderer.invoke('history:restore', pageId, versionId),
+  },
   database: {
     loadByPage: (pageId) => ipcRenderer.invoke('database:load-by-page', pageId),
     updateCell: (recordId, propertyId, value) => ipcRenderer.invoke('database:update-cell', recordId, propertyId, value),

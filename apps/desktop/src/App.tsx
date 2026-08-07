@@ -25,6 +25,7 @@ import {
   Heading1,
   Heading2,
   Home,
+  History as HistoryIcon,
   Inbox,
   Image as ImageIcon,
   KeyRound,
@@ -70,6 +71,7 @@ import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/na
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 import { normalizeEmbedUrl, safeHttpsUrl } from './editor/rich-blocks'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
+import { diffHistoryHtml, historyTextLines } from './data/page-history'
 
 type PagePermission = { subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
 type PageComment = { id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }
@@ -79,6 +81,8 @@ type AIPatchProposal = { text: string; operation: 'insert-paragraphs' | 'replace
 type ImportInspection = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['pickAndInspect']>>>
 type ImportJob = Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['listJobs']>>[number]
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
+type PageVersionSummary = Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['list']>>[number]
+type PageVersionDetail = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['get']>>>
 
 const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
   spark: Sparkles,
@@ -558,6 +562,85 @@ function CommentsPanel({ pageId, editor, onClose }: { pageId: string; editor: Ed
   return <aside className="comments-panel"><header><div><MessageSquare size={16} /><span><strong>页面讨论</strong><small>{comments.filter((comment) => !comment.resolvedAt).length} 条未解决</small></span></div><button onClick={onClose}><X size={16} /></button></header><div className="comment-composer">{quote && <blockquote>“{quote}”</blockquote>}<textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={quote ? '评论所选内容，支持 @提及…' : '添加页面评论，输入 @ 提及成员…'} />{members.length > 0 && <div className="mention-members"><span>提及</span>{members.slice(0, 5).map((member) => <button key={member.subjectId} onClick={() => setBody((current) => `${current}${current && !current.endsWith(' ') ? ' ' : ''}@${member.displayName} `)}>@{member.displayName}</button>)}</div>}<button onClick={() => void create()} disabled={!body.trim()}>发布评论</button></div><div className="comment-list">{comments.map((comment) => <article className={comment.resolvedAt ? 'is-resolved' : ''} key={comment.id}>{comment.anchor?.quote && <blockquote>“{comment.anchor.quote}”</blockquote>}<header><i>{comment.authorName.slice(0, 1)}</i><span><strong>{comment.authorName}</strong><small>{new Date(comment.createdAt).toLocaleString('zh-CN')}</small></span></header><p>{comment.body}</p>{!comment.resolvedAt && <button onClick={() => void resolve(comment.id)}><CheckCircle2 size={12} />标记已解决</button>}</article>)}</div></aside>
 }
 
+function PageHistoryPanel({ page, canRestore, onRestored, onClose }: { page: WorkspacePage; canRestore: boolean; onRestored: (page: WorkspacePage) => void; onClose: () => void }) {
+  const [versions, setVersions] = useState<PageVersionSummary[]>([])
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [detail, setDetail] = useState<PageVersionDetail | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const refresh = async () => {
+    if (!window.notetodo?.history) return
+    const items = await window.notetodo.history.list(page.id)
+    setVersions(items)
+    setSelectedId((current) => current && items.some((item) => item.id === current) ? current : items[0]?.id ?? null)
+  }
+
+  useEffect(() => { void refresh().catch((reason) => setError(reason instanceof Error ? reason.message : '历史记录读取失败。')) }, [page.id])
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [onClose])
+  useEffect(() => {
+    let active = true
+    setDetail(null)
+    if (selectedId && window.notetodo?.history) void window.notetodo.history.get(page.id, selectedId).then((version) => { if (active) setDetail(version) })
+    return () => { active = false }
+  }, [page.id, selectedId])
+
+  const diff = useMemo(() => detail ? diffHistoryHtml(detail.content, page.content) : [], [detail?.id, page.content])
+  const additions = diff.filter((line) => line.kind === 'added').length
+  const removals = diff.filter((line) => line.kind === 'removed').length
+  const restore = async () => {
+    if (!selectedId || !canRestore || !window.notetodo?.history) return
+    setBusy(true); setError('')
+    try {
+      const restored = await window.notetodo.history.restore(page.id, selectedId)
+      onRestored(restored)
+      await refresh()
+    } catch (reason) { setError(reason instanceof Error ? reason.message.split('Error: ').at(-1) ?? reason.message : '版本恢复失败。') }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div className="modal-backdrop history-backdrop" onMouseDown={onClose}>
+      <section className="history-panel" role="dialog" aria-modal="true" aria-label="页面历史" onMouseDown={(event) => event.stopPropagation()}>
+        <header>
+          <div><HistoryIcon size={17} /><span><strong>版本档案册</strong><small>{page.title} · 最多保留 200 版</small></span></div>
+          <button onClick={onClose} aria-label="关闭页面历史"><X size={16} /></button>
+        </header>
+        <div className="history-layout">
+          <aside className="history-timeline">
+            <div><span>自动存档</span><small>{versions.length} 版</small></div>
+            {versions.map((version, index) => (
+              <button className={selectedId === version.id ? 'is-selected' : ''} key={version.id} onClick={() => setSelectedId(version.id)}>
+                <i>{String(versions.length - index).padStart(2, '0')}</i>
+                <span><strong>{version.reason === 'restore' ? '恢复前快照' : version.title}</strong><small>{new Date(version.createdAt).toLocaleString('zh-CN')}</small><em>{historyTextLines(version.preview, 1)[0] ?? '空白页面'}</em></span>
+              </button>
+            ))}
+            {!versions.length && <div className="history-empty"><Clock3 size={22} /><strong>还没有历史版本</strong><span>编辑页面后会自动留下首个快照。</span></div>}
+          </aside>
+          <main className="history-proof">
+            {detail ? <>
+              <div className="history-proof-head">
+                <span><small>ARCHIVE #{detail.id}</small><strong>{detail.title}</strong></span>
+                <div><em className="is-added">+{additions}</em><em className="is-removed">−{removals}</em></div>
+              </div>
+              {detail.title !== page.title && <div className="history-title-diff"><del>{detail.title}</del><ins>{page.title}</ins></div>}
+              <div className="history-diff" aria-label="版本文本差异">
+                {diff.map((line, index) => <div className={`is-${line.kind}`} key={`${index}-${line.text}`}><i>{line.kind === 'added' ? '+' : line.kind === 'removed' ? '−' : '·'}</i><span>{line.text}</span></div>)}
+                {!diff.length && <div className="history-no-change">此版本与当前正文没有文本差异。</div>}
+              </div>
+              <footer>
+                <span>{canRestore ? '恢复前会先保存当前页面，因此本操作可以撤回。' : '当前角色只能浏览历史，无法恢复。'}</span>
+                <button disabled={!canRestore || busy} onClick={() => void restore()}><RotateCcw size={13} />{busy ? '正在恢复…' : '恢复此版本'}</button>
+              </footer>
+            </> : <div className="history-loading">{versions.length ? '正在展开档案…' : '编辑页面后，版本会陈列在这里。'}</div>}
+            {error && <p className="history-error">{error}</p>}
+          </main>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function AIPanel({ onClose, selectionContext, onApplyPatch, onUndoPatch }: { onClose: () => void; selectionContext: SelectionContext | null; onApplyPatch: (patch: AIPatchProposal) => boolean; onUndoPatch: () => void }) {
   const { pages, activePageId } = useWorkspace()
   const activePage = pages.find((page) => page.id === activePageId)
@@ -695,6 +778,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
   const [collaborators, setCollaborators] = useState<RemoteCursor[]>([])
   const [shareOpen, setShareOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [pageRole, setPageRole] = useState<'viewer' | 'commenter' | 'editor' | 'owner'>('owner')
   const [uploadState, setUploadState] = useState<null | { phase: 'working' | 'complete' | 'error'; percent: number; name: string; message: string }>(null)
   const [dropActive, setDropActive] = useState(false)
@@ -966,6 +1050,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
             <span className="presence-avatars">{collaborators.slice(0, 3).map((person) => <i key={person.clientId} style={{ background: person.color }} title={person.name}>{person.name.slice(0, 1)}</i>)}</span>
           </div>
           <button onClick={() => setCommentsOpen(true)} aria-label="页面评论"><MessageSquare size={15} /></button>
+          <button onClick={() => setHistoryOpen(true)} aria-label="页面历史"><HistoryIcon size={15} /></button>
           <button onClick={() => setShareOpen(true)}>分享</button>
           <button className={page.favorite ? 'is-starred' : ''} onClick={() => toggleFavorite(page.id)}><Star size={17} fill={page.favorite ? 'currentColor' : 'none'} /></button>
           <button aria-label="归档当前页面" onClick={() => archivePage(page.id)}><Trash2 size={16} /></button>
@@ -1041,6 +1126,15 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
       </div>
       {shareOpen && <SharePanel pageId={page.id} onClose={() => setShareOpen(false)} />}
       {commentsOpen && <CommentsPanel pageId={page.id} editor={editor} onClose={() => setCommentsOpen(false)} />}
+      {historyOpen && <PageHistoryPanel
+        page={page}
+        canRestore={Boolean(editor?.isEditable)}
+        onClose={() => setHistoryOpen(false)}
+        onRestored={(restored) => {
+          editor?.commands.setContent(restored.content)
+          updatePage(restored.id, { title: restored.title, content: restored.content })
+        }}
+      />}
     </main>
   )
 }

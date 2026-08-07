@@ -2,7 +2,7 @@ const { DatabaseSync } = require('node:sqlite')
 const { randomUUID } = require('node:crypto')
 const seedWorkspace = require('../shared/seed-workspace.json')
 
-const LATEST_SCHEMA_VERSION = 7
+const LATEST_SCHEMA_VERSION = 8
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -278,6 +278,30 @@ class WorkspaceDatabase {
       `)
     }
 
+    if (currentVersion < 8) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE page_versions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          reason TEXT NOT NULL CHECK(reason IN ('autosave', 'restore')),
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX page_versions_page_time ON page_versions(page_id, created_at DESC, id DESC);
+        CREATE TABLE page_version_attachments (
+          version_id INTEGER NOT NULL REFERENCES page_versions(id) ON DELETE CASCADE,
+          attachment_hash TEXT NOT NULL REFERENCES attachments(hash) ON DELETE CASCADE,
+          PRIMARY KEY(version_id, attachment_hash)
+        );
+        CREATE INDEX page_version_attachments_hash ON page_version_attachments(attachment_hash);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '8')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
     if (currentVersion > LATEST_SCHEMA_VERSION) {
       throw new Error(`Workspace schema ${currentVersion} is newer than this app supports.`)
     }
@@ -439,6 +463,8 @@ class WorkspaceDatabase {
   upsertPage(page) {
     this.database.exec('BEGIN IMMEDIATE')
     try {
+      const current = this.database.prepare('SELECT id, title, content FROM pages WHERE id=?').get(page.id)
+      if (current && (current.title !== page.title || current.content !== page.content)) this.captureAutomaticVersion(current)
       this.statements.upsertPage.run(
         page.id,
         page.title,
@@ -579,12 +605,62 @@ class WorkspaceDatabase {
     for (const hash of referenced) if (!existingByHash.has(hash)) insertReference.run(pageId, hash, `document/${hash}`, '附件', hash)
   }
 
+  captureAutomaticVersion(page) {
+    const latest = this.database.prepare('SELECT created_at AS createdAt FROM page_versions WHERE page_id=? ORDER BY created_at DESC, id DESC LIMIT 1').get(page.id)
+    if (latest && Date.now() - Date.parse(latest.createdAt) < 5 * 60_000) return null
+    return this.insertPageVersion(page, 'autosave')
+  }
+
+  insertPageVersion(page, reason) {
+    const result = this.database.prepare('INSERT INTO page_versions(page_id, title, content, reason, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(page.id, page.title, page.content, reason, new Date().toISOString())
+    const versionId = Number(result.lastInsertRowid)
+    const insertReference = this.database.prepare('INSERT OR IGNORE INTO page_version_attachments(version_id, attachment_hash) SELECT ?, hash FROM attachments WHERE hash=?')
+    for (const hash of extractAttachmentHashes(page.content)) insertReference.run(versionId, hash)
+    this.database.prepare(`DELETE FROM page_versions WHERE page_id=? AND id NOT IN (
+      SELECT id FROM page_versions WHERE page_id=? ORDER BY created_at DESC, id DESC LIMIT 200
+    )`).run(page.id, page.id)
+    return versionId
+  }
+
+  listPageVersions(pageId, limit = 100) {
+    const boundedLimit = Math.min(200, Math.max(1, Number(limit) || 100))
+    return this.database.prepare(`
+      SELECT id, page_id AS pageId, title, reason, created_at AS createdAt,
+             length(content) AS contentLength, substr(content, 1, 500) AS preview
+      FROM page_versions WHERE page_id=? ORDER BY created_at DESC, id DESC LIMIT ?
+    `).all(pageId, boundedLimit)
+  }
+
+  getPageVersion(pageId, versionId) {
+    return this.database.prepare('SELECT id, page_id AS pageId, title, content, reason, created_at AS createdAt FROM page_versions WHERE page_id=? AND id=?').get(pageId, versionId) ?? null
+  }
+
+  restorePageVersion(pageId, versionId) {
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const current = this.database.prepare('SELECT * FROM pages WHERE id=?').get(pageId)
+      const version = this.getPageVersion(pageId, versionId)
+      if (!current || !version) throw new Error('历史版本不存在。')
+      this.insertPageVersion({ id: pageId, title: current.title, content: current.content }, 'restore')
+      const now = new Date().toISOString()
+      this.database.prepare('UPDATE pages SET title=?, content=?, updated_at=? WHERE id=?').run(version.title, version.content, now, pageId)
+      this.reconcilePageAttachments(pageId, version.content)
+      this.database.exec('COMMIT')
+      return mapPageRow(this.database.prepare('SELECT * FROM pages WHERE id=?').get(pageId))
+    } catch (error) {
+      this.database.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   listUnreferencedAttachments(cutoff) {
     return this.database.prepare(`
       SELECT a.hash, a.relative_path AS relativePath
       FROM attachments a
       LEFT JOIN page_attachments pa ON pa.attachment_hash = a.hash
-      WHERE pa.attachment_hash IS NULL AND a.created_at < ?
+      LEFT JOIN page_version_attachments pva ON pva.attachment_hash = a.hash
+      WHERE pa.attachment_hash IS NULL AND pva.attachment_hash IS NULL AND a.created_at < ?
       ORDER BY a.created_at
     `).all(cutoff)
   }
@@ -594,6 +670,7 @@ class WorkspaceDatabase {
       DELETE FROM attachments
       WHERE hash=? AND created_at < ?
         AND NOT EXISTS (SELECT 1 FROM page_attachments WHERE attachment_hash=attachments.hash)
+        AND NOT EXISTS (SELECT 1 FROM page_version_attachments WHERE attachment_hash=attachments.hash)
     `).run(hash, cutoff).changes > 0
   }
 

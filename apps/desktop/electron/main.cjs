@@ -117,6 +117,20 @@ function registerWorkspaceIpc(database) {
     if (typeof query !== 'string' || query.length > 500) throw new TypeError('Invalid search query.')
     return database.searchPages(query)
   })
+  ipcMain.handle('history:list', (_event, pageId) => { assertId(pageId); return database.listPageVersions(pageId) })
+  ipcMain.handle('history:get', (_event, pageId, versionId) => {
+    assertId(pageId)
+    if (!Number.isSafeInteger(versionId) || versionId < 1) throw new TypeError('Invalid page version.')
+    return database.getPageVersion(pageId, versionId)
+  })
+  ipcMain.handle('history:restore', (_event, pageId, versionId) => {
+    assertId(pageId)
+    if (!Number.isSafeInteger(versionId) || versionId < 1) throw new TypeError('Invalid page version.')
+    const userId = database.getSetting('collaboration_user_id')
+    const role = userId ? database.getPageRole(pageId, userId) : null
+    if (role && !['editor', 'owner'].includes(role)) throw new Error('当前角色无权恢复页面历史。')
+    return database.restorePageVersion(pageId, versionId)
+  })
   ipcMain.handle('import:pick-and-inspect', async () => {
     const selected = await dialog.showOpenDialog({
       title: '导入 Notion 工作区',

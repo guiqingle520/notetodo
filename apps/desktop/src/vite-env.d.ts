@@ -11,6 +11,11 @@ interface Window {
       restorePage: (id: string) => Promise<void>
       search: (query: string) => Promise<import('./domain').WorkspacePage[]>
     }
+    history: {
+      list: (pageId: string) => Promise<Array<{ id: number; pageId: string; title: string; reason: 'autosave' | 'restore'; createdAt: string; contentLength: number; preview: string }>>
+      get: (pageId: string, versionId: number) => Promise<null | { id: number; pageId: string; title: string; content: string; reason: 'autosave' | 'restore'; createdAt: string }>
+      restore: (pageId: string, versionId: number) => Promise<import('./domain').WorkspacePage>
+    }
     database: {
       loadByPage: (pageId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot | null>
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<void>

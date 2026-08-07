@@ -44,6 +44,9 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     registerPageAttachments(pageId: string, attachments: Array<{ hash: string; size: number; mimeType: string; relativePath: string; displayName: string }>): void
     listUnreferencedAttachments(cutoff: string): Array<{ hash: string; relativePath: string }>
     deleteAttachmentIfUnreferenced(hash: string, cutoff: string): boolean
+    listPageVersions(pageId: string, limit?: number): Array<{ id: number; pageId: string; title: string; reason: 'autosave' | 'restore'; createdAt: string }>
+    getPageVersion(pageId: string, versionId: number): null | { id: number; title: string; content: string }
+    restorePageVersion(pageId: string, versionId: number): WorkspacePage
     close(): void
   }
 }
@@ -158,6 +161,33 @@ describe('WorkspaceDatabase', () => {
     expect(database.listUnreferencedAttachments('9999-01-01T00:00:00.000Z')).toContainEqual({ hash, relativePath: `cc/${hash}` })
     expect(database.deleteAttachmentIfUnreferenced(hash, '9999-01-01T00:00:00.000Z')).toBe(true)
     expect(database.getAttachment(hash)).toBeNull()
+  })
+
+  it('coalesces automatic history and makes every restore reversible', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const original = database.loadWorkspace().pages.find((page) => page.id === 'welcome')!
+    database.upsertPage({ ...original, title: '第一次编辑', content: '<p>alpha</p>' })
+    database.upsertPage({ ...original, title: '第二次编辑', content: '<p>beta</p>' })
+    const versions = database.listPageVersions('welcome')
+    expect(versions).toHaveLength(1)
+    expect(database.getPageVersion('welcome', versions[0]!.id)).toMatchObject({ title: original.title, content: original.content })
+
+    const restored = database.restorePageVersion('welcome', versions[0]!.id)
+    expect(restored).toMatchObject({ title: original.title, content: original.content })
+    expect(database.listPageVersions('welcome')).toHaveLength(2)
+    expect(database.listPageVersions('welcome')[0]?.reason).toBe('restore')
+  })
+
+  it('keeps assets referenced only by reversible history out of garbage collection', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const hash = 'e'.repeat(64)
+    const attachment = { hash, size: 32, mimeType: 'image/png', relativePath: `ee/${hash}`, displayName: 'history.png' }
+    database.registerPageAttachments('welcome', [attachment])
+    const original = database.loadWorkspace().pages.find((page) => page.id === 'welcome')!
+    database.upsertPage({ ...original, content: `<img src="notetodo-asset://${hash}/history.png">` })
+    const originalVersion = database.listPageVersions('welcome')[0]!
+    database.restorePageVersion('welcome', originalVersion.id)
+    expect(database.listUnreferencedAttachments('9999-01-01T00:00:00.000Z')).not.toContainEqual(expect.objectContaining({ hash }))
   })
 
   it('replays incremental sync updates and compacts them into one durable snapshot', () => {
