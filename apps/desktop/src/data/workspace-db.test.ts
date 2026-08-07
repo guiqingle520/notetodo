@@ -108,7 +108,8 @@ describe('WorkspaceDatabase', () => {
     database = new WorkspaceDatabase(':memory:')
     const initial = database.loadDatabaseByPage('projects')
     expect(initial?.records).toHaveLength(5)
-    expect(initial?.views.map((view) => view.type)).toEqual(['table', 'board', 'list'])
+    expect(initial?.views.map((view) => view.type)).toEqual(['table', 'board', 'list', 'calendar'])
+    expect(initial?.views.at(-1)).toMatchObject({ type: 'calendar', config: { datePropertyId: 'task-due' } })
 
     database.updateDatabaseCell('task-1', 'task-score', 2)
     database.createDatabaseRecord('roadmap-db', 'task-new')

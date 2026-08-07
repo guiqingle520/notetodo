@@ -536,6 +536,7 @@ class WorkspaceDatabase {
       insertView.run('roadmap-table', 'roadmap-db', '所有任务', 'table', 0, '{}')
       insertView.run('roadmap-board', 'roadmap-db', '状态看板', 'board', 1, JSON.stringify({ groupByPropertyId: 'task-status' }))
       insertView.run('roadmap-list', 'roadmap-db', '紧凑列表', 'list', 2, '{}')
+      insertView.run('roadmap-calendar', 'roadmap-db', '交付日历', 'calendar', 3, JSON.stringify({ datePropertyId: 'task-due' }))
       this.database.exec('COMMIT')
     } catch (error) {
       this.database.exec('ROLLBACK')
@@ -573,6 +574,12 @@ class WorkspaceDatabase {
         ['task-1', ['task-2']], ['task-2', []], ['task-3', ['task-1', 'task-2']],
         ['task-4', ['task-2']], ['task-5', ['task-3', 'task-4']],
       ]) relationProperty.run(recordId, JSON.stringify(relatedIds), now)
+      // Data-only view backfill: the existing table already persists arbitrary
+      // view types and JSON configuration, so no structural migration is needed.
+      this.database.prepare(`
+        INSERT OR IGNORE INTO database_views(id, database_id, name, type, position, config_json)
+        VALUES ('roadmap-calendar', 'roadmap-db', '交付日历', 'calendar', 3, ?)
+      `).run(JSON.stringify({ datePropertyId: 'task-due' }))
       this.database.prepare(`
         INSERT OR IGNORE INTO database_automations(id, database_id, name, enabled, trigger_property_id, condition_json, actions_json, created_at, updated_at)
         VALUES ('completed-task-priority', 'roadmap-db', '完成后归档优先级', 1, 'task-status', ?, ?, ?, ?)

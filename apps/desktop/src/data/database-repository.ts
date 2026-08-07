@@ -31,6 +31,7 @@ const seedSnapshot: DatabaseSnapshot = {
     { id: 'roadmap-table', databaseId: 'roadmap-db', name: '所有任务', type: 'table', config: {} },
     { id: 'roadmap-board', databaseId: 'roadmap-db', name: '状态看板', type: 'board', config: { groupByPropertyId: 'task-status' } },
     { id: 'roadmap-list', databaseId: 'roadmap-db', name: '紧凑列表', type: 'list', config: {} },
+    { id: 'roadmap-calendar', databaseId: 'roadmap-db', name: '交付日历', type: 'calendar', config: { datePropertyId: 'task-due' } },
   ],
   activeViewId: 'roadmap-table',
 }

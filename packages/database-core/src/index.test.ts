@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateFormula, normalizePropertyValue, queryRecords, resolveDerivedRecords, runDatabaseAutomations, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, normalizePropertyValue, queryRecords, resolveDerivedRecords, runDatabaseAutomations, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -33,6 +33,18 @@ describe('database query engine', () => {
     const result = queryRecords(many, [{ propertyId: 'status', operator: 'equals', value: 'doing' }], [{ propertyId: 'score', direction: 'asc' }])
     expect(result).toHaveLength(5_000)
     expect(performance.now() - start).toBeLessThan(500)
+  })
+
+  it('builds a Monday-first calendar and groups ten thousand records in one pass', () => {
+    const august = buildCalendarMonth(2026, 7)
+    expect(august).toHaveLength(42)
+    expect(august[0]).toMatchObject({ date: '2026-07-27', inCurrentMonth: false })
+    expect(august.find((day) => day.date === '2026-08-01')).toMatchObject({ day: 1, inCurrentMonth: true })
+    const many = Array.from({ length: 10_000 }, (_, index): DatabaseRecord => ({ ...records[0]!, id: String(index), values: { due: index % 10 ? `2026-08-${String(index % 28 + 1).padStart(2, '0')}` : null } }))
+    const start = performance.now(); const grouped = groupRecordsByDate(many, 'due')
+    expect(grouped.unscheduled).toHaveLength(1_000)
+    expect(Object.values(grouped.groups).flat()).toHaveLength(9_000)
+    expect(performance.now() - start).toBeLessThan(250)
   })
 
   it('evaluates bounded formulas without executing arbitrary JavaScript', () => {

@@ -4,7 +4,7 @@
 
 ## 当前里程碑
 
-Open Platform & External Automation Alpha — **已完成**
+Database Views & Layout Beta — **进行中（1/4）**
 
 ### 已交付
 
@@ -101,11 +101,14 @@ Open Platform & External Automation Alpha — **已完成**
 - 基于官方 TypeScript SDK v2 的本地 stdio MCP Server，同时兼容 2025/2026 协议协商。
 - 六个页面/数据库 MCP 工具、结构化输出、响应上限、读写标注与统一参数校验。
 - MCP 调用复用 API 令牌作用域和审计账本；真实协议客户端已完成 SQLite 读写闭环。
+- Calendar 数据库视图：Monday-first 固定六周网格、月份导航、今天定位和跨月日期。
+- 日期记录一次性 O(n) 分组、单格有界卡片渲染、未排期收纳和拖放改期。
+- Calendar 配置与活动视图持久化；旧工作区启动时幂等补齐交付日历。
 
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：26 个测试文件、108 个测试通过。
+- Vitest：26 个测试文件、109 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -145,8 +148,9 @@ Open Platform & External Automation Alpha — **已完成**
 - 本地 Chromium：新增关联后汇总值与风险公式实时更新，控制台无警告或错误。
 - 隔离 Electron 烟雾测试：Schema v7、CSP、Preload、SQLite 与协作票据链路通过，退出码 0。
 - 自动化规则校验、条件计划、事务执行、失败隔离与修正后重放：通过。
+- Calendar 一万条记录日期分组性能、SQLite 配置回归和 Chromium 三栏布局：通过。
 
-## 当前里程碑余项
+## 已完成里程碑归档
 
 Content Parity, Import & Retrieval Alpha
 
@@ -157,7 +161,7 @@ Content Parity, Import & Retrieval Alpha
 5. 权限过滤的全文/本地向量混合检索和 AI 引用定位已完成；后续允许模型提供商覆盖嵌入实现。
 6. 模板库、数据库 Relation/Rollup/Formula 和基础自动化已完成。
 
-## 下一里程碑
+## 上一里程碑
 
 Open Platform & External Automation Alpha
 
@@ -166,11 +170,11 @@ Open Platform & External Automation Alpha
 3. 用户可编辑自动化规则、执行日志和失败重放已交付 Alpha。
 4. MCP Server 读写工作区与自定义模型工具调用闭环已交付 Alpha。
 
-## 后续里程碑
+## 当前开发里程碑
 
 Database Views & Layout Beta
 
-1. Calendar、Timeline 和 Gallery 数据库视图。
+1. Calendar 数据库视图已交付 Beta；Timeline 与 Gallery 待开发。
 2. 多条件筛选、排序、分组与已保存视图配置。
 3. 页面多栏布局、页面提及和关联数据库视图。
 4. 大型数据库增量计算、虚拟化和交互性能压测。

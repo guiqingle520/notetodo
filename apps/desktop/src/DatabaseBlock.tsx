@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, ArrowUpDown, CheckCircle2, CircleAlert, Columns3, Filter, Link2, List, Plus, RotateCcw, Sigma, Table2, X, Zap } from 'lucide-react'
-import { queryRecords, resolveDerivedRecords, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type PropertyValue } from '@notetodo/database-core'
+import { Activity, ArrowUpDown, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Filter, Link2, List, Plus, RotateCcw, Sigma, Table2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, groupRecordsByDate, queryRecords, resolveDerivedRecords, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type PropertyValue } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -86,7 +86,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       <div className="database-viewbar">
         <div className="database-tabs">
           {snapshot.views.map((view) => {
-            const Icon = view.type === 'table' ? Table2 : view.type === 'board' ? Columns3 : List
+            const Icon = view.type === 'table' ? Table2 : view.type === 'board' ? Columns3 : view.type === 'calendar' ? CalendarDays : List
             return <button className={view.id === activeView.id ? 'is-active' : ''} key={view.id} onClick={() => setView(view.id)}><Icon size={13} />{view.name}</button>
           })}
         </div>
@@ -101,6 +101,7 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       {activeView.type === 'table' && <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} />}
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
+      {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
       {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
         if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
         else setAutomations((current) => [...current.filter((item) => item.id !== rule.id), rule])
@@ -115,6 +116,41 @@ export function DatabaseBlock({ pageId }: { pageId: string }) {
       }} />}
     </section>
   )
+}
+
+const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
+
+function CalendarView({ records, schema, datePropertyId, updateCell }: { records: DatabaseRecord[]; schema: DatabaseSchema; datePropertyId?: string; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+  const dateProperty = schema.properties.find((property) => property.id === datePropertyId && property.type === 'date') ?? schema.properties.find((property) => property.type === 'date')
+  const titleProperty = schema.properties.find((property) => property.type === 'title')
+  const today = new Date(); const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const [cursor, setCursor] = useState(() => ({ year: today.getFullYear(), month: today.getMonth() }))
+  const days = useMemo(() => buildCalendarMonth(cursor.year, cursor.month), [cursor])
+  const grouped = useMemo(() => dateProperty ? groupRecordsByDate(records, dateProperty.id) : { groups: {}, unscheduled: records }, [records, dateProperty])
+  const moveMonth = (offset: number) => setCursor((current) => { const date = new Date(Date.UTC(current.year, current.month + offset, 1)); return { year: date.getUTCFullYear(), month: date.getUTCMonth() } })
+  const monthLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(new Date(cursor.year, cursor.month, 1))
+
+  if (!dateProperty || !titleProperty) return <div className="calendar-missing"><CalendarDays size={22} /><strong>需要日期与标题属性</strong><span>Calendar 视图会自动使用数据库中的第一个日期属性。</span></div>
+
+  return <div className="database-calendar">
+    <header className="calendar-header">
+      <div><small>DELIVERY WINDOW</small><strong>{monthLabel}</strong></div>
+      <span>{records.length - grouped.unscheduled.length} 已排期 · {grouped.unscheduled.length} 待排期</span>
+      <nav aria-label="切换月份"><button aria-label="上个月" onClick={() => moveMonth(-1)}><ChevronLeft size={14} /></button><button onClick={() => setCursor({ year: today.getFullYear(), month: today.getMonth() })}>今天</button><button aria-label="下个月" onClick={() => moveMonth(1)}><ChevronRight size={14} /></button></nav>
+    </header>
+    <div className="calendar-weekdays">{weekdayLabels.map((label, index) => <span className={index > 4 ? 'is-weekend' : ''} key={label}>周{label}</span>)}</div>
+    <div className="calendar-grid">{days.map((day) => {
+      const scheduled = grouped.groups[day.date] ?? []
+      return <section className={`${day.inCurrentMonth ? '' : 'is-outside'} ${day.date === todayIso ? 'is-today' : ''}`} key={day.date} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const recordId = event.dataTransfer.getData('application/x-notetodo-record'); if (recordId) updateCell(recordId, dateProperty.id, day.date) }}>
+        <header><time dateTime={day.date}>{day.day}</time>{scheduled.length > 0 && <em>{scheduled.length}</em>}</header>
+        <div>{scheduled.slice(0, 4).map((record) => <article draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-notetodo-record', record.id) }} key={record.id} title="拖动卡片可调整截止日期">
+          <i className={`status-dot status-${record.values['task-status'] ?? 'todo'}`} />
+          <span><strong>{record.values[titleProperty.id] || '无标题'}</strong><small>{record.values['task-owner'] || '未分配'}</small></span>
+        </article>)}{scheduled.length > 4 && <button className="calendar-more">+{scheduled.length - 4} 项</button>}</div>
+      </section>
+    })}</div>
+    {grouped.unscheduled.length > 0 && <footer className="calendar-unscheduled"><span><CalendarDays size={12} />待排期</span><div>{grouped.unscheduled.slice(0, 8).map((record) => <article draggable onDragStart={(event) => event.dataTransfer.setData('application/x-notetodo-record', record.id)} key={record.id}>{record.values[titleProperty.id] || '无标题'}</article>)}{grouped.unscheduled.length > 8 && <em>+{grouped.unscheduled.length - 8}</em>}</div></footer>}
+  </div>
 }
 
 function AutomationPanel({ schema, rules, runs, onClose, onSave, onToggle, onReplay }: { schema: DatabaseSchema; rules: AutomationRule[]; runs: AutomationRun[]; onClose: () => void; onSave: (rule: AutomationRule) => Promise<void>; onToggle: (rule: AutomationRule) => Promise<void>; onReplay: (runId: string) => Promise<void> }) {

@@ -35,12 +35,19 @@ export interface DatabaseView {
   id: string
   databaseId: string
   name: string
-  type: 'table' | 'board' | 'list'
+  type: 'table' | 'board' | 'list' | 'calendar'
   config: {
     filters?: FilterRule[]
     sorts?: SortRule[]
     groupByPropertyId?: string
+    datePropertyId?: string
   }
+}
+
+export interface CalendarDay {
+  date: string
+  day: number
+  inCurrentMonth: boolean
 }
 
 export interface DatabaseSnapshot {
@@ -240,6 +247,38 @@ export function queryRecords(
     }
     return 0
   })
+}
+
+/** Builds a stable Monday-first 6×7 grid without local-time/DST drift. */
+export function buildCalendarMonth(year: number, month: number): CalendarDay[] {
+  if (!Number.isInteger(year) || year < 1 || year > 9999 || !Number.isInteger(month) || month < 0 || month > 11) throw new TypeError('Invalid calendar month.')
+  const first = new Date(Date.UTC(year, month, 1))
+  const mondayOffset = (first.getUTCDay() + 6) % 7
+  const start = Date.UTC(year, month, 1 - mondayOffset)
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start + index * 86_400_000)
+    return { date: date.toISOString().slice(0, 10), day: date.getUTCDate(), inCurrentMonth: date.getUTCMonth() === month }
+  })
+}
+
+/** Groups valid ISO dates in one pass so month rendering remains O(records + 42). */
+export function groupRecordsByDate(records: DatabaseRecord[], propertyId: string) {
+  const groups: Record<string, DatabaseRecord[]> = Object.create(null) as Record<string, DatabaseRecord[]>
+  const unscheduled: DatabaseRecord[] = []
+  for (const record of records) {
+    const value = record.values[propertyId]
+    const date = typeof value === 'string' ? /^\d{4}-\d{2}-\d{2}/u.exec(value)?.[0] : undefined
+    if (!date || !isValidIsoDate(date)) { unscheduled.push(record); continue }
+    ;(groups[date] ??= []).push(record)
+  }
+  return { groups, unscheduled }
+}
+
+function isValidIsoDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return false
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
 }
 
 /**
