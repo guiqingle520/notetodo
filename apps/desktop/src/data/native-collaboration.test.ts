@@ -8,6 +8,7 @@ import Collaboration from '@tiptap/extension-collaboration'
 import * as Y from 'yjs'
 import { collaborativeExtensions, migrateHtmlToNativeFragment } from './native-collaboration'
 import { RemoteCursors, renderRemoteCursors } from './remote-cursors'
+import { createColumnLayoutContent } from '../editor/rich-blocks'
 
 function collaborativeEditor(document: Y.Doc, content = '') {
   return new Editor({
@@ -113,5 +114,54 @@ describe('native Tiptap collaboration document', () => {
     expect(jsonText(toggle)).toBe('细节')
     expect(secondEditor.getHTML().match(/callout-glyph/g)).toHaveLength(1)
     firstEditor.destroy(); secondEditor.destroy(); firstDocument.destroy(); secondDocument.destroy()
+  })
+
+  it('round-trips editable column layouts through HTML and Yjs', () => {
+    const source = new Y.Doc()
+    migrateHtmlToNativeFragment(source, `
+      <section data-notetodo-columns data-layout="wide-left">
+        <div class="column-layout-content">
+          <div data-notetodo-column><h2>主要结论</h2><p>正文仍可协作编辑。</p></div>
+          <div data-notetodo-column><p>补充资料</p></div>
+        </div>
+      </section>
+    `)
+    const remote = new Y.Doc()
+    Y.applyUpdate(remote, Y.encodeStateAsUpdate(source))
+    const editor = collaborativeEditor(remote)
+    const layout = editor.getJSON().content?.find((node) => node.type === 'columnLayout')
+
+    expect(layout?.attrs?.layout).toBe('wide-left')
+    expect(layout?.content).toHaveLength(2)
+    expect(layout?.content?.every((node) => node.type === 'column')).toBe(true)
+    expect(jsonText(layout)).toContain('正文仍可协作编辑。')
+    expect(editor.getHTML()).toContain('data-notetodo-columns')
+    expect(createColumnLayoutContent(3).content).toHaveLength(3)
+    editor.destroy(); source.destroy(); remote.destroy()
+  })
+
+  it('round-trips safe inline page mentions without duplicating labels', () => {
+    const source = new Y.Doc()
+    migrateHtmlToNativeFragment(source, '<p>继续查看 <a data-notetodo-page-mention data-page-id="weekly" data-title="本周计划" href="notetodo-page:weekly">@本周计划</a> 的结论。</p>')
+    const editor = collaborativeEditor(source)
+    const paragraph = editor.getJSON().content?.[0]
+    const mention = paragraph?.content?.find((node) => node.type === 'pageMention')
+
+    expect(mention && 'attrs' in mention ? mention.attrs : undefined).toMatchObject({ pageId: 'weekly', title: '本周计划' })
+    expect(editor.getHTML()).toContain('href="notetodo-page:weekly"')
+    expect(editor.view.dom.querySelector('.page-mention')?.textContent).toBe('@本周计划')
+    editor.destroy(); source.destroy()
+  })
+
+  it('stores linked databases as lightweight source references', () => {
+    const source = new Y.Doc()
+    migrateHtmlToNativeFragment(source, '<section data-notetodo-linked-database data-source-page-id="projects" data-source-title="产品路线"><strong>产品路线</strong></section>')
+    const editor = collaborativeEditor(source)
+    const linked = editor.getJSON().content?.find((node) => node.type === 'linkedDatabase')
+
+    expect(linked && 'attrs' in linked ? linked.attrs : undefined).toMatchObject({ sourcePageId: 'projects', sourceTitle: '产品路线' })
+    expect(linked && 'content' in linked ? linked.content : undefined).toBeUndefined()
+    expect(editor.getHTML()).toContain('data-source-page-id="projects"')
+    editor.destroy(); source.destroy()
   })
 })

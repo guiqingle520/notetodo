@@ -2,6 +2,7 @@ import { mergeAttributes, Node, type Extensions } from '@tiptap/core'
 import Image from '@tiptap/extension-image'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import { LinkedDatabaseBlock } from './linked-database'
 
 const RichImage = Image.extend({
   addAttributes() {
@@ -150,6 +151,138 @@ export const ToggleBlock = Node.create({
     return ['details', attributes, ['summary', { contenteditable: 'false' }, title], ['div', { class: 'toggle-content' }, 0]]
   },
 })
+
+const columnLayouts = new Set(['equal', 'wide-left', 'wide-right', 'focus-center'])
+
+/**
+ * Columns are schema-native container nodes. Their structure therefore travels
+ * through Yjs, history snapshots and HTML export as one atomic page layout,
+ * while every nested block remains directly editable by ProseMirror.
+ */
+export const ColumnLayoutBlock = Node.create({
+  name: 'columnLayout',
+  group: 'block',
+  content: 'column{2,3}',
+  defining: true,
+  isolating: true,
+  addAttributes() {
+    return {
+      layout: {
+        default: 'equal',
+        parseHTML: (element) => normalizeColumnLayout(element.getAttribute('data-layout')),
+        renderHTML: (attributes) => ({ 'data-layout': normalizeColumnLayout(attributes.layout) }),
+      },
+    }
+  },
+  parseHTML() {
+    return [{
+      tag: 'section[data-notetodo-columns]',
+      contentElement: (element) => element.querySelector<HTMLElement>('.column-layout-content') ?? element,
+    }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['section', mergeAttributes(HTMLAttributes, {
+      'data-notetodo-columns': '',
+      class: 'column-layout',
+    }), ['div', { class: 'column-layout-content' }, 0]]
+  },
+  addNodeView() {
+    return ({ node, editor, getPos }) => {
+      const dom = document.createElement('section')
+      dom.className = 'column-layout'
+      dom.dataset.notetodoColumns = ''
+      const controls = document.createElement('div')
+      controls.className = 'column-layout-controls'
+      controls.contentEditable = 'false'
+      controls.setAttribute('aria-label', '分栏宽度')
+      const contentDOM = document.createElement('div')
+      contentDOM.className = 'column-layout-content'
+      dom.append(controls, contentDOM)
+      let currentNode = node
+
+      const presets = node.childCount === 3
+        ? [['equal', '等宽'], ['wide-left', '左宽'], ['focus-center', '中宽']] as const
+        : [['equal', '等宽'], ['wide-left', '左宽'], ['wide-right', '右宽']] as const
+      const setLayout = (layout: string) => {
+        if (!editor.isEditable) return
+        const position = getPos()
+        if (typeof position !== 'number') return
+        editor.view.dispatch(editor.state.tr.setNodeMarkup(position, undefined, { ...currentNode.attrs, layout }))
+      }
+      const render = () => {
+        const layout = normalizeColumnLayout(currentNode.attrs.layout)
+        dom.dataset.layout = layout
+        controls.replaceChildren()
+        for (const [value, label] of presets) {
+          const button = document.createElement('button')
+          button.type = 'button'; button.textContent = label; button.dataset.active = String(layout === value)
+          button.disabled = !editor.isEditable
+          button.addEventListener('click', () => setLayout(value))
+          controls.append(button)
+        }
+      }
+      render()
+      return {
+        dom,
+        contentDOM,
+        update: (nextNode) => {
+          if (nextNode.type !== currentNode.type || nextNode.childCount !== currentNode.childCount) return false
+          currentNode = nextNode; render(); return true
+        },
+        stopEvent: (event) => controls.contains(event.target as globalThis.Node),
+        ignoreMutation: (mutation) => controls.contains(mutation.target),
+      }
+    }
+  },
+})
+
+export const ColumnBlock = Node.create({
+  name: 'column',
+  content: 'block+',
+  defining: true,
+  parseHTML() { return [{ tag: 'div[data-notetodo-column]' }] },
+  renderHTML() { return ['div', { 'data-notetodo-column': '', class: 'column-layout-column' }, 0] },
+})
+
+export const PageMention = Node.create({
+  name: 'pageMention',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      pageId: {
+        default: '',
+        parseHTML: (element) => pageIdFromMention(element.getAttribute('href') ?? element.getAttribute('data-page-id') ?? ''),
+      },
+      title: { default: '未命名页面', parseHTML: (element) => element.getAttribute('data-title') ?? element.textContent?.replace(/^@/u, '') ?? '未命名页面' },
+    }
+  },
+  parseHTML() { return [{ tag: 'a[data-notetodo-page-mention]' }] },
+  renderHTML({ HTMLAttributes }) {
+    const pageId = pageIdFromMention(String(HTMLAttributes.pageId ?? ''))
+    const title = String(HTMLAttributes.title ?? '未命名页面').slice(0, 200)
+    return ['a', {
+      'data-notetodo-page-mention': '',
+      'data-page-id': pageId,
+      'data-title': title,
+      class: 'page-mention',
+      href: `notetodo-page:${pageId}`,
+    }, `@${title}`]
+  },
+})
+
+export function createColumnLayoutContent(count: 2 | 3) {
+  return {
+    type: 'columnLayout',
+    attrs: { layout: 'equal' },
+    content: Array.from({ length: count }, (_, index) => ({
+      type: 'column',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: index === 0 ? '开始书写…' : '继续补充…' }] }],
+    })),
+  }
+}
 
 export const FileBlock = Node.create({
   name: 'fileAttachment',
@@ -335,12 +468,25 @@ export function richBlockExtensions(): Extensions {
     RichImage.configure({ inline: false, allowBase64: false, HTMLAttributes: { class: 'rich-image' } }),
     CalloutBlock,
     ToggleBlock,
+    ColumnLayoutBlock,
+    ColumnBlock,
+    PageMention,
+    LinkedDatabaseBlock,
     FileBlock,
     BookmarkBlock,
     FormulaBlock,
     TableOfContentsBlock,
     EmbedBlock,
   ]
+}
+
+function normalizeColumnLayout(value: unknown) {
+  return typeof value === 'string' && columnLayouts.has(value) ? value : 'equal'
+}
+
+function pageIdFromMention(value: string) {
+  const pageId = value.startsWith('notetodo-page:') ? value.slice('notetodo-page:'.length) : value
+  return /^[a-zA-Z0-9_-]{1,128}$/u.test(pageId) ? pageId : ''
 }
 
 export function safeHttpsUrl(value: string) {

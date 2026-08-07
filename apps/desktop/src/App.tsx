@@ -15,6 +15,8 @@ import {
   CircleHelp,
   Clock3,
   Code2,
+  Columns2,
+  Columns3,
   Command,
   Copy,
   Cpu,
@@ -71,7 +73,7 @@ import { DatabaseBlock } from './DatabaseBlock'
 import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
-import { normalizeEmbedUrl, safeHttpsUrl } from './editor/rich-blocks'
+import { createColumnLayoutContent, normalizeEmbedUrl, safeHttpsUrl } from './editor/rich-blocks'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
 import { diffHistoryHtml, historyTextLines } from './data/page-history'
 import { pageTemplates } from './data/page-templates'
@@ -89,6 +91,7 @@ type StoredAttachment = { hash: string; size: number; mimeType: string; displayN
 type PageVersionSummary = Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['list']>>[number]
 type PageVersionDetail = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['get']>>>
 type RetrievalCitation = Awaited<ReturnType<NonNullable<typeof window.notetodo>['retrieval']['search']>>[number]
+type EditorMenuState = { from: number; left: number; top: number; query: string; index: number }
 
 const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
   spark: Sparkles,
@@ -117,6 +120,8 @@ const baseSlashCommands: SlashCommand[] = [
   { label: '代码块', hint: '保留格式的代码', keywords: 'code block 代码', icon: Code2, run: (editor) => { editor.chain().focus().toggleCodeBlock().run() } },
   { label: '提示框', hint: '突出背景、结论或提醒', keywords: 'callout note 提示 提醒', icon: Lightbulb, run: (editor) => { editor.chain().focus().insertContent({ type: 'callout', attrs: { tone: 'note', icon: '✦' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '输入提示内容…' }] }] }).run() } },
   { label: '折叠内容', hint: '收纳可展开的详细信息', keywords: 'toggle details 折叠 展开', icon: ListCollapse, run: (editor) => { editor.chain().focus().insertContent({ type: 'toggle', attrs: { title: '展开查看', open: true }, content: [{ type: 'paragraph', content: [{ type: 'text', text: '输入折叠内容…' }] }] }).run() } },
+  { label: '双栏布局', hint: '并排组织正文与资料', keywords: 'columns layout two 双栏 分栏 布局', icon: Columns2, run: (editor) => { editor.chain().focus().insertContent(createColumnLayoutContent(2)).run() } },
+  { label: '三栏布局', hint: '创建紧凑的信息矩阵', keywords: 'columns layout three 三栏 分栏 布局', icon: Columns3, run: (editor) => { editor.chain().focus().insertContent(createColumnLayoutContent(3)).run() } },
   { label: '网页书签', hint: '保存带摘要的网址卡片', keywords: 'bookmark url 书签 链接', icon: Bookmark, run: (editor) => { const input = window.prompt('输入 HTTPS 网页地址'); const url = safeHttpsUrl(input?.trim() ?? ''); if (!url) return; const parsed = new URL(url); editor.chain().focus().insertContent({ type: 'bookmark', attrs: { url, title: parsed.hostname.replace(/^www\./, ''), description: url, site: parsed.hostname } }).run() } },
   { label: '公式', hint: '插入 KaTeX 块公式', keywords: 'formula math latex 公式 数学', icon: Sigma, run: (editor) => { const expression = window.prompt('输入 LaTeX 公式', 'E = mc^2')?.trim(); if (expression) editor.chain().focus().insertContent({ type: 'formula', attrs: { expression: expression.slice(0, 5000) } }).run() } },
   { label: '页面目录', hint: '自动列出当前页面标题', keywords: 'toc contents 目录 大纲', icon: ListTree, run: (editor) => { editor.chain().focus().insertContent({ type: 'tableOfContents' }).run() } },
@@ -857,8 +862,10 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
   const { pages, activePageId, updatePage, toggleFavorite, archivePage, setActivePage } = useWorkspace()
   const page = pages.find((candidate) => candidate.id === activePageId) ?? pages[0]
   const breadcrumbs = useMemo(() => pageBreadcrumbs(pages, page.id), [pages, page.id])
-  const [slashMenu, setSlashMenu] = useState<null | { from: number; left: number; top: number; query: string; index: number }>(null)
+  const [slashMenu, setSlashMenu] = useState<EditorMenuState | null>(null)
   const slashMenuRef = useRef(slashMenu)
+  const [pageMentionMenu, setPageMentionMenu] = useState<EditorMenuState | null>(null)
+  const pageMentionMenuRef = useRef(pageMentionMenu)
   const [syncSession, setSyncSession] = useState<PageSyncSession | null>(null)
   const loadingDocument = useMemo(() => new Y.Doc(), [page.id])
   const [syncState, setSyncState] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading')
@@ -874,6 +881,7 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
   const uploadBusyRef = useRef(false)
   const localEditorRef = useRef<Editor | null>(null)
   slashMenuRef.current = slashMenu
+  pageMentionMenuRef.current = pageMentionMenu
 
   const reportAttachmentProgress = (progress: { completed: number; total: number; currentName: string }) => {
     const percent = progress.total ? Math.min(100, Math.round(progress.completed / progress.total * 100)) : 0
@@ -926,16 +934,27 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
     }
   }
 
+  const databaseSourcePage = pages.find((candidate) => candidate.id === 'projects')
   const slashCommands = useMemo<SlashCommand[]>(() => [
     ...baseSlashCommands,
+    { label: '关联数据库', hint: '嵌入产品路线的实时视图', keywords: 'linked database 关联 数据库 视图', icon: Grid2X2, run: (activeEditor) => {
+      if (databaseSourcePage) activeEditor.chain().focus().insertContent({ type: 'linkedDatabase', attrs: { sourcePageId: databaseSourcePage.id, sourceTitle: databaseSourcePage.title } }).run()
+    } },
     { label: '本地图片', hint: '选择图片并安全存入工作区', keywords: 'image photo upload 图片 上传', icon: ImageIcon, run: (activeEditor) => { void pickAndInsertAttachment(activeEditor, 'image') } },
     { label: '本地文件', hint: '附加文档、压缩包或媒体', keywords: 'file attachment upload 文件 附件 上传', icon: Paperclip, run: (activeEditor) => { void pickAndInsertAttachment(activeEditor, 'file') } },
-  ], [page.id])
+  ], [page.id, databaseSourcePage?.id, databaseSourcePage?.title])
 
   const filteredSlashCommands = useMemo(() => {
     const query = slashMenu?.query.toLocaleLowerCase() ?? ''
     return slashCommands.filter((command) => `${command.label} ${command.keywords}`.toLocaleLowerCase().includes(query))
   }, [slashMenu?.query, slashCommands])
+
+  const mentionedPages = useMemo(() => {
+    const query = pageMentionMenu?.query.trim().toLocaleLowerCase() ?? ''
+    return pages
+      .filter((candidate) => !candidate.archivedAt && candidate.id !== page.id && (!query || candidate.title.toLocaleLowerCase().includes(query)))
+      .slice(0, 8)
+  }, [page.id, pageMentionMenu?.query, pages])
 
   const editor = useEditor({
     extensions: [
@@ -959,16 +978,18 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
         return true
       },
       handleKeyDown: (view, event) => {
-        if (event.key !== '/' || !view.state.selection.empty) return false
+        if (!['/', '@'].includes(event.key) || !view.state.selection.empty) return false
         const position = view.state.selection.from
         const coordinates = view.coordsAtPos(position)
-        setSlashMenu({
+        const nextMenu = {
           from: position,
           left: Math.min(coordinates.left, window.innerWidth - 310),
           top: Math.min(coordinates.bottom + 8, window.innerHeight - 430),
           query: '',
           index: 0,
-        })
+        }
+        if (event.key === '/') { setSlashMenu(nextMenu); setPageMentionMenu(null) }
+        else { setPageMentionMenu(nextMenu); setSlashMenu(null) }
         return false
       },
       handleDrop: (view, event) => {
@@ -995,14 +1016,17 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
       const content = activeEditor.getHTML()
       updatePage(page.id, { content })
       const menu = slashMenuRef.current
-      if (!menu) return
-
       const cursor = activeEditor.state.selection.from
-      const typed = activeEditor.state.doc.textBetween(menu.from, cursor, '\n', '\0')
-      if (typed.startsWith('/') && !/\s/u.test(typed)) {
-        setSlashMenu((current) => current ? { ...current, query: typed.slice(1), index: 0 } : null)
-      } else {
-        setSlashMenu(null)
+      if (menu) {
+        const typed = activeEditor.state.doc.textBetween(menu.from, cursor, '\n', '\0')
+        if (typed.startsWith('/') && !/\s/u.test(typed)) setSlashMenu((current) => current ? { ...current, query: typed.slice(1), index: 0 } : null)
+        else setSlashMenu(null)
+      }
+      const mentionMenu = pageMentionMenuRef.current
+      if (mentionMenu) {
+        const typed = activeEditor.state.doc.textBetween(mentionMenu.from, cursor, '\n', '\0')
+        if (typed.startsWith('@') && !/\s/u.test(typed)) setPageMentionMenu((current) => current ? { ...current, query: typed.slice(1), index: 0 } : null)
+        else setPageMentionMenu(null)
       }
     },
     onSelectionUpdate: ({ editor: activeEditor }) => {
@@ -1051,6 +1075,16 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
     setSlashMenu(null)
   }
 
+  const insertPageMention = (mentionedPage: WorkspacePage) => {
+    if (!editor || !pageMentionMenu) return
+    const cursor = editor.state.selection.from
+    editor.chain().focus().deleteRange({ from: pageMentionMenu.from, to: cursor }).insertContent([
+      { type: 'pageMention', attrs: { pageId: mentionedPage.id, title: mentionedPage.title } },
+      { type: 'text', text: ' ' },
+    ]).run()
+    setPageMentionMenu(null)
+  }
+
   useEffect(() => { onEditorReady(editor); return () => onEditorReady(null) }, [editor, onEditorReady])
   useEffect(() => renderRemoteCursors(editor, collaborators), [editor, collaborators])
 
@@ -1080,6 +1114,24 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
     window.addEventListener('keydown', handleMenuKeys, true)
     return () => window.removeEventListener('keydown', handleMenuKeys, true)
   }, [slashMenu, filteredSlashCommands, editor])
+
+  useEffect(() => {
+    if (!pageMentionMenu) return
+    const handleMentionKeys = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setPageMentionMenu(null) }
+      else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const direction = event.key === 'ArrowDown' ? 1 : -1
+        setPageMentionMenu((current) => current && mentionedPages.length
+          ? { ...current, index: (current.index + direction + mentionedPages.length) % mentionedPages.length }
+          : current)
+      } else if (event.key === 'Enter' && mentionedPages.length) {
+        event.preventDefault(); insertPageMention(mentionedPages[pageMentionMenu.index] ?? mentionedPages[0])
+      }
+    }
+    window.addEventListener('keydown', handleMentionKeys, true)
+    return () => window.removeEventListener('keydown', handleMentionKeys, true)
+  }, [pageMentionMenu, mentionedPages, editor])
 
   useEffect(() => {
     let active = true
@@ -1207,6 +1259,28 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
                 {!filteredSlashCommands.length && <div className="slash-empty">没有匹配的内容块</div>}
               </div>
               <footer><span><kbd>↑↓</kbd> 选择</span><span><kbd>Enter</kbd> 插入</span></footer>
+            </div>
+          )}
+          {pageMentionMenu && (
+            <div className="page-mention-menu" style={{ left: pageMentionMenu.left, top: pageMentionMenu.top }}>
+              <header><span>链接到页面</span><kbd>@</kbd></header>
+              <div>
+                {mentionedPages.map((mentionedPage, index) => {
+                  const MentionIcon = iconMap[mentionedPage.icon]
+                  return (
+                    <button
+                      className={index === pageMentionMenu.index ? 'is-selected' : ''}
+                      key={mentionedPage.id}
+                      onMouseDown={(event) => { event.preventDefault(); insertPageMention(mentionedPage) }}
+                    >
+                      <span><MentionIcon size={15} /></span>
+                      <span><strong>{mentionedPage.title}</strong><small>{pageBreadcrumbs(pages, mentionedPage.id).map((crumb) => crumb.title).join(' / ')}</small></span>
+                    </button>
+                  )
+                })}
+                {!mentionedPages.length && <div className="slash-empty">没有匹配的页面</div>}
+              </div>
+              <footer><span><kbd>↑↓</kbd> 选择</span><span><kbd>Enter</kbd> 链接</span></footer>
             </div>
           )}
           <div className="document-end"><span />END OF PAGE<span /></div>
