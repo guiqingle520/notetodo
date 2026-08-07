@@ -27,6 +27,10 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     renameDatabaseView(databaseId: string, viewId: string, name: string): DatabaseSnapshot
     deleteDatabaseView(databaseId: string, viewId: string): DatabaseSnapshot
     setDefaultDatabaseView(databaseId: string, viewId: string): DatabaseSnapshot
+    bulkUpdateDatabaseRecords(databaseId: string, recordIds: string[], propertyId: string, value: unknown): DatabaseSnapshot
+    saveDatabaseTemplate(databaseId: string, template: { id: string; name: string; values: Record<string, unknown>; content: string; createdAt: string }): DatabaseSnapshot
+    deleteDatabaseTemplate(databaseId: string, templateId: string): DatabaseSnapshot
+    createDatabaseRecordFromTemplate(databaseId: string, templateId: string, recordId: string): DatabaseSnapshot
     loadSyncDocument(pageId: string): {
       snapshot: string | null
       updates: Array<{ id: number; clientId: string; data: string }>
@@ -176,6 +180,20 @@ describe('WorkspaceDatabase', () => {
 
     const isolated = database.createDatabaseForPage('welcome', 'single-view-db', '单视图')
     expect(() => database?.deleteDatabaseView('single-view-db', isolated.views[0]!.id)).toThrow(/final database view/)
+  })
+
+  it('applies transactional bulk edits and reusable record templates', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const bulk = database.bulkUpdateDatabaseRecords('roadmap-db', ['task-1', 'task-2'], 'task-owner', '发布组')
+    expect(bulk.records.filter((record) => ['task-1', 'task-2'].includes(record.id)).every((record) => record.values['task-owner'] === '发布组')).toBe(true)
+
+    const now = new Date().toISOString()
+    const saved = database.saveDatabaseTemplate('roadmap-db', { id: 'release-template', name: '发布检查', values: { 'task-status': 'todo', 'task-owner': '发布组', 'task-score': 2 }, content: '<h2>发布检查</h2><p>逐项确认。</p>', createdAt: now })
+    expect(saved.templates).toEqual([expect.objectContaining({ id: 'release-template', name: '发布检查' })])
+    const applied = database.createDatabaseRecordFromTemplate('roadmap-db', 'release-template', 'task-from-template')
+    expect(applied.records.find((record) => record.id === 'task-from-template')).toMatchObject({ values: { 'task-status': 'todo', 'task-owner': '发布组', 'task-score': 2 }, content: expect.stringContaining('逐项确认') })
+    expect(database.deleteDatabaseTemplate('roadmap-db', 'release-template').templates).toHaveLength(0)
+    expect(() => database?.bulkUpdateDatabaseRecords('roadmap-db', ['missing'], 'task-owner', 'x')).toThrow(/selected database record/)
   })
 
   it('persists validated relations while keeping derived properties read-only', () => {

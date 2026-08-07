@@ -6,7 +6,7 @@ const { createApiToken, verifyApiToken } = require('@notetodo/auth-core')
 const { planAutomationRuns, validateAutomationRule } = require('@notetodo/automation-core')
 const { WEBHOOK_EVENTS, createWebhookEnvelope, nextWebhookAttempt, stableJson, validateWebhookUrl } = require('@notetodo/webhook-core')
 
-const LATEST_SCHEMA_VERSION = 13
+const LATEST_SCHEMA_VERSION = 14
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -451,6 +451,25 @@ class WorkspaceDatabase {
         BEGIN IMMEDIATE;
         ALTER TABLE database_records ADD COLUMN content TEXT NOT NULL DEFAULT '' CHECK(length(content) <= 2000000);
         INSERT INTO app_meta(key, value) VALUES ('schema_version', '13')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
+    if (currentVersion < 14) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE database_templates (
+          id TEXT PRIMARY KEY,
+          database_id TEXT NOT NULL REFERENCES databases(id) ON DELETE CASCADE,
+          name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200),
+          values_json TEXT NOT NULL DEFAULT '{}',
+          content TEXT NOT NULL DEFAULT '' CHECK(length(content) <= 2000000),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX database_templates_order ON database_templates(database_id, created_at, id);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '14')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value;
         COMMIT;
       `)
@@ -1031,7 +1050,11 @@ class WorkspaceDatabase {
       type: view.type,
       config: JSON.parse(view.config_json),
     }))
-    return { schema: { id: database.id, name: database.name, properties }, records, views, activeViewId: database.active_view_id }
+    const templates = this.database.prepare('SELECT id, name, values_json, content, created_at, updated_at FROM database_templates WHERE database_id = ? ORDER BY created_at, id').all(database.id).map((template) => ({
+      id: template.id, databaseId: database.id, name: template.name, values: JSON.parse(template.values_json), content: template.content,
+      createdAt: template.created_at, updatedAt: template.updated_at,
+    }))
+    return { schema: { id: database.id, name: database.name, properties }, records, views, activeViewId: database.active_view_id, templates }
   }
 
   createDatabaseForPage(pageId, databaseId, name) {
@@ -1150,6 +1173,66 @@ class WorkspaceDatabase {
     const now = new Date().toISOString()
     const result = this.database.prepare('UPDATE database_records SET content = ?, updated_at = ? WHERE id = ?').run(content, now, recordId)
     if (result.changes !== 1) throw new Error('Database record does not exist.')
+  }
+
+  bulkUpdateDatabaseRecords(databaseId, recordIds, propertyId, value) {
+    const property = this.database.prepare('SELECT id, type, config_json FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
+    if (!property) throw new Error('Database property does not exist.')
+    if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
+    const now = new Date().toISOString()
+    const exists = this.database.prepare('SELECT 1 FROM database_records WHERE id = ? AND database_id = ?')
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      for (const recordId of recordIds) {
+        if (!exists.get(recordId, databaseId)) throw new Error('A selected database record does not exist.')
+        this.writeDatabasePropertyValue(recordId, property, value, now)
+        this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, recordId)
+        this.executeDatabaseAutomations(databaseId, recordId, propertyId, now)
+      }
+      this.enqueueWebhookEvent('database.record.updated', `${databaseId}:bulk`, { databaseId, recordIds, propertyId, value, updatedAt: now }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseById(databaseId)
+  }
+
+  saveDatabaseTemplate(databaseId, template) {
+    const existing = this.database.prepare('SELECT database_id FROM database_templates WHERE id = ?').get(template.id)
+    if (existing && existing.database_id !== databaseId) throw new Error('Template belongs to another database.')
+    if (!existing) {
+      const count = this.database.prepare('SELECT COUNT(*) AS count FROM database_templates WHERE database_id = ?').get(databaseId).count
+      if (count >= 50) throw new Error('A database cannot contain more than 50 templates.')
+    }
+    const now = new Date().toISOString()
+    const result = this.database.prepare(`
+      INSERT INTO database_templates(id, database_id, name, values_json, content, created_at, updated_at)
+      SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, values_json=excluded.values_json, content=excluded.content, updated_at=excluded.updated_at
+    `).run(template.id, databaseId, template.name, JSON.stringify(template.values), template.content, template.createdAt || now, now, databaseId)
+    if (result.changes !== 1) throw new Error('Database does not exist.')
+    return this.loadDatabaseById(databaseId)
+  }
+
+  deleteDatabaseTemplate(databaseId, templateId) {
+    const result = this.database.prepare('DELETE FROM database_templates WHERE id = ? AND database_id = ?').run(templateId, databaseId)
+    if (result.changes !== 1) throw new Error('Database template does not exist.')
+    return this.loadDatabaseById(databaseId)
+  }
+
+  createDatabaseRecordFromTemplate(databaseId, templateId, recordId) {
+    const template = this.database.prepare('SELECT values_json, content FROM database_templates WHERE id = ? AND database_id = ?').get(templateId, databaseId)
+    if (!template) throw new Error('Database template does not exist.')
+    const values = JSON.parse(template.values_json)
+    const properties = this.database.prepare('SELECT id, type, config_json FROM database_properties WHERE database_id = ? ORDER BY position').all(databaseId)
+    const now = new Date().toISOString()
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
+      this.database.prepare('INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(recordId, databaseId, position, template.content, now, now)
+      for (const property of properties) if (!['formula', 'rollup'].includes(property.type) && Object.hasOwn(values, property.id)) this.writeDatabasePropertyValue(recordId, property, values[property.id], now)
+      this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, templateId, createdAt: now } }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseById(databaseId)
   }
 
   setActiveDatabaseView(databaseId, viewId) {

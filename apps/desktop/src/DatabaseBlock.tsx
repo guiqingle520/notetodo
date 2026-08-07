@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Filter, Images, Layers3, Link2, List, MoreHorizontal, Plus, RotateCcw, Settings2, Sigma, Star, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseView, type DatabaseViewConfig, type FilterRule, type PropertyType, type PropertyValue, type SortRule } from '@notetodo/database-core'
+import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Filter, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, Plus, RotateCcw, Settings2, Sigma, Star, Table2, Trash2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type PropertyType, type PropertyValue, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -59,6 +59,9 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [schemaOpen, setSchemaOpen] = useState(false)
   const [automationOpen, setAutomationOpen] = useState(false)
   const [viewMenuOpen, setViewMenuOpen] = useState<'create' | 'manage' | null>(null)
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
+  const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(() => new Set())
+  const [exportState, setExportState] = useState<'idle' | 'working' | 'done'>('idle')
   const [openRecordId, setOpenRecordId] = useState<string | null>(null)
   const [automations, setAutomations] = useState<AutomationRule[]>([])
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([])
@@ -144,6 +147,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const setView = (viewId: string) => {
     const next = { ...snapshot, activeViewId: viewId }
     setSnapshot(next)
+    setSelectedRecordIds(new Set())
     void databaseRepository.setActiveView(next, viewId)
   }
 
@@ -166,6 +170,29 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     setViewMenuOpen(null)
   }
 
+  const toggleRecord = (recordId: string) => setSelectedRecordIds((current) => {
+    const next = new Set(current); if (next.has(recordId)) next.delete(recordId); else if (next.size < 1000) next.add(recordId); return next
+  })
+  const toggleAllRecords = () => setSelectedRecordIds((current) => current.size === records.length ? new Set() : new Set(records.slice(0, 1000).map((record) => record.id)))
+  const createFromTemplate = async (templateId: string) => {
+    setSnapshot(await databaseRepository.createFromTemplate(snapshot, templateId, crypto.randomUUID()))
+    setTemplateMenuOpen(false)
+  }
+  const saveSelectionAsTemplate = async (name: string) => {
+    const source = snapshot.records.find((record) => selectedRecordIds.has(record.id))
+    if (!source) return
+    const values = Object.fromEntries(snapshot.schema.properties.filter((property) => property.type !== 'title' && !['formula', 'rollup'].includes(property.type)).map((property) => [property.id, source.values[property.id] ?? defaultPropertyValue(property)]))
+    const now = new Date().toISOString()
+    const template: DatabaseTemplate = { id: crypto.randomUUID(), databaseId: snapshot.schema.id, name, values, content: source.content ?? '', createdAt: now, updatedAt: now }
+    setSnapshot(await databaseRepository.saveTemplate(snapshot, template)); setTemplateMenuOpen(false)
+  }
+  const exportCsv = async () => {
+    if (exportState === 'working') return
+    setExportState('working')
+    try { if (await databaseRepository.exportCsv(`${snapshot.schema.name}-${activeView.name}`, serializeDatabaseCsv(snapshot.schema, records))) { setExportState('done'); window.setTimeout(() => setExportState('idle'), 1800) } else setExportState('idle') }
+    catch { setExportState('idle') }
+  }
+
   return (
     <section className="database-block">
       <div className="database-viewbar">
@@ -182,17 +209,21 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
           <button className={activeView.config.filters?.length ? 'is-active' : ''} onClick={() => setRulesOpen('filters')}><Filter size={13} />筛选{activeView.config.filters?.length ? ` · ${activeView.config.filters.length}` : ''}</button>
           <button className={activeView.config.sorts?.length ? 'is-active' : ''} onClick={() => setRulesOpen('sorts')}><ArrowUpDown size={13} />排序{activeView.config.sorts?.length ? ` · ${activeView.config.sorts.length}` : ''}</button>
           <button className={activeView.config.groupByPropertyId ? 'is-active' : ''} onClick={() => setRulesOpen('group')}><Layers3 size={13} />分组</button>
+          <button className={templateMenuOpen ? 'is-active' : ''} onClick={() => setTemplateMenuOpen((open) => !open)}><LayoutTemplate size={13} />模板{snapshot.templates?.length ? ` · ${snapshot.templates.length}` : ''}</button>
+          <button onClick={() => void exportCsv()} disabled={exportState === 'working'}><Download size={13} />{exportState === 'working' ? '导出中' : exportState === 'done' ? '已导出' : 'CSV'}</button>
           <button className="database-automation" onClick={() => setAutomationOpen(true)}><Zap size={13} />自动化 · {automations.filter((rule) => rule.enabled).length}</button>
           <button className="database-new" onClick={addRecord}><Plus size={13} />新建</button>
         </div>
         {viewMenuOpen && <ViewManagementMenu key={`${viewMenuOpen}-${activeView.id}`} mode={viewMenuOpen} views={snapshot.views} activeView={activeView} defaultViewId={snapshot.views[0]!.id} onClose={() => setViewMenuOpen(null)} onCreate={createView} onRename={async (name) => { setSnapshot(await databaseRepository.renameView(snapshot, activeView.id, name)); setViewMenuOpen(null) }} onDuplicate={duplicateView} onDelete={async () => { setSnapshot(await databaseRepository.deleteView(snapshot, activeView.id)); setViewMenuOpen(null) }} onSetDefault={async () => { setSnapshot(await databaseRepository.setDefaultView(snapshot, activeView.id)); setViewMenuOpen(null) }} />}
+        {templateMenuOpen && <DatabaseTemplateMenu templates={snapshot.templates ?? []} selectedCount={selectedRecordIds.size} onClose={() => setTemplateMenuOpen(false)} onCreateBlank={addRecord} onApply={createFromTemplate} onSaveSelection={saveSelectionAsTemplate} onDelete={async (templateId) => setSnapshot(await databaseRepository.deleteTemplate(snapshot, templateId))} />}
       </div>
+      {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
       <div className="database-summary"><span>{snapshot.schema.name}</span><span className="database-compute-mark">已更新 {projection.recomputedCount} 项</span><span>{records.length} / {snapshot.records.length} 条记录</span></div>
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
       {recordGroups.length > 0 && <div className="database-group-ledger"><span>分组</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
       {activeView.type === 'table' && (snapshot.schema.id === 'roadmap-db'
-        ? <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} onOpenRecord={setOpenRecordId} />
-        : <GenericTable records={records} schema={snapshot.schema} updateCell={updateCell} onOpenRecord={setOpenRecordId} />)}
+        ? <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />
+        : <GenericTable records={records} schema={snapshot.schema} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />)}
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
       {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
@@ -274,6 +305,49 @@ export function ViewManagementMenu({ mode, views, activeView, defaultViewId, onC
     </div>
     {error && <p>{error}</p>}
   </section>
+}
+
+export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCreateBlank, onApply, onSaveSelection, onDelete }: {
+  templates: DatabaseTemplate[]; selectedCount: number; onClose: () => void; onCreateBlank: () => void
+  onApply: (templateId: string) => Promise<void>; onSaveSelection: (name: string) => Promise<void>; onDelete: (templateId: string) => Promise<void>
+}) {
+  const [name, setName] = useState('新模板')
+  const [busy, setBusy] = useState(false)
+  const run = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); try { await action() } finally { setBusy(false) } }
+  return <section className="database-template-menu" role="dialog" aria-label="数据库模板">
+    <header><strong>新建记录</strong><button aria-label="关闭数据库模板" onClick={onClose}><X size={14} /></button></header>
+    <button className="template-blank" onClick={() => { onCreateBlank(); onClose() }}><Plus size={15} /><span><strong>空白记录</strong><small>使用数据库默认值</small></span></button>
+    <div className="database-template-list">
+      <small>模板</small>
+      {templates.map((template) => <div key={template.id}><button disabled={busy} onClick={() => void run(() => onApply(template.id))}><LayoutTemplate size={15} /><span><strong>{template.name}</strong><small>{Object.keys(template.values).length} 个预设属性</small></span></button><button aria-label={`删除模板 ${template.name}`} disabled={busy} onClick={() => void run(() => onDelete(template.id))}><Trash2 size={13} /></button></div>)}
+      {!templates.length && <p>还没有模板。选中一条记录后，可以将它保存为模板。</p>}
+    </div>
+    <footer><input aria-label="模板名称" value={name} maxLength={200} disabled={!selectedCount} onChange={(event) => setName(event.target.value)} /><button disabled={!selectedCount || !name.trim() || busy} onClick={() => void run(() => onSaveSelection(name.trim()))}>保存所选记录{selectedCount > 1 ? '中的第一条' : ''}</button></footer>
+  </section>
+}
+
+export function BulkEditToolbar({ schema, count, onClear, onApply }: { schema: DatabaseSchema; count: number; onClear: () => void; onApply: (propertyId: string, value: PropertyValue) => Promise<void> }) {
+  const properties = schema.properties.filter((property) => !['formula', 'rollup', 'relation'].includes(property.type))
+  const [propertyId, setPropertyId] = useState(properties[0]?.id ?? '')
+  const property = properties.find((candidate) => candidate.id === propertyId)
+  const [value, setValue] = useState<string | boolean>('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => setValue(property?.type === 'checkbox' ? false : ''), [propertyId])
+  const parsedValue = (): PropertyValue => {
+    if (property?.type === 'checkbox') return Boolean(value)
+    if (property?.type === 'number') return value === '' ? null : Number(value)
+    if (property?.type === 'multiSelect') return String(value).split(',').map((item) => item.trim()).filter(Boolean)
+    return value === '' ? null : String(value)
+  }
+  return <div className="database-bulk-toolbar" role="toolbar" aria-label={`批量编辑 ${count} 条记录`}>
+    <span><Check size={13} />已选择 {count} 条</span>
+    <select aria-label="批量编辑属性" value={propertyId} onChange={(event) => setPropertyId(event.target.value)}>{properties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select>
+    {property?.type === 'select' ? <select aria-label="批量编辑值" value={String(value)} onChange={(event) => setValue(event.target.value)}><option value="">清空</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+      : property?.type === 'checkbox' ? <label><input aria-label="批量编辑值" type="checkbox" checked={Boolean(value)} onChange={(event) => setValue(event.target.checked)} /><span>{value ? '已勾选' : '未勾选'}</span></label>
+        : <input aria-label="批量编辑值" type={property?.type === 'number' ? 'number' : property?.type === 'date' ? 'date' : 'text'} value={String(value)} placeholder={property?.type === 'multiSelect' ? '用逗号分隔多个值' : '输入统一值'} onChange={(event) => setValue(event.target.value)} />}
+    <button disabled={!propertyId || busy} onClick={() => { setBusy(true); void onApply(propertyId, parsedValue()).finally(() => setBusy(false)) }}>{busy ? '应用中…' : '应用'}</button>
+    <button aria-label="取消批量选择" onClick={onClear}><X size={14} /></button>
+  </div>
 }
 
 const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title' | 'relation' | 'rollup' | 'formula'>; label: string }> = [
@@ -536,16 +610,16 @@ function defaultPropertyValue(property: DatabaseProperty): PropertyValue {
   return null
 }
 
-export function GenericTable({ records, schema, updateCell, onOpenRecord }: { records: DatabaseRecord[]; schema: DatabaseSchema; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void }) {
+export function GenericTable({ records, schema, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll }: { records: DatabaseRecord[]; schema: DatabaseSchema; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void }) {
   const [scrollTop, setScrollTop] = useState(0)
   const properties = schema.properties.slice(0, 20)
   const { start, end, totalSize } = virtualWindow(records.length, scrollTop, ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
-  const template = properties.map((property, index) => index === 0 || property.type === 'title' ? 'minmax(180px, 1.6fr)' : 'minmax(120px, 1fr)').join(' ')
-  const minWidth = Math.max(420, properties.length * 140)
+  const template = `34px ${properties.map((property, index) => index === 0 || property.type === 'title' ? 'minmax(180px, 1.6fr)' : 'minmax(120px, 1fr)').join(' ')}`
+  const minWidth = Math.max(454, properties.length * 140 + 34)
   return <div className="generic-database-table">
-    <div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i>{property.name}</span>)}</div>
+    <div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}><label className="database-row-select"><input aria-label="选择全部记录" type="checkbox" checked={records.length > 0 && selectedIds.size === records.length} onChange={() => onToggleAll?.()} /><span /></label>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i>{property.name}</span>)}</div>
     <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(ROW_HEIGHT, records.length * ROW_HEIGHT)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className="generic-database-grid generic-database-row" key={record.id} style={{ gridTemplateColumns: template, transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
+      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className={`generic-database-grid generic-database-row ${selectedIds.has(record.id) ? 'is-selected' : ''}`} key={record.id} style={{ gridTemplateColumns: template, transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}><label className="database-row-select"><input aria-label={`选择记录 ${String(record.values[properties.find((property) => property.type === 'title')?.id ?? ''] || record.id)}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
     </div>
     {!records.length && <div className="generic-database-empty"><Database size={17} /><span>还没有记录</span><small>点击右上角“新建”写入第一行</small></div>}
   </div>
@@ -647,18 +721,19 @@ function propertyTypeLabel(type: DatabaseProperty['type']) {
   return ({ title: 'Aa', text: 'Tx', number: '#', checkbox: '✓', select: '◉', multiSelect: '◎', date: '◫', url: '↗', relation: '↔', rollup: '∑', formula: 'ƒ' } as const)[type]
 }
 
-export function VirtualTable({ records, allRecords, updateCell, onOpenRecord }: { records: DatabaseRecord[]; allRecords: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void }) {
+export function VirtualTable({ records, allRecords, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll }: { records: DatabaseRecord[]; allRecords: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void }) {
   const [scrollTop, setScrollTop] = useState(0)
   const { start, end, totalSize } = virtualWindow(records.length, scrollTop, ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
   const visible = records.slice(start, end)
 
   return (
     <div className="database-table">
-      <div className="database-grid database-grid-head"><span>任务</span><span>状态</span><span>负责人</span><span>截止日期</span><span>优先级</span><span><Link2 size={11} />依赖</span><span><Sigma size={11} />汇总</span><span>ƒ 风险</span></div>
+      <div className="database-grid database-grid-head"><label className="database-row-select"><input aria-label="选择全部记录" type="checkbox" checked={records.length > 0 && selectedIds.size === records.length} onChange={() => onToggleAll?.()} /><span /></label><span>任务</span><span>状态</span><span>负责人</span><span>截止日期</span><span>优先级</span><span><Link2 size={11} />依赖</span><span><Sigma size={11} />汇总</span><span>ƒ 风险</span></div>
       <div className="database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(ROW_HEIGHT, records.length * ROW_HEIGHT)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
         <div className="database-row-space" style={{ height: totalSize }}>
           {visible.map((record, offset) => (
-            <div className="database-grid database-grid-row" key={record.id} style={{ transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}>
+            <div className={`database-grid database-grid-row ${selectedIds.has(record.id) ? 'is-selected' : ''}`} key={record.id} style={{ transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}>
+              <label className="database-row-select"><input aria-label={`选择记录 ${String(record.values['task-title'] || record.id)}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label>
               <div className="generic-title-cell"><input value={String(record.values['task-title'] ?? '')} onChange={(event) => updateCell(record.id, 'task-title', event.target.value)} /><button aria-label={`打开 ${String(record.values['task-title'] || '无标题')}`} title="打开记录详情" onClick={() => onOpenRecord?.(record.id)}><BookOpen size={12} /></button></div>
               <StatusSelect record={record} updateCell={updateCell} />
               <input value={String(record.values['task-owner'] ?? '')} onChange={(event) => updateCell(record.id, 'task-owner', event.target.value)} />

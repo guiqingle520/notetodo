@@ -344,6 +344,39 @@ function registerWorkspaceIpc(database) {
     assertId(databaseId); assertId(viewId)
     return database.setDefaultDatabaseView(databaseId, viewId)
   })
+  ipcMain.handle('database:bulk-update', (_event, databaseId, recordIds, propertyId, value) => {
+    assertId(databaseId); assertId(propertyId)
+    if (!Array.isArray(recordIds) || recordIds.length < 1 || recordIds.length > 1000) throw new TypeError('Select between 1 and 1000 database records.')
+    const uniqueIds = [...new Set(recordIds)]
+    uniqueIds.forEach(assertId)
+    const serialized = JSON.stringify(value)
+    if (serialized === undefined || serialized.length > 100_000) throw new TypeError('Database cell value is invalid or too large.')
+    return database.bulkUpdateDatabaseRecords(databaseId, uniqueIds, propertyId, value)
+  })
+  ipcMain.handle('database:save-template', (_event, databaseId, template) => {
+    assertId(databaseId); assertId(template?.id)
+    if (typeof template.name !== 'string' || !template.name.trim() || template.name.length > 200) throw new TypeError('Invalid database template name.')
+    if (!template.values || typeof template.values !== 'object' || Array.isArray(template.values)) throw new TypeError('Invalid database template values.')
+    if (typeof template.content !== 'string' || template.content.length > 2_000_000 || JSON.stringify(template.values).length > 500_000) throw new TypeError('Database template is too large.')
+    return database.saveDatabaseTemplate(databaseId, { ...template, name: template.name.trim() })
+  })
+  ipcMain.handle('database:delete-template', (_event, databaseId, templateId) => {
+    assertId(databaseId); assertId(templateId)
+    return database.deleteDatabaseTemplate(databaseId, templateId)
+  })
+  ipcMain.handle('database:create-from-template', (_event, databaseId, templateId, recordId) => {
+    assertId(databaseId); assertId(templateId); assertId(recordId)
+    return database.createDatabaseRecordFromTemplate(databaseId, templateId, recordId)
+  })
+  ipcMain.handle('database:export-csv', async (_event, suggestedName, csv) => {
+    if (typeof suggestedName !== 'string' || suggestedName.length > 200 || typeof csv !== 'string' || csv.length > 20_000_000) throw new TypeError('CSV export is invalid or too large.')
+    const safeName = suggestedName.replace(/[<>:"/\\|?*\x00-\x1f]/gu, '_').trim() || 'database'
+    const selected = await dialog.showSaveDialog({ title: '导出 CSV', defaultPath: `${safeName}.csv`, buttonLabel: '导出', filters: [{ name: 'CSV 文件', extensions: ['csv'] }] })
+    if (selected.canceled || !selected.filePath) return false
+    // UTF-8 BOM keeps Chinese text readable when the file is opened directly in Excel.
+    await fs.promises.writeFile(selected.filePath, `\uFEFF${csv}`, 'utf8')
+    return true
+  })
   ipcMain.handle('sync:load-document', (_event, pageId) => {
     assertId(pageId)
     return database.loadSyncDocument(pageId)

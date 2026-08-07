@@ -54,6 +54,16 @@ export interface DatabaseViewConfig {
   cardSize?: 'small' | 'medium' | 'large'
 }
 
+export interface DatabaseTemplate {
+  id: string
+  databaseId: string
+  name: string
+  values: Record<string, PropertyValue>
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface CalendarDay {
   date: string
   day: number
@@ -74,6 +84,8 @@ export interface DatabaseSnapshot {
   records: DatabaseRecord[]
   views: DatabaseView[]
   activeViewId: string
+  /** Record templates are optional for snapshots created before schema v14. */
+  templates?: DatabaseTemplate[]
 }
 
 export interface SortRule {
@@ -85,6 +97,21 @@ export interface FilterRule {
   propertyId: string
   operator: 'equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty' | 'greaterThan' | 'lessThan'
   value?: PropertyValue
+}
+
+/**
+ * Serializes the current database result set as UTF-8 CSV. Spreadsheet formula
+ * prefixes are escaped so exported user text cannot execute when opened in
+ * Excel or another desktop spreadsheet application.
+ */
+export function serializeDatabaseCsv(schema: DatabaseSchema, records: DatabaseRecord[]) {
+  const escape = (value: PropertyValue | string) => {
+    const plain = Array.isArray(value) ? value.join(', ') : value === null || value === undefined ? '' : String(value)
+    const safe = /^[=+\-@]/u.test(plain.trimStart()) ? `'${plain}` : plain
+    return /[",\r\n]/u.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe
+  }
+  const header = schema.properties.map((property) => escape(property.name)).join(',')
+  return [header, ...records.map((record) => schema.properties.map((property) => escape(record.values[property.id] ?? '')).join(','))].join('\r\n')
 }
 
 export interface DatabaseAutomation {

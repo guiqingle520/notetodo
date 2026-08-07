@@ -52,6 +52,11 @@ interface Window {
       renameView: (databaseId: string, viewId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       deleteView: (databaseId: string, viewId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       setDefaultView: (databaseId: string, viewId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      bulkUpdate: (databaseId: string, recordIds: string[], propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      saveTemplate: (databaseId: string, template: import('@notetodo/database-core').DatabaseTemplate) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      deleteTemplate: (databaseId: string, templateId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      createFromTemplate: (databaseId: string, templateId: string, recordId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      exportCsv: (suggestedName: string, csv: string) => Promise<boolean>
     }
     sync: {
       loadDocument: (pageId: string) => Promise<{ snapshot: string | null; updates: Array<{ id: number; clientId: string; data: string }>; latestUpdateId: number }>

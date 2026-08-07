@@ -1158,3 +1158,46 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .database-view-actions > button.is-confirm-delete { color: #fff; background: #eb5757; }
 .database-view-actions > button.is-confirm-delete > svg { color: #fff; }
 .database-view-menu > p { margin: 0; padding: 8px 11px; color: #eb5757; border-top: 1px solid var(--notion-divider); font-size: 11px; line-height: 1.4; }
+
+.database-template-menu { position: absolute; z-index: 25; top: 68px; right: 92px; width: 330px; overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px; background: #fff; box-shadow: var(--notion-shadow); animation: menu-rise .12s ease both; }
+.database-template-menu > header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; border-bottom: 1px solid var(--notion-divider); }
+.database-template-menu > header strong { font-size: 12px; }
+.database-template-menu > header button { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-muted); border: 0; background: transparent; cursor: pointer; }
+.database-template-menu > header button:hover { background: var(--notion-hover); }
+.database-template-menu .template-blank { width: calc(100% - 10px); min-height: 42px; margin: 5px; display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 4px; padding: 5px 8px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: pointer; }
+.database-template-menu .template-blank:hover { background: var(--notion-hover); }
+.database-template-menu .template-blank > svg { color: var(--notion-muted); }
+.database-template-menu button > span { display: flex; flex-direction: column; gap: 1px; }
+.database-template-menu button strong { font-size: 12px; font-weight: 500; }
+.database-template-menu button small { color: var(--notion-faint); font-size: 10px; }
+.database-template-list { max-height: 210px; overflow-y: auto; padding: 4px 5px 6px; border-top: 1px solid var(--notion-divider); }
+.database-template-list > small { display: block; padding: 4px 7px; color: var(--notion-faint); font-size: 10px; }
+.database-template-list > div { display: grid; grid-template-columns: 1fr 28px; align-items: center; border-radius: 4px; }
+.database-template-list > div:hover { background: var(--notion-hover); }
+.database-template-list > div > button:first-child { min-height: 42px; display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 4px; padding: 4px 7px; color: var(--notion-text); border: 0; background: transparent; text-align: left; cursor: pointer; }
+.database-template-list > div > button:last-child { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-faint); border: 0; background: transparent; cursor: pointer; }
+.database-template-list > div > button:last-child:hover { color: #eb5757; background: rgba(235,87,87,.10); }
+.database-template-list > p { margin: 0; padding: 14px 10px; color: var(--notion-faint); font-size: 11px; line-height: 1.5; text-align: center; }
+.database-template-menu > footer { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding: 9px; border-top: 1px solid var(--notion-divider); background: var(--notion-sidebar); }
+.database-template-menu > footer input { min-width: 0; height: 31px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); background: #fff; font-size: 12px; }
+.database-template-menu > footer button { height: 31px; padding: 0 9px; color: #fff; border: 0; background: var(--notion-blue); font-size: 11px; cursor: pointer; }
+.database-template-menu button:disabled, .database-template-menu input:disabled { opacity: .42; cursor: default; }
+
+.database-bulk-toolbar { min-height: 42px; display: grid; grid-template-columns: auto minmax(120px, .6fr) minmax(150px, 1fr) auto 28px; align-items: center; gap: 7px; padding: 5px 8px; color: var(--notion-text); border-bottom: 1px solid var(--notion-divider); background: #f1f7fc; }
+.database-bulk-toolbar > span { display: flex; align-items: center; gap: 5px; color: var(--notion-blue); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.database-bulk-toolbar select, .database-bulk-toolbar > input { min-width: 0; height: 30px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); background: #fff; font-size: 12px; }
+.database-bulk-toolbar > label { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 8px; border: 1px solid var(--notion-border); background: #fff; font-size: 12px; }
+.database-bulk-toolbar > button { height: 30px; padding: 0 11px; color: #fff; border: 0; background: var(--notion-blue); font-size: 12px; cursor: pointer; }
+.database-bulk-toolbar > button:last-child { width: 28px; padding: 0; display: grid; place-items: center; color: var(--notion-muted); background: transparent; }
+.database-bulk-toolbar > button:last-child:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-bulk-toolbar button:disabled { opacity: .5; cursor: default; }
+
+.database-grid { grid-template-columns: 34px minmax(180px, 1.7fr) 112px 95px 124px 72px 126px 72px 82px; min-width: 1024px; }
+.database-row-space { min-width: 1024px; }
+.database-row-select { height: 100%; display: grid; place-items: center; padding: 0 !important; border-right: 1px solid var(--notion-divider) !important; background: transparent !important; }
+.database-row-select input { position: absolute; opacity: 0; pointer-events: none; }
+.database-row-select span { width: 14px; height: 14px; display: grid; place-items: center; border: 1px solid #b7b6b2; border-radius: 2px; background: #fff; cursor: pointer; }
+.database-row-select input:checked + span { color: #fff; border-color: var(--notion-blue); background: var(--notion-blue); }
+.database-row-select input:checked + span::after { content: '✓'; font-size: 10px; line-height: 1; }
+.database-grid-row.is-selected, .generic-database-row.is-selected { background: rgba(35,131,226,.07); }
+.generic-database-head > .database-row-select { border-bottom: 0; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, timelineDays, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, serializeDatabaseCsv, timelineDays, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -143,5 +143,13 @@ describe('database query engine', () => {
     }])
     expect(result.record.values.score).toBe(1)
     expect(result.executions).toEqual([{ automationId: 'complete', propertyId: 'score', value: 1 }])
+  })
+
+  it('exports quoted CSV while neutralizing spreadsheet formulas', () => {
+    const schema: DatabaseSchema = { id: 'export', name: 'Export', properties: [
+      { id: 'title', name: '名称', type: 'title' }, { id: 'note', name: '说明', type: 'text' },
+    ] }
+    const csv = serializeDatabaseCsv(schema, [{ id: '1', values: { title: '=HYPERLINK("x")', note: '包含,逗号\n和换行' }, createdAt: '', updatedAt: '' }])
+    expect(csv).toBe('名称,说明\r\n"\'=HYPERLINK(""x"")","包含,逗号\n和换行"')
   })
 })

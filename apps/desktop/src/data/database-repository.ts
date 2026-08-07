@@ -1,4 +1,4 @@
-import type { DatabaseRecord, DatabaseSnapshot, DatabaseView, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
+import type { DatabaseRecord, DatabaseSnapshot, DatabaseTemplate, DatabaseView, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
 
 const now = new Date().toISOString()
 const seedSnapshot: DatabaseSnapshot = {
@@ -151,6 +151,46 @@ class DatabaseRepository {
     if (!selected) throw new Error('视图不存在。')
     const next = { ...snapshot, views: [selected, ...snapshot.views.filter((view) => view.id !== viewId)] }
     this.write(next); return structuredClone(next)
+  }
+
+  async bulkUpdate(snapshot: DatabaseSnapshot, recordIds: string[], propertyId: string, value: PropertyValue) {
+    if (window.notetodo?.database) return window.notetodo.database.bulkUpdate(snapshot.schema.id, recordIds, propertyId, value)
+    const selected = new Set(recordIds)
+    const now = new Date().toISOString()
+    const next = { ...snapshot, records: snapshot.records.map((record) => selected.has(record.id) ? { ...record, values: { ...record.values, [propertyId]: value }, updatedAt: now } : record) }
+    this.write(next); return structuredClone(next)
+  }
+
+  async saveTemplate(snapshot: DatabaseSnapshot, template: DatabaseTemplate) {
+    if (window.notetodo?.database) return window.notetodo.database.saveTemplate(snapshot.schema.id, template)
+    const templates = [...(snapshot.templates ?? []).filter((candidate) => candidate.id !== template.id), template]
+    const next = { ...snapshot, templates }
+    this.write(next); return structuredClone(next)
+  }
+
+  async deleteTemplate(snapshot: DatabaseSnapshot, templateId: string) {
+    if (window.notetodo?.database) return window.notetodo.database.deleteTemplate(snapshot.schema.id, templateId)
+    const next = { ...snapshot, templates: (snapshot.templates ?? []).filter((template) => template.id !== templateId) }
+    this.write(next); return structuredClone(next)
+  }
+
+  async createFromTemplate(snapshot: DatabaseSnapshot, templateId: string, recordId: string) {
+    if (window.notetodo?.database) return window.notetodo.database.createFromTemplate(snapshot.schema.id, templateId, recordId)
+    const template = snapshot.templates?.find((candidate) => candidate.id === templateId)
+    if (!template) throw new Error('模板不存在。')
+    const now = new Date().toISOString()
+    const record: DatabaseRecord = { id: recordId, values: structuredClone(template.values), content: template.content, createdAt: now, updatedAt: now }
+    const next = { ...snapshot, records: [...snapshot.records, record] }
+    this.write(next); return structuredClone(next)
+  }
+
+  async exportCsv(name: string, csv: string) {
+    if (window.notetodo?.database) return window.notetodo.database.exportCsv(name, csv)
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a'); link.href = url; link.download = `${name.replace(/[<>:"/\\|?*]/gu, '_') || 'database'}.csv`; link.click()
+    URL.revokeObjectURL(url)
+    return true
   }
 
   private write(snapshot: DatabaseSnapshot, explicitPageId?: string) {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render, waitFor } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema, DatabaseView } from '@notetodo/database-core'
-import { BoardView, DatabaseCreationPrompt, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TimelineView, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TimelineView, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -173,5 +173,33 @@ describe('database authoring', () => {
     expect(onDelete).not.toHaveBeenCalled()
     fireEvent.click(manageMenu.getByRole('button', { name: '确认删除此视图' }))
     expect(onDelete).toHaveBeenCalledOnce()
+  })
+
+  it('selects rows, applies a bulk property value and saves a record template', async () => {
+    const updateCell = vi.fn()
+    const authoringSchema: DatabaseSchema = { id: 'bulk-db', name: '批量资料', properties: [
+      { id: 'title', name: '名称', type: 'title' },
+      { id: 'status', name: '状态', type: 'select', options: [{ id: 'todo', name: '待开始', color: 'slate' }, { id: 'done', name: '已完成', color: 'green' }] },
+    ] }
+    const rows: DatabaseRecord[] = [{ id: 'a', values: { title: 'A', status: 'todo' }, createdAt: '', updatedAt: '' }, { id: 'b', values: { title: 'B', status: 'todo' }, createdAt: '', updatedAt: '' }]
+    const onToggle = vi.fn()
+    const table = render(<GenericTable records={rows} schema={authoringSchema} updateCell={updateCell} selectedIds={new Set(['a'])} onToggleRecord={onToggle} onToggleAll={vi.fn()} />)
+    fireEvent.click(table.getByRole('checkbox', { name: '选择记录 A' }))
+    expect(onToggle).toHaveBeenCalledWith('a')
+    table.unmount()
+
+    const onApply = vi.fn().mockResolvedValue(undefined)
+    const toolbar = render(<BulkEditToolbar schema={authoringSchema} count={2} onClear={vi.fn()} onApply={onApply} />)
+    fireEvent.change(toolbar.getByRole('combobox', { name: '批量编辑属性' }), { target: { value: 'status' } })
+    fireEvent.change(toolbar.getByRole('combobox', { name: '批量编辑值' }), { target: { value: 'done' } })
+    fireEvent.click(toolbar.getByRole('button', { name: '应用' }))
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith('status', 'done'))
+    toolbar.unmount()
+
+    const onSaveSelection = vi.fn().mockResolvedValue(undefined)
+    const templates = render(<DatabaseTemplateMenu templates={[]} selectedCount={1} onClose={vi.fn()} onCreateBlank={vi.fn()} onApply={vi.fn()} onSaveSelection={onSaveSelection} onDelete={vi.fn()} />)
+    fireEvent.change(templates.getByRole('textbox', { name: '模板名称' }), { target: { value: '发布检查' } })
+    fireEvent.click(templates.getByRole('button', { name: '保存所选记录' }))
+    await waitFor(() => expect(onSaveSelection).toHaveBeenCalledWith('发布检查'))
   })
 })
