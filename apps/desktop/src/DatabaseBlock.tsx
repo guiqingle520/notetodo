@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, FileUp, Filter, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Settings2, Sigma, Star, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, coerceCsvPropertyValue, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SortRule } from '@notetodo/database-core'
+import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, validateFormulaExpression, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -57,6 +57,8 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null>(initialSnapshot ?? null)
   const [rulesOpen, setRulesOpen] = useState<'filters' | 'sorts' | 'group' | null>(null)
   const [schemaOpen, setSchemaOpen] = useState(false)
+  const [databaseSources, setDatabaseSources] = useState<Array<{ id: string; pageId: string; name: string; pageTitle: string; recordCount: number }>>([])
+  const [relationTargets, setRelationTargets] = useState<Record<string, { schema: DatabaseSchema; records: DatabaseRecord[] }>>({})
   const [automationOpen, setAutomationOpen] = useState(false)
   const [viewMenuOpen, setViewMenuOpen] = useState<'create' | 'manage' | null>(null)
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
@@ -79,6 +81,21 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     if (window.notetodo?.automations) void Promise.all([window.notetodo.automations.list(snapshot.schema.id), window.notetodo.automations.listRuns(snapshot.schema.id)]).then(([rules, runs]) => { setAutomations(rules); setAutomationRuns(runs) })
     else setAutomations(snapshot.schema.id === 'roadmap-db' ? [previewAutomation] : [])
   }, [snapshot?.schema.id])
+  useEffect(() => { if (schemaOpen) void databaseRepository.listSources().then(setDatabaseSources) }, [schemaOpen])
+  useEffect(() => {
+    if (!snapshot) return
+    const targetIds = [...new Set(snapshot.schema.properties.filter((property) => property.type === 'relation').map((property) => property.relation?.databaseId).filter((id): id is string => Boolean(id && id !== snapshot.schema.id)))]
+    if (!targetIds.length) { setRelationTargets({}); return }
+    let active = true
+    void databaseRepository.listSources().then(async (sources) => {
+      const loaded = await Promise.all(targetIds.map(async (databaseId) => {
+        const source = sources.find((candidate) => candidate.id === databaseId)
+        return [databaseId, source ? await databaseRepository.loadByPage(source.pageId) : null] as const
+      }))
+      if (active) setRelationTargets(Object.fromEntries(loaded.filter((entry): entry is readonly [string, DatabaseSnapshot] => Boolean(entry[1])).map(([id, target]) => [id, { schema: target.schema, records: target.records }])))
+    })
+    return () => { active = false }
+  }, [snapshot?.schema.properties])
 
   // Rollups and formulas are computed once per snapshot, never persisted back.
   // This keeps sort/filter cheap while making every view consume identical data.
@@ -237,17 +254,17 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       {recordGroups.length > 0 && <div className="database-group-ledger"><span>分组</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
       {activeView.type === 'table' && (snapshot.schema.id === 'roadmap-db'
         ? <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />
-        : <GenericTable records={records} schema={snapshot.schema} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />)}
+        : <GenericTable records={records} schema={snapshot.schema} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />)}
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
       {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
       {activeView.type === 'timeline' && <TimelineView records={records} schema={snapshot.schema} startDatePropertyId={activeView.config.startDatePropertyId} endDatePropertyId={activeView.config.endDatePropertyId} updateCell={updateCell} />}
       {activeView.type === 'gallery' && <GalleryView records={records} schema={snapshot.schema} coverPropertyId={activeView.config.coverPropertyId} visiblePropertyIds={activeView.config.visiblePropertyIds} cardSize={activeView.config.cardSize} updateCell={updateCell} />}
       {rulesOpen && createPortal(<ViewRulesPanel schema={snapshot.schema} config={activeView.config} initialTab={rulesOpen} onClose={() => setRulesOpen(null)} onSave={(config) => { saveViewConfig(config); setRulesOpen(null) }} />, document.body)}
-      {schemaOpen && createPortal(<SchemaPanel schema={snapshot.schema} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
+      {schemaOpen && createPortal(<SchemaPanel schema={snapshot.schema} previewRecord={derivedRecords[0]} databaseSources={databaseSources} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onConfigure={async (propertyId, config) => setSnapshot(await databaseRepository.updatePropertyConfig(snapshot, propertyId, config))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
       {editingTemplate && createPortal(<TemplateEditorPanel schema={snapshot.schema} template={editingTemplate === 'new' ? null : editingTemplate} onClose={() => setEditingTemplate(null)} onSave={saveEditedTemplate} />, document.body)}
       {csvImportOpen && createPortal(<CsvImportPanel schema={snapshot.schema} onClose={() => setCsvImportOpen(false)} onImport={importCsvRecords} />, document.body)}
-      {openRecordId && derivedRecords.find((record) => record.id === openRecordId) && createPortal(<RecordDetailPanel key={openRecordId} record={derivedRecords.find((record) => record.id === openRecordId)!} schema={snapshot.schema} onClose={() => setOpenRecordId(null)} onUpdateCell={updateCell} onUpdateContent={updateRecordContent} />, document.body)}
+      {openRecordId && derivedRecords.find((record) => record.id === openRecordId) && createPortal(<RecordDetailPanel key={openRecordId} record={derivedRecords.find((record) => record.id === openRecordId)!} schema={snapshot.schema} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} onClose={() => setOpenRecordId(null)} onUpdateCell={updateCell} onUpdateContent={updateRecordContent} />, document.body)}
       {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
         if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
         else setAutomations((current) => [...current.filter((item) => item.id !== rule.id), rule])
@@ -444,26 +461,64 @@ export function BulkEditToolbar({ schema, count, onClear, onApply }: { schema: D
   </div>
 }
 
-const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title' | 'relation' | 'rollup' | 'formula'>; label: string }> = [
+const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title' | 'rollup'>; label: string }> = [
   { id: 'text', label: '文本' }, { id: 'number', label: '数字' }, { id: 'checkbox', label: '复选框' },
   { id: 'select', label: '单选' }, { id: 'multiSelect', label: '多选' }, { id: 'date', label: '日期' }, { id: 'url', label: '网址' },
+  { id: 'relation', label: '关联' }, { id: 'formula', label: '公式' },
 ]
 
-export function SchemaPanel({ schema, onClose, onAdd, onRename, onDelete }: { schema: DatabaseSchema; onClose: () => void; onAdd: (name: string, type: Exclude<PropertyType, 'title' | 'relation' | 'rollup' | 'formula'>) => Promise<void>; onRename: (propertyId: string, name: string) => Promise<void>; onDelete: (propertyId: string) => Promise<void> }) {
+type PropertyConfig = Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'formula'>>
+type DatabaseSource = { id: string; pageId: string; name: string; pageTitle: string; recordCount: number }
+
+export function SchemaPanel({ schema, previewRecord, databaseSources, onClose, onAdd, onRename, onConfigure, onDelete }: {
+  schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; onClose: () => void
+  onAdd: (name: string, type: Exclude<PropertyType, 'title' | 'rollup'>) => Promise<void>; onRename: (propertyId: string, name: string) => Promise<void>
+  onConfigure: (propertyId: string, config: PropertyConfig) => Promise<void>; onDelete: (propertyId: string) => Promise<void>
+}) {
   const [name, setName] = useState('')
   const [type, setType] = useState<(typeof writablePropertyTypes)[number]['id']>('text')
   const [busy, setBusy] = useState(false)
   const [deletePending, setDeletePending] = useState<string | null>(null)
-  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [onClose])
+  const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null)
+  const editingProperty = schema.properties.find((property) => property.id === editingPropertyId)
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key !== 'Escape') return; if (editingPropertyId) setEditingPropertyId(null); else onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [editingPropertyId, onClose])
   const add = async () => {
     if (!name.trim() || busy || schema.properties.length >= 50) return
     setBusy(true); try { await onAdd(name.trim(), type); setName('') } finally { setBusy(false) }
   }
-  return <div className="schema-panel-backdrop" onMouseDown={onClose}><section className="schema-panel" role="dialog" aria-modal="true" aria-label="数据库属性管理" onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="schema-panel-backdrop" onMouseDown={onClose}><section className={`schema-panel ${editingProperty ? 'is-configuring' : ''}`} role="dialog" aria-modal="true" aria-label="数据库属性管理" onMouseDown={(event) => event.stopPropagation()}>
     <header><div><small>SCHEMA DESK / {schema.name.toLocaleUpperCase()}</small><strong>定义资料的骨架</strong></div><button aria-label="关闭属性管理" onClick={onClose}><X size={15} /></button></header>
-    <main><div className="schema-ledger-head"><span>序号</span><span>属性名称</span><span>类型</span><span>操作</span></div>{schema.properties.map((property, index) => <div className="schema-ledger-row" key={property.id}><em>{String(index + 1).padStart(2, '0')}</em><input aria-label={`${property.name} 属性名称`} defaultValue={property.name} maxLength={100} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== property.name) void onRename(property.id, next) }} /><span><i>{propertyTypeLabel(property.type)}</i>{propertyTypeName(property.type)}</span>{property.type === 'title' || ['formula', 'rollup'].includes(property.type) ? <small>{property.type === 'title' ? '主属性' : '只读派生'}</small> : <button className={deletePending === property.id ? 'is-confirm' : ''} onClick={() => { if (deletePending !== property.id) return setDeletePending(property.id); void onDelete(property.id).then(() => setDeletePending(null)) }}><Trash2 size={11} />{deletePending === property.id ? '确认删除' : '删除'}</button>}</div>)}</main>
+    <main className="schema-workbench"><section className="schema-ledger"><div className="schema-ledger-head"><span>序号</span><span>属性名称</span><span>类型</span><span>操作</span></div>{schema.properties.map((property, index) => {
+      const configurable = ['select', 'multiSelect', 'relation', 'formula'].includes(property.type)
+      return <div className={`schema-ledger-row ${editingPropertyId === property.id ? 'is-selected' : ''}`} key={property.id}><em>{String(index + 1).padStart(2, '0')}</em><input aria-label={`${property.name} 属性名称`} defaultValue={property.name} maxLength={100} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== property.name) void onRename(property.id, next) }} /><span><i>{propertyTypeLabel(property.type)}</i>{propertyTypeName(property.type)}</span><div>{configurable && <button aria-label={`配置 ${property.name}`} onClick={() => setEditingPropertyId(property.id)}><Settings2 size={12} /></button>}{property.type === 'title' || property.type === 'rollup' ? <small>{property.type === 'title' ? '主属性' : '只读派生'}</small> : <button aria-label={`删除属性 ${property.name}`} className={deletePending === property.id ? 'is-confirm' : ''} onClick={() => { if (deletePending !== property.id) return setDeletePending(property.id); void onDelete(property.id).then(() => setDeletePending(null)) }}><Trash2 size={11} /></button>}</div></div>
+    })}</section>{editingProperty && <PropertyConfigEditor key={editingProperty.id} property={editingProperty} schema={schema} previewRecord={previewRecord} databaseSources={databaseSources} onClose={() => setEditingPropertyId(null)} onSave={async (config) => { setBusy(true); try { await onConfigure(editingProperty.id, config); setEditingPropertyId(null) } finally { setBusy(false) } }} />}</main>
     <footer><div><input aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span>{schema.properties.length} / 50 个属性 · 标题属性受保护</span></footer>
   </section></div>
+}
+
+const optionColors: SelectOption['color'][] = ['slate', 'gray', 'brown', 'red', 'orange', 'amber', 'green', 'blue', 'purple', 'pink']
+
+function PropertyConfigEditor({ property, schema, previewRecord, databaseSources, onClose, onSave }: { property: DatabaseProperty; schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; onClose: () => void; onSave: (config: PropertyConfig) => Promise<void> }) {
+  const [options, setOptions] = useState<SelectOption[]>(() => structuredClone(property.options ?? []))
+  const [relationDatabaseId, setRelationDatabaseId] = useState(property.relation?.databaseId ?? schema.id)
+  const [expression, setExpression] = useState(property.formula?.expression ?? '""')
+  const [busy, setBusy] = useState(false)
+  const validFormula = property.type !== 'formula' || validateFormulaExpression(expression)
+  const duplicateOption = options.some((option, index) => options.findIndex((candidate) => candidate.name.trim().toLocaleLowerCase() === option.name.trim().toLocaleLowerCase()) !== index || !option.name.trim())
+  const save = async () => {
+    const config: PropertyConfig = ['select', 'multiSelect'].includes(property.type) ? { options } : property.type === 'relation' ? { relation: { databaseId: relationDatabaseId } } : { formula: { expression: expression.trim() } }
+    setBusy(true); try { await onSave(config) } finally { setBusy(false) }
+  }
+  const previewValues = { ...(previewRecord?.values ?? {}) }
+  for (const candidate of schema.properties) previewValues[candidate.name] = previewRecord?.values[candidate.id] ?? null
+  const preview = property.type === 'formula' ? evaluateFormula(expression, previewValues) : null
+  return <aside className="property-config-editor" aria-label={`${property.name} 属性配置`}>
+    <header><div><i>{propertyTypeLabel(property.type)}</i><span><small>{propertyTypeName(property.type).toLocaleUpperCase()} PROPERTY</small><strong>{property.name}</strong></span></div><button aria-label="关闭属性配置" onClick={onClose}><X size={14} /></button></header>
+    {['select', 'multiSelect'].includes(property.type) && <div className="option-config"><p>选项会立即用于表格、筛选和分组。拖动排序将在下一阶段开放。</p>{options.map((option, index) => <div className="option-config-row" key={option.id}><span className={`option-swatch color-${option.color}`} /><input aria-label={`选项 ${index + 1} 名称`} maxLength={100} value={option.name} onChange={(event) => setOptions((current) => current.map((candidate, position) => position === index ? { ...candidate, name: event.target.value } : candidate))} /><details><summary aria-label={`选项 ${index + 1} 颜色`} className={`color-${option.color}`} /><div>{optionColors.map((color) => <button aria-label={`颜色 ${color}`} className={`color-${color}`} key={color} onClick={() => setOptions((current) => current.map((candidate, position) => position === index ? { ...candidate, color } : candidate))} />)}</div></details><button aria-label={`删除选项 ${option.name}`} onClick={() => setOptions((current) => current.filter((_, position) => position !== index))}><Trash2 size={12} /></button></div>)}<button className="option-add" disabled={options.length >= 100} onClick={() => setOptions((current) => [...current, { id: crypto.randomUUID(), name: `选项 ${current.length + 1}`, color: optionColors[current.length % optionColors.length]! }])}><Plus size={13} />添加选项</button>{duplicateOption && <small className="property-config-error">选项名称不能为空或重复。</small>}</div>}
+    {property.type === 'relation' && <div className="relation-config"><p>选择要关联的数据库。已有不属于新目标的关联值将保留显示，但再次编辑时需要重新选择。</p><label><span>目标数据库</span><select aria-label="关联目标数据库" value={relationDatabaseId} onChange={(event) => setRelationDatabaseId(event.target.value)}>{databaseSources.map((source) => <option key={source.id} value={source.id}>{source.name} · {source.recordCount} 条</option>)}</select></label><div className="relation-preview"><Link2 size={15} /><span><small>RELATION TARGET</small><strong>{databaseSources.find((source) => source.id === relationDatabaseId)?.pageTitle ?? schema.name}</strong></span></div></div>}
+    {property.type === 'formula' && <div className="formula-config"><p>使用属性名称，例如 <code>[评分] * 2</code>。支持 if、concat、round、min、max 与基础运算。</p><textarea aria-label="公式表达式" spellCheck={false} value={expression} onChange={(event) => setExpression(event.target.value)} /><div className="formula-token-list"><small>插入属性</small>{schema.properties.filter((candidate) => candidate.id !== property.id && candidate.type !== 'formula').map((candidate) => <button key={candidate.id} onClick={() => setExpression((current) => `${current}${current && !/\s$/u.test(current) ? ' ' : ''}[${candidate.name}]`)}>{candidate.name}</button>)}</div><div className={`formula-preview ${validFormula ? '' : 'is-error'}`}><Sigma size={15} /><span><small>{validFormula ? '当前记录预览' : '表达式不完整'}</small><strong>{validFormula ? formatPropertyValue(preview) || '—' : '检查括号、引号或运算符'}</strong></span></div></div>}
+    <footer><button onClick={onClose}>取消</button><button disabled={busy || duplicateOption || !validFormula || (property.type === 'relation' && !relationDatabaseId)} onClick={() => void save()}>{busy ? '保存中…' : '保存配置'}</button></footer>
+  </aside>
 }
 
 function propertyTypeName(type: PropertyType) {
@@ -686,6 +741,7 @@ function AutomationPanel({ schema, rules, runs, onClose, onSave, onToggle, onRep
 }
 
 function propertyName(properties: DatabaseProperty[], id: string) { return properties.find((property) => property.id === id)?.name ?? id }
+function formatPropertyValue(value: PropertyValue | undefined) { return Array.isArray(value) ? value.join('、') : value === null || value === undefined || value === '' ? '' : String(value) }
 function displayAutomationValue(value: AutomationValue | undefined) { return Array.isArray(value) ? value.join(', ') : value === null || value === undefined ? '' : String(value) }
 function parseAutomationValue(property: DatabaseProperty | undefined, value: string): AutomationValue {
   if (!value) return null
@@ -704,7 +760,9 @@ function defaultPropertyValue(property: DatabaseProperty): PropertyValue {
   return null
 }
 
-export function GenericTable({ records, schema, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll }: { records: DatabaseRecord[]; schema: DatabaseSchema; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void }) {
+type RelationTargets = Record<string, { schema: DatabaseSchema; records: DatabaseRecord[] }>
+
+export function GenericTable({ records, schema, relationTargets = {}, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll }: { records: DatabaseRecord[]; schema: DatabaseSchema; relationTargets?: RelationTargets; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void }) {
   const [scrollTop, setScrollTop] = useState(0)
   const properties = schema.properties.slice(0, 20)
   const { start, end, totalSize } = virtualWindow(records.length, scrollTop, ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
@@ -713,25 +771,32 @@ export function GenericTable({ records, schema, updateCell, onOpenRecord, select
   return <div className="generic-database-table">
     <div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}><label className="database-row-select"><input aria-label="选择全部记录" type="checkbox" checked={records.length > 0 && selectedIds.size === records.length} onChange={() => onToggleAll?.()} /><span /></label>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i>{property.name}</span>)}</div>
     <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(ROW_HEIGHT, records.length * ROW_HEIGHT)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className={`generic-database-grid generic-database-row ${selectedIds.has(record.id) ? 'is-selected' : ''}`} key={record.id} style={{ gridTemplateColumns: template, transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}><label className="database-row-select"><input aria-label={`选择记录 ${String(record.values[properties.find((property) => property.type === 'title')?.id ?? ''] || record.id)}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
+      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className={`generic-database-grid generic-database-row ${selectedIds.has(record.id) ? 'is-selected' : ''}`} key={record.id} style={{ gridTemplateColumns: template, transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}><label className="database-row-select"><input aria-label={`选择记录 ${String(record.values[properties.find((property) => property.type === 'title')?.id ?? ''] || record.id)}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} relationTargets={relationTargets} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
     </div>
     {!records.length && <div className="generic-database-empty"><Database size={17} /><span>还没有记录</span><small>点击右上角“新建”写入第一行</small></div>}
   </div>
 }
 
-function GenericCell({ record, property, updateCell, onOpenRecord }: { record: DatabaseRecord; property: DatabaseProperty; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void }) {
+function GenericCell({ record, property, relationTargets, updateCell, onOpenRecord }: { record: DatabaseRecord; property: DatabaseProperty; relationTargets: RelationTargets; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void }) {
   const value = record.values[property.id]
-  if (property.type === 'select') return <select className={`generic-select value-${String(value ?? 'empty')}`} value={String(value ?? '')} onChange={(event) => updateCell(record.id, property.id, event.target.value || null)}><option value="">未选择</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+  if (property.type === 'select') return <select className={`generic-select select-color-${property.options?.find((option) => option.id === value)?.color ?? 'empty'}`} value={String(value ?? '')} onChange={(event) => updateCell(record.id, property.id, event.target.value || null)}><option value="">未选择</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
   if (property.type === 'checkbox') return <label className="generic-check"><input type="checkbox" checked={Boolean(value)} onChange={(event) => updateCell(record.id, property.id, event.target.checked)} /><span /></label>
   if (property.type === 'number') return <input type="number" value={typeof value === 'number' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value === '' ? null : Number(event.target.value))} />
   if (property.type === 'date') return <input type="date" value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value || null)} />
   if (property.type === 'multiSelect') return <input value={Array.isArray(value) ? value.join(', ') : ''} placeholder="逗号分隔" onChange={(event) => updateCell(record.id, property.id, event.target.value.split(',').map((item) => item.trim()).filter(Boolean))} />
-  if (property.type === 'formula' || property.type === 'rollup' || property.type === 'relation') return <output>{Array.isArray(value) ? value.join('、') : value === null || value === undefined ? '—' : String(value)}</output>
+  if (property.type === 'relation') return <RelationValueEditor value={Array.isArray(value) ? value : []} target={property.relation?.databaseId ? relationTargets[property.relation.databaseId] : undefined} onChange={(next) => updateCell(record.id, property.id, next)} />
+  if (property.type === 'formula' || property.type === 'rollup') return <output>{Array.isArray(value) ? value.join('、') : value === null || value === undefined ? '—' : String(value)}</output>
   if (property.type === 'title') return <div className="generic-title-cell"><input className="is-title" value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value)} /><button aria-label={`打开 ${String(value || '无标题')}`} title="打开记录详情" onClick={() => onOpenRecord?.(record.id)}><BookOpen size={12} /></button></div>
   return <input type={property.type === 'url' ? 'url' : 'text'} value={typeof value === 'string' ? value : ''} onChange={(event) => updateCell(record.id, property.id, event.target.value)} />
 }
 
-export function RecordDetailPanel({ record, schema, onClose, onUpdateCell, onUpdateContent }: { record: DatabaseRecord; schema: DatabaseSchema; onClose: () => void; onUpdateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onUpdateContent: (recordId: string, content: string) => void }) {
+function RelationValueEditor({ value, target, onChange }: { value: string[]; target?: RelationTargets[string]; onChange: (value: string[]) => void }) {
+  const titleId = target?.schema.properties.find((property) => property.type === 'title')?.id
+  const names = new Map(target?.records.map((record) => [record.id, String(record.values[titleId ?? ''] || '无标题')]) ?? [])
+  return <details className="relation-value-editor"><summary>{value.length ? value.slice(0, 2).map((id) => names.get(id) ?? id).join('、') + (value.length > 2 ? ` +${value.length - 2}` : '') : '添加关联'}</summary><div>{target?.records.slice(0, 100).map((candidate) => <label key={candidate.id}><input type="checkbox" checked={value.includes(candidate.id)} onChange={() => onChange(value.includes(candidate.id) ? value.filter((id) => id !== candidate.id) : [...value, candidate.id].slice(0, 100))} /><span>{names.get(candidate.id)}</span></label>)}{!target?.records.length && <p>目标数据库还没有记录。</p>}</div></details>
+}
+
+export function RecordDetailPanel({ record, schema, relationTargets = {}, onClose, onUpdateCell, onUpdateContent }: { record: DatabaseRecord; schema: DatabaseSchema; relationTargets?: RelationTargets; onClose: () => void; onUpdateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onUpdateContent: (recordId: string, content: string) => void }) {
   const titleProperty = schema.properties.find((property) => property.type === 'title')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestContent = useRef(record.content ?? '')
@@ -784,7 +849,7 @@ export function RecordDetailPanel({ record, schema, onClose, onUpdateCell, onUpd
         </main>
         <aside>
           <div className="record-property-heading"><span>属性</span><em>{schema.properties.length}</em></div>
-          {schema.properties.filter((property) => property.type !== 'title').map((property) => <RecordPropertyField key={property.id} record={record} property={property} onUpdate={onUpdateCell} />)}
+          {schema.properties.filter((property) => property.type !== 'title').map((property) => <RecordPropertyField key={property.id} record={record} property={property} relationTargets={relationTargets} onUpdate={onUpdateCell} />)}
           <footer><span>创建</span><time>{formatRecordTime(record.createdAt)}</time><span>更新</span><time>{formatRecordTime(record.updatedAt)}</time></footer>
         </aside>
       </div>
@@ -792,7 +857,7 @@ export function RecordDetailPanel({ record, schema, onClose, onUpdateCell, onUpd
   </div>
 }
 
-function RecordPropertyField({ record, property, onUpdate }: { record: DatabaseRecord; property: DatabaseProperty; onUpdate: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+function RecordPropertyField({ record, property, relationTargets, onUpdate }: { record: DatabaseRecord; property: DatabaseProperty; relationTargets: RelationTargets; onUpdate: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
   const value = record.values[property.id]
   let field: ReactNode
   if (property.type === 'select') field = <select value={String(value ?? '')} onChange={(event) => onUpdate(record.id, property.id, event.target.value || null)}><option value="">未选择</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
@@ -800,7 +865,8 @@ function RecordPropertyField({ record, property, onUpdate }: { record: DatabaseR
   else if (property.type === 'number') field = <input type="number" value={typeof value === 'number' ? value : ''} onChange={(event) => onUpdate(record.id, property.id, event.target.value === '' ? null : Number(event.target.value))} />
   else if (property.type === 'date') field = <input type="date" value={typeof value === 'string' ? value : ''} onChange={(event) => onUpdate(record.id, property.id, event.target.value || null)} />
   else if (property.type === 'multiSelect') field = <input value={Array.isArray(value) ? value.join(', ') : ''} placeholder="逗号分隔" onChange={(event) => onUpdate(record.id, property.id, event.target.value.split(',').map((item) => item.trim()).filter(Boolean))} />
-  else if (['formula', 'rollup', 'relation'].includes(property.type)) field = <output>{Array.isArray(value) ? value.join('、') : value === null || value === undefined ? '—' : String(value)}</output>
+  else if (property.type === 'relation') field = <RelationValueEditor value={Array.isArray(value) ? value : []} target={property.relation?.databaseId ? relationTargets[property.relation.databaseId] : undefined} onChange={(next) => onUpdate(record.id, property.id, next)} />
+  else if (['formula', 'rollup'].includes(property.type)) field = <output>{Array.isArray(value) ? value.join('、') : value === null || value === undefined ? '—' : String(value)}</output>
   else field = <input type={property.type === 'url' ? 'url' : 'text'} value={typeof value === 'string' ? value : ''} placeholder="空" onChange={(event) => onUpdate(record.id, property.id, event.target.value)} />
   return <label className="record-property-field"><span><i>{propertyTypeLabel(property.type)}</i>{property.name}</span>{field}</label>
 }

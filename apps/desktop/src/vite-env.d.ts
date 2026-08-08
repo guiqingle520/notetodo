@@ -41,6 +41,8 @@ interface Window {
       loadByPage: (pageId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot | null>
       create: (pageId: string, databaseId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       addProperty: (databaseId: string, propertyId: string, name: string, type: import('@notetodo/database-core').PropertyType) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      listSources: () => Promise<Array<{ id: string; pageId: string; name: string; pageTitle: string; recordCount: number }>>
+      updatePropertyConfig: (databaseId: string, propertyId: string, config: Partial<Pick<import('@notetodo/database-core').DatabaseProperty, 'options' | 'relation' | 'formula'>>) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       renameProperty: (databaseId: string, propertyId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       deleteProperty: (databaseId: string, propertyId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<{ automationRuns: string[] }>

@@ -1084,11 +1084,50 @@ class WorkspaceDatabase {
     const config = type === 'select' || type === 'multiSelect' ? JSON.stringify({ options: [
       { id: 'option-1', name: '选项 1', color: 'slate' },
       { id: 'option-2', name: '选项 2', color: 'amber' },
-    ] }) : '{}'
+    ] }) : type === 'relation' ? JSON.stringify({ relation: { databaseId } }) : type === 'formula' ? JSON.stringify({ formula: { expression: '""' } }) : '{}'
     const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_properties WHERE database_id = ?').get(databaseId).position
     const result = this.database.prepare('INSERT INTO database_properties(id, database_id, name, type, position, config_json) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)')
       .run(propertyId, databaseId, name, type, position, config, databaseId)
     if (result.changes !== 1) throw new Error('Database does not exist.')
+    return this.loadDatabaseById(databaseId)
+  }
+
+  listDatabaseSources() {
+    return this.database.prepare(`
+      SELECT database.id, database.page_id AS pageId, database.name, page.title AS pageTitle,
+        (SELECT COUNT(*) FROM database_records record WHERE record.database_id = database.id) AS recordCount
+      FROM databases database JOIN pages page ON page.id = database.page_id
+      WHERE page.archived_at IS NULL ORDER BY page.last_visited_at DESC, database.name, database.id
+    `).all()
+  }
+
+  updateDatabasePropertyConfig(databaseId, propertyId, config) {
+    const property = this.database.prepare('SELECT type FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
+    if (!property) throw new Error('Database property does not exist.')
+    let normalized = {}
+    if (property.type === 'select' || property.type === 'multiSelect') {
+      const colors = new Set(['slate', 'gray', 'brown', 'red', 'orange', 'amber', 'green', 'blue', 'purple', 'pink'])
+      if (!Array.isArray(config.options) || config.options.length > 100) throw new TypeError('Select configuration must contain at most 100 options.')
+      const ids = new Set(); const names = new Set()
+      const options = config.options.map((option) => {
+        if (!option || typeof option.id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(option.id) || ids.has(option.id)) throw new TypeError('Select option IDs must be unique and safe.')
+        const name = typeof option.name === 'string' ? option.name.trim() : ''
+        const nameKey = name.toLocaleLowerCase()
+        if (!name || name.length > 100 || names.has(nameKey) || !colors.has(option.color)) throw new TypeError('Select options require unique names and valid colors.')
+        ids.add(option.id); names.add(nameKey); return { id: option.id, name, color: option.color }
+      })
+      normalized = { options }
+    } else if (property.type === 'relation') {
+      const targetId = config?.relation?.databaseId
+      if (typeof targetId !== 'string' || !this.database.prepare('SELECT 1 FROM databases WHERE id = ?').get(targetId)) throw new TypeError('Relation target database does not exist.')
+      normalized = { relation: { databaseId: targetId } }
+    } else if (property.type === 'formula') {
+      const expression = typeof config?.formula?.expression === 'string' ? config.formula.expression.trim() : ''
+      if (!expression || expression.length > 1000) throw new TypeError('Formula expression must contain 1 to 1,000 characters.')
+      normalized = { formula: { expression } }
+    } else if (Object.keys(config ?? {}).length) throw new TypeError('This property type has no configurable settings.')
+    const result = this.database.prepare('UPDATE database_properties SET config_json = ? WHERE id = ? AND database_id = ?').run(JSON.stringify(normalized), propertyId, databaseId)
+    if (result.changes !== 1) throw new Error('Database property does not exist.')
     return this.loadDatabaseById(databaseId)
   }
 

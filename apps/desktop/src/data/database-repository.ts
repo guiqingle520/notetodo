@@ -1,4 +1,4 @@
-import type { DatabaseRecord, DatabaseSnapshot, DatabaseTemplate, DatabaseView, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
+import type { DatabaseProperty, DatabaseRecord, DatabaseSnapshot, DatabaseTemplate, DatabaseView, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
 
 const now = new Date().toISOString()
 const seedSnapshot: DatabaseSnapshot = {
@@ -73,13 +73,24 @@ class DatabaseRepository {
     return structuredClone(snapshot)
   }
 
-  async addProperty(snapshot: DatabaseSnapshot, name: string, type: Exclude<PropertyType, 'title' | 'relation' | 'rollup' | 'formula'>) {
+  async addProperty(snapshot: DatabaseSnapshot, name: string, type: Exclude<PropertyType, 'title' | 'rollup'>) {
     const propertyId = crypto.randomUUID()
     if (window.notetodo?.database) return window.notetodo.database.addProperty(snapshot.schema.id, propertyId, name, type)
     const property = { id: propertyId, name, type, ...(['select', 'multiSelect'].includes(type) ? { options: [
       { id: 'option-1', name: '选项 1', color: 'slate' as const }, { id: 'option-2', name: '选项 2', color: 'amber' as const },
-    ] } : {}) }
+    ] } : type === 'relation' ? { relation: { databaseId: snapshot.schema.id } } : type === 'formula' ? { formula: { expression: '""' } } : {}) }
     const next = { ...snapshot, schema: { ...snapshot.schema, properties: [...snapshot.schema.properties, property] } }
+    this.write(next); return structuredClone(next)
+  }
+
+  async listSources() {
+    if (window.notetodo?.database) return window.notetodo.database.listSources()
+    return Object.entries(this.readCollections()).map(([pageId, snapshot]) => ({ id: snapshot.schema.id, pageId, name: snapshot.schema.name, pageTitle: snapshot.schema.name, recordCount: snapshot.records.length }))
+  }
+
+  async updatePropertyConfig(snapshot: DatabaseSnapshot, propertyId: string, config: Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'formula'>>) {
+    if (window.notetodo?.database) return window.notetodo.database.updatePropertyConfig(snapshot.schema.id, propertyId, config)
+    const next = { ...snapshot, schema: { ...snapshot.schema, properties: snapshot.schema.properties.map((property) => property.id === propertyId ? { ...property, ...structuredClone(config) } : property) } }
     this.write(next); return structuredClone(next)
   }
 

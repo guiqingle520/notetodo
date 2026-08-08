@@ -120,22 +120,27 @@ describe('database authoring', () => {
   })
 
   it('adds, renames and confirms deletion of schema properties', () => {
-    const onAdd = vi.fn().mockResolvedValue(undefined); const onRename = vi.fn().mockResolvedValue(undefined); const onDelete = vi.fn().mockResolvedValue(undefined)
+    const onAdd = vi.fn().mockResolvedValue(undefined); const onRename = vi.fn().mockResolvedValue(undefined); const onDelete = vi.fn().mockResolvedValue(undefined); const onConfigure = vi.fn().mockResolvedValue(undefined)
     const authoringSchema: DatabaseSchema = { id: 'research-db', name: '研究', properties: [
       { id: 'name', name: '名称', type: 'title' }, { id: 'notes', name: '备注', type: 'text' },
+      { id: 'status', name: '状态', type: 'select', options: [{ id: 'todo', name: '待开始', color: 'slate' }] },
     ] }
-    const { getByRole } = render(<SchemaPanel schema={authoringSchema} onClose={vi.fn()} onAdd={onAdd} onRename={onRename} onDelete={onDelete} />)
+    const { getByRole } = render(<SchemaPanel schema={authoringSchema} databaseSources={[{ id: 'research-db', pageId: 'research', name: '研究', pageTitle: '研究', recordCount: 1 }]} onClose={vi.fn()} onAdd={onAdd} onRename={onRename} onConfigure={onConfigure} onDelete={onDelete} />)
     fireEvent.change(getByRole('textbox', { name: '新属性名称' }), { target: { value: '评分' } })
     fireEvent.change(getByRole('combobox', { name: '新属性类型' }), { target: { value: 'number' } })
     fireEvent.click(getByRole('button', { name: /添加属性/ }))
     fireEvent.change(getByRole('textbox', { name: '备注 属性名称' }), { target: { value: '研究备注' } })
     fireEvent.blur(getByRole('textbox', { name: '备注 属性名称' }))
-    fireEvent.click(getByRole('button', { name: '删除' }))
+    fireEvent.click(getByRole('button', { name: '删除属性 备注' }))
     expect(onDelete).not.toHaveBeenCalled()
-    fireEvent.click(getByRole('button', { name: '确认删除' }))
+    fireEvent.click(getByRole('button', { name: '删除属性 备注' }))
+    fireEvent.click(getByRole('button', { name: '配置 状态' }))
+    fireEvent.change(getByRole('textbox', { name: '选项 1 名称' }), { target: { value: '待处理' } })
+    fireEvent.click(getByRole('button', { name: '保存配置' }))
     expect(onAdd).toHaveBeenCalledWith('评分', 'number')
     expect(onRename).toHaveBeenCalledWith('notes', '研究备注')
     expect(onDelete).toHaveBeenCalledWith('notes')
+    expect(onConfigure).toHaveBeenCalledWith('status', { options: [{ id: 'todo', name: '待处理', color: 'slate' }] })
   })
 
   it('opens a record detail surface with body and editable properties', () => {

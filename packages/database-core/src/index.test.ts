@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, serializeDatabaseCsv, timelineDays, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, serializeDatabaseCsv, timelineDays, validateFormulaExpression, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -84,6 +84,8 @@ describe('database query engine', () => {
     expect(evaluateFormula('if([score] >= 3, concat("P", [score]), "普通")', { score: 3 })).toBe('P3')
     expect(evaluateFormula('[score] / 0', { score: 3 })).toBeNull()
     expect(evaluateFormula('globalThis.process.exit()', {})).toBeNull()
+    expect(validateFormulaExpression('if([score] > 2, "高", "低")')).toBe(true)
+    expect(validateFormulaExpression('if([score] >')).toBe(false)
   })
 
   it('resolves relation rollups before dependent formulas', () => {
@@ -99,6 +101,10 @@ describe('database query engine', () => {
       { id: 'c', values: { score: 4 }, createdAt: '', updatedAt: '' },
     ])
     expect(derived[0]?.values).toMatchObject({ 'dependency-score': 7, label: '合计 7' })
+    expect(resolveDerivedRecords({ ...schema, properties: schema.properties.map((property) => property.id === 'label' ? { ...property, formula: { expression: 'concat("分数 ", [Dependency Score])' } } : property) }, [
+      { id: 'a', values: { score: 2, dependencies: ['b'] }, createdAt: '', updatedAt: '' },
+      { id: 'b', values: { score: 3 }, createdAt: '', updatedAt: '' },
+    ])[0]?.values.label).toBe('分数 3')
   })
 
   it('incrementally recomputes only edited records and rollup dependents at 10k scale', () => {

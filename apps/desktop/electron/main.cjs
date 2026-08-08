@@ -281,8 +281,14 @@ function registerWorkspaceIpc(database) {
   ipcMain.handle('database:add-property', (_event, databaseId, propertyId, name, type) => {
     assertId(databaseId); assertId(propertyId)
     if (typeof name !== 'string' || name.trim().length < 1 || name.length > 100) throw new TypeError('Invalid property name.')
-    if (!['text', 'number', 'checkbox', 'select', 'multiSelect', 'date', 'url'].includes(type)) throw new TypeError('Invalid property type.')
+    if (!['text', 'number', 'checkbox', 'select', 'multiSelect', 'date', 'url', 'relation', 'formula'].includes(type)) throw new TypeError('Invalid property type.')
     return database.addDatabaseProperty(databaseId, propertyId, name.trim(), type)
+  })
+  ipcMain.handle('database:list-sources', () => database.listDatabaseSources())
+  ipcMain.handle('database:update-property-config', (_event, databaseId, propertyId, config) => {
+    assertId(databaseId); assertId(propertyId)
+    if (!config || typeof config !== 'object' || Array.isArray(config) || JSON.stringify(config).length > 50_000) throw new TypeError('Invalid property configuration.')
+    return database.updateDatabasePropertyConfig(databaseId, propertyId, config)
   })
   ipcMain.handle('database:rename-property', (_event, databaseId, propertyId, name) => {
     assertId(databaseId); assertId(propertyId)

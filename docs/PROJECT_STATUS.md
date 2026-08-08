@@ -132,7 +132,7 @@ Notion UI Parity Beta — **进行中（应用壳、页面画布与记录详情�
 ### 当前验证结果
 
 - TypeScript：通过。
-- Vitest：27 个测试文件、128 个测试通过。
+- Vitest：27 个测试文件、134 个测试通过。
 - Vite production build：通过。
 - 浏览器控制台：当前版本无错误。
 - 任务列表：2 个任务正确解析和渲染。
@@ -142,6 +142,7 @@ Notion UI Parity Beta — **进行中（应用壳、页面画布与记录详情�
 - Preload → IPC → SQLite 完整桌面链路：通过，退出码 0。
 - 数据库迁移/单元格/记录/视图持久化：通过。
 - Table/Board/List 真实 Chromium 视觉与交互：通过。
+- Select 色板、跨数据库 Relation、Formula 属性名解析与双栏 Schema 工作台视觉验收：通过。
 - 隔离桌面烟雾测试：Schema v3、5 条记录、3 个视图、系统加密密钥和同步快照全部通过。
 - 协作协议：未认证拒绝、更新广播、离线 Presence 清理全部通过。
 - AI SSE：中文 UTF-8 跨字节分片恢复与取消语义通过。
@@ -220,7 +221,8 @@ Database Authoring & Record Pages Beta
 3. 视图新建、重命名、复制、删除和默认视图管理已交付，并完整持久化到 SQLite。
 4. 数据库记录模板、最多 1000 条记录的事务化批量编辑与当前视图 CSV 安全导出已交付。
 5. 可编辑记录模板、富文本模板正文、CSV 预览/字段映射与最多 10,000 行的事务导入已交付。
-6. 下一步进入高级属性创作：Select 选项管理、Relation 配置和 Formula 可视化编辑。
+6. Select/Multi-select 选项与色板管理、跨数据库 Relation 配置和 Formula 可视化编辑已交付。
+7. 下一步补充 Rollup 可视化配置、属性排序与数据库重命名。
 
 ## 最近完成的视觉里程碑
 

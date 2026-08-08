@@ -3,7 +3,7 @@ export type PropertyType = 'title' | 'text' | 'number' | 'checkbox' | 'select' |
 export interface SelectOption {
   id: string
   name: string
-  color: 'slate' | 'red' | 'amber' | 'green' | 'blue'
+  color: 'slate' | 'gray' | 'brown' | 'red' | 'orange' | 'amber' | 'green' | 'blue' | 'purple' | 'pink'
 }
 
 export interface DatabaseProperty {
@@ -264,6 +264,7 @@ export function resolveDerivedRecordsIncremental(
 
 function derivedProperties(schema: DatabaseSchema) {
   return {
+    properties: schema.properties,
     rollups: schema.properties.filter((candidate) => candidate.type === 'rollup' && candidate.rollup),
     formulas: schema.properties.filter((candidate) => candidate.type === 'formula' && candidate.formula),
   }
@@ -279,7 +280,13 @@ function resolveRecord(record: DatabaseRecord, byId: Map<string, DatabaseRecord>
       : []
     values[property.id] = aggregateRollup(relatedValues, config.aggregation)
   }
-  for (const property of derived.formulas) values[property.id] = evaluateFormula(property.formula!.expression, values)
+  for (const property of derived.formulas) {
+    // Notion-style formulas address properties by display name. Internal IDs
+    // remain available so existing formulas and imported workspaces stay valid.
+    const context = { ...values }
+    for (const candidate of derived.properties) context[candidate.name] = values[candidate.id] ?? null
+    values[property.id] = evaluateFormula(property.formula!.expression, context)
+  }
   return { ...record, values }
 }
 
@@ -289,6 +296,15 @@ export function evaluateFormula(expression: string, values: Record<string, Prope
     const parser = new FormulaParser(tokenizeFormula(expression), values)
     return normalizeFormulaResult(parser.parse())
   } catch { return null }
+}
+
+/** Syntax-only validation used by the visual formula editor before saving. */
+export function validateFormulaExpression(expression: string) {
+  try {
+    if (!expression.trim() || expression.length > 1000) return false
+    new FormulaParser(tokenizeFormula(expression), Object.create(null) as Record<string, PropertyValue>).parse()
+    return true
+  } catch { return false }
 }
 
 function aggregateRollup(values: PropertyValue[], aggregation: NonNullable<DatabaseProperty['rollup']>['aggregation']): PropertyValue {

@@ -16,6 +16,8 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     loadDatabaseByPage(pageId: string): DatabaseSnapshot | null
     createDatabaseForPage(pageId: string, databaseId: string, name: string): DatabaseSnapshot
     addDatabaseProperty(databaseId: string, propertyId: string, name: string, type: string): DatabaseSnapshot
+    listDatabaseSources(): Array<{ id: string; pageId: string; name: string; pageTitle: string; recordCount: number }>
+    updateDatabasePropertyConfig(databaseId: string, propertyId: string, config: object): DatabaseSnapshot
     renameDatabaseProperty(databaseId: string, propertyId: string, name: string): DatabaseSnapshot
     deleteDatabaseProperty(databaseId: string, propertyId: string): DatabaseSnapshot
     updateDatabaseCell(recordId: string, propertyId: string, value: unknown): { automationRuns: string[] }
@@ -162,6 +164,15 @@ describe('WorkspaceDatabase', () => {
     expect(database.loadDatabaseByPage('research')?.schema.properties.some((property) => property.id === 'research-notes')).toBe(false)
     expect(() => database!.deleteDatabaseProperty('research-db', 'research-db-title')).toThrow(/cannot be deleted/)
     expect(() => database!.createDatabaseForPage('missing', 'missing-db', '无效')).toThrow('Database page does not exist.')
+    database.addDatabaseProperty('research-db', 'research-stage', '阶段', 'select')
+    const configuredSelect = database.updateDatabasePropertyConfig('research-db', 'research-stage', { options: [{ id: 'idea', name: '想法', color: 'purple' }, { id: 'ready', name: '就绪', color: 'green' }] })
+    expect(configuredSelect.schema.properties.find((property) => property.id === 'research-stage')?.options).toEqual([{ id: 'idea', name: '想法', color: 'purple' }, { id: 'ready', name: '就绪', color: 'green' }])
+    database.addDatabaseProperty('research-db', 'research-relation', '关联路线', 'relation')
+    expect(database.updateDatabasePropertyConfig('research-db', 'research-relation', { relation: { databaseId: 'roadmap-db' } }).schema.properties.at(-1)).toMatchObject({ relation: { databaseId: 'roadmap-db' } })
+    database.addDatabaseProperty('research-db', 'research-formula', '评分标签', 'formula')
+    expect(database.updateDatabasePropertyConfig('research-db', 'research-formula', { formula: { expression: 'concat("P", [research-db-date])' } }).schema.properties.at(-1)).toMatchObject({ formula: { expression: expect.stringContaining('concat') } })
+    expect(database.listDatabaseSources()).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'research-db', pageId: 'research' }), expect.objectContaining({ id: 'roadmap-db' })]))
+    expect(() => database?.updateDatabasePropertyConfig('research-db', 'research-stage', { options: [{ id: 'x', name: '重复', color: 'blue' }, { id: 'y', name: '重复', color: 'red' }] })).toThrow(/unique names/)
   })
 
   it('creates, renames, reorders and safely deletes persisted views', () => {
