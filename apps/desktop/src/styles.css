@@ -1338,15 +1338,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .layout-density > div { display: flex; padding: 2px; border-radius: 5px; background: var(--notion-sidebar); }
 .layout-density button { height: 26px; padding: 0 8px; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; font-size: 10px; cursor: pointer; }
 .layout-density button.is-selected { color: var(--notion-text); background: #fff; box-shadow: 0 1px 3px rgba(15,15,15,.12); }
+.layout-freeze { width: calc(100% - 10px); min-height: 43px; margin: 5px; display: grid; grid-template-columns: 26px 1fr 28px; align-items: center; gap: 4px; padding: 5px 7px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: pointer; }
+.layout-freeze:hover { background: var(--notion-hover); }
+.layout-freeze > svg { color: var(--notion-muted); }
+.layout-freeze > span { display: flex; flex-direction: column; gap: 1px; }
+.layout-freeze strong { font-size: 11px; font-weight: 500; }
+.layout-freeze small { color: var(--notion-faint); font-size: 9px; }
+.layout-freeze > i { width: 26px; height: 14px; position: relative; border-radius: 8px; background: rgba(55,53,47,.2); }
+.layout-freeze > i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(15,15,15,.22); transition: transform .14s ease; }
+.layout-freeze.is-active > i { background: var(--notion-blue); }
+.layout-freeze.is-active > i::after { transform: translateX(12px); }
 .layout-property-heading { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; color: var(--notion-faint); font-size: 9px; }
 .layout-property-heading em { font-style: normal; }
 .layout-property-list { max-height: 264px; overflow-y: auto; padding: 0 5px 5px; }
-.layout-property-list > button { width: 100%; height: 32px; display: grid; grid-template-columns: 24px 1fr 20px; align-items: center; gap: 3px; padding: 0 6px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: pointer; }
-.layout-property-list > button:hover { background: var(--notion-hover); }
-.layout-property-list > button:disabled { cursor: default; opacity: .58; }
-.layout-property-list > button i { width: 20px; color: var(--notion-faint); font: normal 10px var(--font-ui); text-align: center; }
-.layout-property-list > button span { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.layout-property-list > button svg { color: var(--notion-muted); }
+.layout-property-row { width: 100%; height: 32px; display: grid; grid-template-columns: 22px 22px 1fr 24px; align-items: center; gap: 2px; padding: 0 4px; color: var(--notion-text); border-radius: 4px; }
+.layout-property-row:hover { background: var(--notion-hover); }
+.layout-property-row.is-dragging { opacity: .38; background: rgba(35,131,226,.08); }
+.layout-property-row > i { color: var(--notion-faint); font: normal 10px var(--font-ui); text-align: center; }
+.layout-property-row > span { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.layout-property-row > button { width: 22px; height: 26px; display: grid; place-items: center; padding: 0; color: var(--notion-muted); border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
+.layout-property-row > button:hover { color: var(--notion-text); background: rgba(55,53,47,.08); }
+.layout-property-row > button:disabled { cursor: default; opacity: .45; }
+.layout-property-row .layout-property-drag { color: var(--notion-faint); cursor: grab; }
+.layout-property-row .layout-property-drag:active { cursor: grabbing; }
 .database-layout-menu > footer { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border-top: 1px solid var(--notion-divider); background: var(--notion-sidebar); }
 .database-layout-menu > footer button { padding: 5px 7px; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; font-size: 10px; cursor: pointer; }
 .database-layout-menu > footer button:hover { color: var(--notion-text); background: var(--notion-hover); }
@@ -1356,6 +1370,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .database-column-resizer { position: absolute; z-index: 2; top: 0; right: -3px; width: 7px; height: 100%; padding: 0; border: 0; background: transparent; cursor: col-resize; }
 .database-column-resizer:hover, .database-column-resizer:active { background: var(--notion-blue); }
 .generic-database-row > input, .generic-database-row > select, .generic-database-row > output, .generic-database-row > label, .generic-title-cell { height: calc(var(--database-row-height, 42px) - 1px); }
+.generic-database-footer { min-height: 34px; color: var(--notion-faint); border-top: 1px solid var(--notion-divider); background: #fff; }
+.generic-database-footer > span { display: grid; place-items: center; border-right: 1px solid var(--notion-divider); }
+.generic-database-footer > label { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 4px 7px; border-right: 1px solid var(--notion-divider); }
+.generic-database-footer select { min-width: 0; max-width: 82px; height: 24px; padding: 0 3px; color: var(--notion-faint); border: 0; border-radius: 3px; background: transparent; font: 9px var(--font-ui); cursor: pointer; }
+.generic-database-footer select:hover { color: var(--notion-text); background: var(--notion-hover); }
+.generic-database-footer output { overflow: hidden; color: var(--notion-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.generic-database-table { overflow-x: hidden; }
+.generic-database-sync { width: 100%; overflow: hidden; }
+.generic-database-table.is-first-column-frozen .generic-database-head > :first-child,
+.generic-database-table.is-first-column-frozen .generic-database-footer > :first-child,
+.generic-database-table.is-first-column-frozen .generic-database-row > :first-child { position: sticky; left: 0; z-index: 5; background: #fff !important; }
+.generic-database-table.is-first-column-frozen .generic-database-head > :nth-child(2),
+.generic-database-table.is-first-column-frozen .generic-database-footer > :nth-child(2),
+.generic-database-table.is-first-column-frozen .generic-database-row > :nth-child(2) { position: sticky; left: 34px; z-index: 4; background: #fff; box-shadow: 1px 0 0 var(--notion-divider), 5px 0 8px rgba(15,15,15,.035); }
+.generic-database-table.is-first-column-frozen .generic-database-head > :first-child,
+.generic-database-table.is-first-column-frozen .generic-database-head > :nth-child(2) { z-index: 7; }
 
 .database-template-menu { position: absolute; z-index: 25; top: 68px; right: 92px; width: 330px; overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px; background: #fff; box-shadow: var(--notion-shadow); animation: menu-rise .12s ease both; }
 .database-template-menu > header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; border-bottom: 1px solid var(--notion-divider); }

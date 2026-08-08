@@ -53,8 +53,13 @@ export interface DatabaseViewConfig {
   visiblePropertyIds?: string[]
   propertyWidths?: Record<string, number>
   rowHeight?: 'compact' | 'default' | 'comfortable'
+  propertyOrder?: string[]
+  freezeFirstColumn?: boolean
+  calculations?: Record<string, ColumnCalculation>
   cardSize?: 'small' | 'medium' | 'large'
 }
+
+export type ColumnCalculation = 'count' | 'countValues' | 'sum' | 'average' | 'min' | 'max' | 'earliest' | 'latest' | 'percentChecked'
 
 export interface DatabaseTemplate {
   id: string
@@ -451,7 +456,38 @@ export function normalizeViewConfig(schema: DatabaseSchema, config: DatabaseView
   const visiblePropertyIds = config.visiblePropertyIds === undefined ? undefined : [...new Set(config.visiblePropertyIds.filter((id) => propertyIds.has(id)))].slice(0, 50)
   const propertyWidths = Object.fromEntries(Object.entries(config.propertyWidths ?? {}).filter(([id, width]) => propertyIds.has(id) && Number.isFinite(width)).map(([id, width]) => [id, Math.max(80, Math.min(600, Math.round(width)))]))
   const rowHeight = ['compact', 'default', 'comfortable'].includes(config.rowHeight ?? '') ? config.rowHeight : 'default'
-  return { ...config, filters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId, visiblePropertyIds, propertyWidths, rowHeight }
+  const orderedIds = [...new Set((config.propertyOrder ?? []).filter((id) => propertyIds.has(id)))]
+  const propertyOrder = config.propertyOrder === undefined ? undefined : [...orderedIds, ...schema.properties.map((property) => property.id).filter((id) => !orderedIds.includes(id))]
+  const calculations = Object.fromEntries(Object.entries(config.calculations ?? {}).filter(([id, calculation]) => {
+    const property = schema.properties.find((candidate) => candidate.id === id)
+    return property && validColumnCalculations(property).includes(calculation)
+  }))
+  return { ...config, filters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId, visiblePropertyIds, propertyWidths, rowHeight, propertyOrder, freezeFirstColumn: Boolean(config.freezeFirstColumn), calculations }
+}
+
+export function validColumnCalculations(property: DatabaseProperty): ColumnCalculation[] {
+  const base: ColumnCalculation[] = ['count', 'countValues']
+  if (property.type === 'number' || property.type === 'rollup' || property.type === 'formula') return [...base, 'sum', 'average', 'min', 'max']
+  if (property.type === 'date') return [...base, 'earliest', 'latest']
+  if (property.type === 'checkbox') return [...base, 'percentChecked']
+  return base
+}
+
+/** Computes one configured footer aggregate in a single bounded pass. */
+export function calculateColumn(records: DatabaseRecord[], propertyId: string, calculation: ColumnCalculation): PropertyValue {
+  if (calculation === 'count') return records.length
+  const values = records.map((record) => record.values[propertyId]).filter((value) => value !== null && value !== '' && (!Array.isArray(value) || value.length > 0))
+  if (calculation === 'countValues') return values.length
+  if (calculation === 'percentChecked') return records.length ? Math.round(values.filter(Boolean).length / records.length * 1000) / 10 : 0
+  if (calculation === 'earliest' || calculation === 'latest') {
+    const dates = values.filter((value): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/u.test(value)).sort()
+    return dates.length ? (calculation === 'earliest' ? dates[0]! : dates.at(-1)!) : null
+  }
+  const numbers = values.map(Number).filter(Number.isFinite)
+  if (!numbers.length) return null
+  if (calculation === 'sum') return numbers.reduce((sum, value) => sum + value, 0)
+  if (calculation === 'average') return numbers.reduce((sum, value) => sum + value, 0) / numbers.length
+  return calculation === 'min' ? Math.min(...numbers) : Math.max(...numbers)
 }
 
 /**

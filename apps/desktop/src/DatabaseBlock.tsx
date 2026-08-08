@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, validateFormulaExpression, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
+import { Activity, ArrowRight, ArrowUpDown, BookOpen, Calculator, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, Lock, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, validColumnCalculations, validateFormulaExpression, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -319,7 +319,11 @@ function defaultViewConfig(schema: DatabaseSchema, type: DatabaseView['type']): 
 
 export function ViewLayoutMenu({ schema, config, onClose, onSave }: { schema: DatabaseSchema; config: DatabaseViewConfig; onClose: () => void; onSave: (config: DatabaseViewConfig) => void }) {
   const [draft, setDraft] = useState<DatabaseViewConfig>(() => structuredClone(config))
+  const [draggingId, setDraggingId] = useState<string | null>(null)
   const titleId = schema.properties.find((property) => property.type === 'title')?.id
+  const propertyById = new Map(schema.properties.map((property) => [property.id, property]))
+  const orderedIds = [...new Set([...(draft.propertyOrder ?? []), ...schema.properties.map((property) => property.id)])].filter((id) => propertyById.has(id))
+  const orderedProperties = orderedIds.map((id) => propertyById.get(id)!)
   const visible = new Set(draft.visiblePropertyIds ?? schema.properties.map((property) => property.id))
   if (titleId) visible.add(titleId)
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [onClose])
@@ -328,15 +332,21 @@ export function ViewLayoutMenu({ schema, config, onClose, onSave }: { schema: Da
     if (propertyId === titleId) return
     const nextVisible = new Set(visible)
     if (nextVisible.has(propertyId)) nextVisible.delete(propertyId); else nextVisible.add(propertyId)
-    commit({ ...draft, visiblePropertyIds: schema.properties.filter((property) => nextVisible.has(property.id)).map((property) => property.id) })
+    commit({ ...draft, visiblePropertyIds: orderedProperties.filter((property) => nextVisible.has(property.id)).map((property) => property.id) })
+  }
+  const reorder = (targetId: string) => {
+    if (!draggingId || draggingId === targetId) return
+    const ids = [...orderedIds]; const from = ids.indexOf(draggingId); const to = ids.indexOf(targetId)
+    ids.splice(to, 0, ids.splice(from, 1)[0]!); setDraggingId(null); commit({ ...draft, propertyOrder: ids })
   }
   const visibleCount = schema.properties.filter((property) => visible.has(property.id)).length
   return <section className="database-layout-menu" role="dialog" aria-label="表格布局">
     <header><div><strong>表格布局</strong><small>仅作用于当前视图</small></div><button aria-label="关闭表格布局" onClick={onClose}><X size={14} /></button></header>
     <div className="layout-density"><span><Rows3 size={14} />行高</span><div>{(['compact', 'default', 'comfortable'] as const).map((density) => <button aria-pressed={(draft.rowHeight ?? 'default') === density} className={(draft.rowHeight ?? 'default') === density ? 'is-selected' : ''} key={density} onClick={() => commit({ ...draft, rowHeight: density })}>{density === 'compact' ? '紧凑' : density === 'default' ? '标准' : '宽松'}</button>)}</div></div>
-    <div className="layout-property-heading"><span>显示属性</span><em>{visibleCount} / {schema.properties.length}</em></div>
-    <div className="layout-property-list">{schema.properties.map((property) => { const shown = visible.has(property.id); return <button aria-label={`${shown ? '隐藏' : '显示'}属性 ${property.name}`} disabled={property.id === titleId} key={property.id} onClick={() => toggle(property.id)}><i>{propertyTypeLabel(property.type)}</i><span>{property.name}</span>{shown ? <Eye size={14} /> : <EyeOff size={14} />}</button> })}</div>
-    <footer><button onClick={() => commit({ ...draft, propertyWidths: {} })}>重置列宽</button><span>拖动表头边缘可调整列宽</span></footer>
+    <button className={`layout-freeze ${draft.freezeFirstColumn ? 'is-active' : ''}`} aria-pressed={Boolean(draft.freezeFirstColumn)} onClick={() => commit({ ...draft, freezeFirstColumn: !draft.freezeFirstColumn })}><Lock size={14} /><span><strong>冻结首列</strong><small>横向滚动时保持第一列可见</small></span><i /></button>
+    <div className="layout-property-heading"><span>显示与排序</span><em>{visibleCount} / {schema.properties.length}</em></div>
+    <div className="layout-property-list">{orderedProperties.map((property) => { const shown = visible.has(property.id); return <div className={`layout-property-row ${draggingId === property.id ? 'is-dragging' : ''}`} key={property.id} onDragOver={(event) => event.preventDefault()} onDrop={() => reorder(property.id)}><button className="layout-property-drag" draggable aria-label={`调整视图属性顺序 ${property.name}`} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDraggingId(property.id) }} onDragEnd={() => setDraggingId(null)}><GripVertical size={13} /></button><i>{propertyTypeLabel(property.type)}</i><span>{property.name}</span><button className="layout-property-visibility" aria-label={`${shown ? '隐藏' : '显示'}属性 ${property.name}`} disabled={property.id === titleId} onClick={() => toggle(property.id)}>{shown ? <Eye size={14} /> : <EyeOff size={14} />}</button></div> })}</div>
+    <footer><button onClick={() => commit({ ...draft, propertyWidths: {}, propertyOrder: schema.properties.map((property) => property.id) })}>重置布局</button><span>列底可选择计算方式</span></footer>
   </section>
 }
 
@@ -840,15 +850,28 @@ type RelationTargets = Record<string, { schema: DatabaseSchema; records: Databas
 
 export function GenericTable({ records, schema, config = {}, onConfigChange, relationTargets = {}, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll }: { records: DatabaseRecord[]; schema: DatabaseSchema; config?: DatabaseViewConfig; onConfigChange?: (config: DatabaseViewConfig) => void; relationTargets?: RelationTargets; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void }) {
   const [scrollTop, setScrollTop] = useState(0)
+  const headerScrollRef = useRef<HTMLDivElement | null>(null)
+  const footerScrollRef = useRef<HTMLDivElement | null>(null)
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>(() => ({ ...config.propertyWidths }))
   useEffect(() => setLiveWidths({ ...config.propertyWidths }), [config.propertyWidths])
   const visibleIds = config.visiblePropertyIds ? new Set(config.visiblePropertyIds) : null
-  const properties = schema.properties.filter((property) => property.type === 'title' || !visibleIds || visibleIds.has(property.id)).slice(0, 20)
+  const propertyById = new Map(schema.properties.map((property) => [property.id, property]))
+  const orderedIds = [...new Set([...(config.propertyOrder ?? []), ...schema.properties.map((property) => property.id)])]
+  const properties = orderedIds.map((id) => propertyById.get(id)).filter((property): property is DatabaseProperty => Boolean(property && (property.type === 'title' || !visibleIds || visibleIds.has(property.id)))).slice(0, 20)
   const rowHeight = config.rowHeight === 'compact' ? 34 : config.rowHeight === 'comfortable' ? 52 : ROW_HEIGHT
   const { start, end, totalSize } = virtualWindow(records.length, scrollTop, rowHeight, VIEWPORT_HEIGHT, OVERSCAN)
   const propertyWidth = (property: DatabaseProperty) => liveWidths[property.id] ?? (property.type === 'title' ? 220 : 140)
   const template = `34px ${properties.map((property) => `${propertyWidth(property)}px`).join(' ')}`
   const minWidth = 34 + properties.reduce((sum, property) => sum + propertyWidth(property), 0)
+  const calculationValues = useMemo(() => Object.fromEntries(properties.map((property) => {
+    const calculation = config.calculations?.[property.id]
+    return [property.id, calculation ? calculateColumn(records, property.id, calculation) : null]
+  })), [records, config.calculations, config.propertyOrder, config.visiblePropertyIds, schema.properties])
+  const setCalculation = (propertyId: string, calculation: ColumnCalculation | '') => {
+    const calculations = { ...config.calculations }
+    if (calculation) calculations[propertyId] = calculation; else delete calculations[propertyId]
+    onConfigChange?.({ ...config, calculations })
+  }
   const beginResize = (event: ReactMouseEvent<HTMLButtonElement>, property: DatabaseProperty) => {
     event.preventDefault(); event.stopPropagation()
     const startX = event.clientX; const startWidth = propertyWidth(property)
@@ -867,13 +890,25 @@ export function GenericTable({ records, schema, config = {}, onConfigChange, rel
     }
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', end)
   }
-  return <div className="generic-database-table" style={{ '--database-row-height': `${rowHeight}px` } as CSSProperties}>
-    <div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}><label className="database-row-select"><input aria-label="选择全部记录" type="checkbox" checked={records.length > 0 && selectedIds.size === records.length} onChange={() => onToggleAll?.()} /><span /></label>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i><b>{property.name}</b><button className="database-column-resizer" aria-label={`调整列宽 ${property.name}`} onMouseDown={(event) => beginResize(event, property)} /></span>)}</div>
-    <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(rowHeight, records.length * rowHeight)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+  return <div className={`generic-database-table ${config.freezeFirstColumn ? 'is-first-column-frozen' : ''}`} style={{ '--database-row-height': `${rowHeight}px` } as CSSProperties}>
+    <div className="generic-database-sync" ref={headerScrollRef}><div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}><label className="database-row-select"><input aria-label="选择全部记录" type="checkbox" checked={records.length > 0 && selectedIds.size === records.length} onChange={() => onToggleAll?.()} /><span /></label>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i><b>{property.name}</b><button className="database-column-resizer" aria-label={`调整列宽 ${property.name}`} onMouseDown={(event) => beginResize(event, property)} /></span>)}</div></div>
+    <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(rowHeight, records.length * rowHeight)) }} onScroll={(event) => { setScrollTop(event.currentTarget.scrollTop); if (headerScrollRef.current) headerScrollRef.current.scrollLeft = event.currentTarget.scrollLeft; if (footerScrollRef.current) footerScrollRef.current.scrollLeft = event.currentTarget.scrollLeft }}>
       <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className={`generic-database-grid generic-database-row ${selectedIds.has(record.id) ? 'is-selected' : ''}`} key={record.id} style={{ gridTemplateColumns: template, height: rowHeight, transform: `translateY(${(start + offset) * rowHeight}px)` }}><label className="database-row-select"><input aria-label={`选择记录 ${String(record.values[properties.find((property) => property.type === 'title')?.id ?? ''] || record.id)}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} relationTargets={relationTargets} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
     </div>
+    <div className="generic-database-sync" ref={footerScrollRef}><div className="generic-database-grid generic-database-footer" style={{ gridTemplateColumns: template, minWidth }}><span><Calculator size={12} /></span>{properties.map((property) => { const calculation = config.calculations?.[property.id]; const value = calculationValues[property.id]; return <label key={property.id}><select aria-label={`${property.name} 列底计算`} value={calculation ?? ''} onChange={(event) => setCalculation(property.id, event.target.value as ColumnCalculation | '')}><option value="">计算</option>{validColumnCalculations(property).map((candidate) => <option key={candidate} value={candidate}>{columnCalculationLabel(candidate)}</option>)}</select>{calculation && <output>{formatCalculationValue(value, calculation)}</output>}</label> })}</div></div>
     {!records.length && <div className="generic-database-empty"><Database size={17} /><span>还没有记录</span><small>点击右上角“新建”写入第一行</small></div>}
   </div>
+}
+
+function columnCalculationLabel(calculation: ColumnCalculation) {
+  return ({ count: '记录数', countValues: '已填写', sum: '求和', average: '平均值', min: '最小值', max: '最大值', earliest: '最早日期', latest: '最晚日期', percentChecked: '勾选比例' } as const)[calculation]
+}
+
+function formatCalculationValue(value: PropertyValue | undefined, calculation: ColumnCalculation) {
+  if (value === null || value === undefined) return '—'
+  if (calculation === 'percentChecked') return `${value}%`
+  if (typeof value === 'number' && !Number.isInteger(value)) return String(Math.round(value * 100) / 100)
+  return String(value)
 }
 
 function GenericCell({ record, property, relationTargets, updateCell, onOpenRecord }: { record: DatabaseRecord; property: DatabaseProperty; relationTargets: RelationTargets; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void }) {

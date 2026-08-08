@@ -187,8 +187,8 @@ describe('WorkspaceDatabase', () => {
     const created = database.createDatabaseView('roadmap-db', 'roadmap-review', '评审视图', 'table', { sorts: [{ propertyId: 'task-due', direction: 'asc' }] })
     expect(created.activeViewId).toBe('roadmap-review')
     expect(created.views.at(-1)).toMatchObject({ id: 'roadmap-review', name: '评审视图', type: 'table' })
-    database.updateDatabaseViewConfig('roadmap-db', 'roadmap-review', { visiblePropertyIds: ['task-title', 'task-status'], propertyWidths: { 'task-title': 280 }, rowHeight: 'compact' })
-    expect(database.loadDatabaseByPage('projects')?.views.find((view) => view.id === 'roadmap-review')?.config).toMatchObject({ visiblePropertyIds: ['task-title', 'task-status'], propertyWidths: { 'task-title': 280 }, rowHeight: 'compact' })
+    database.updateDatabaseViewConfig('roadmap-db', 'roadmap-review', { visiblePropertyIds: ['task-title', 'task-status'], propertyWidths: { 'task-title': 280 }, rowHeight: 'compact', propertyOrder: ['task-status', 'task-title'], freezeFirstColumn: true, calculations: { 'task-title': 'count', 'task-score': 'average' } })
+    expect(database.loadDatabaseByPage('projects')?.views.find((view) => view.id === 'roadmap-review')?.config).toMatchObject({ visiblePropertyIds: ['task-title', 'task-status'], propertyWidths: { 'task-title': 280 }, rowHeight: 'compact', propertyOrder: ['task-status', 'task-title'], freezeFirstColumn: true, calculations: { 'task-title': 'count', 'task-score': 'average' } })
 
     database.renameDatabaseView('roadmap-db', 'roadmap-review', '发布评审')
     const reordered = database.setDefaultDatabaseView('roadmap-db', 'roadmap-review')
