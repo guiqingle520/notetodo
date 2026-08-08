@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('notetodo', {
     addProperty: (databaseId, propertyId, name, type) => ipcRenderer.invoke('database:add-property', databaseId, propertyId, name, type),
     listSources: () => ipcRenderer.invoke('database:list-sources'),
     updatePropertyConfig: (databaseId, propertyId, config) => ipcRenderer.invoke('database:update-property-config', databaseId, propertyId, config),
+    rename: (databaseId, name) => ipcRenderer.invoke('database:rename', databaseId, name),
+    reorderProperties: (databaseId, propertyIds) => ipcRenderer.invoke('database:reorder-properties', databaseId, propertyIds),
     renameProperty: (databaseId, propertyId, name) => ipcRenderer.invoke('database:rename-property', databaseId, propertyId, name),
     deleteProperty: (databaseId, propertyId) => ipcRenderer.invoke('database:delete-property', databaseId, propertyId),
     updateCell: (recordId, propertyId, value) => ipcRenderer.invoke('database:update-cell', recordId, propertyId, value),

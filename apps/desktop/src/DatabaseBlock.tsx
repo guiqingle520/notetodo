@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, FileUp, Filter, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Settings2, Sigma, Star, Table2, Trash2, X, Zap } from 'lucide-react'
+import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Settings2, Sigma, Star, Table2, Trash2, X, Zap } from 'lucide-react'
 import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, validateFormulaExpression, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
@@ -69,7 +69,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [openRecordId, setOpenRecordId] = useState<string | null>(null)
   const [automations, setAutomations] = useState<AutomationRule[]>([])
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([])
-  const projectionCache = useRef<{ schemaId: string; records: DatabaseRecord[] }>({ schemaId: '', records: [] })
+  const projectionCache = useRef<{ schemaId: string; records: DatabaseRecord[]; targets: typeof relationTargets }>({ schemaId: '', records: [], targets: {} })
   const changedRecordIds = useRef(new Set<string>())
 
   useEffect(() => {
@@ -101,12 +101,12 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   // This keeps sort/filter cheap while making every view consume identical data.
   const projection = useMemo(() => {
     if (!snapshot) return { records: [], recomputedCount: 0 }
-    const previous = projectionCache.current.schemaId === snapshot.schema.id ? projectionCache.current.records : undefined
-    const result = resolveDerivedRecordsIncremental(snapshot.schema, snapshot.records, previous, changedRecordIds.current)
-    projectionCache.current = { schemaId: snapshot.schema.id, records: result.records }
+    const previous = projectionCache.current.schemaId === snapshot.schema.id && projectionCache.current.targets === relationTargets ? projectionCache.current.records : undefined
+    const result = resolveDerivedRecordsIncremental(snapshot.schema, snapshot.records, previous, changedRecordIds.current, relationTargets)
+    projectionCache.current = { schemaId: snapshot.schema.id, records: result.records, targets: relationTargets }
     changedRecordIds.current.clear()
     return result
-  }, [snapshot])
+  }, [snapshot, relationTargets])
   const derivedRecords = projection.records
   const activeView = snapshot ? snapshot.views.find((view) => view.id === snapshot.activeViewId) ?? snapshot.views[0] : undefined
   const queriedRecords = useMemo(() => snapshot && activeView ? queryRecords(
@@ -249,7 +249,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
         {templateMenuOpen && <DatabaseTemplateMenu templates={snapshot.templates ?? []} selectedCount={selectedRecordIds.size} onClose={() => setTemplateMenuOpen(false)} onCreateBlank={addRecord} onApply={createFromTemplate} onEdit={(template) => { setTemplateMenuOpen(false); setEditingTemplate(template ?? 'new') }} onSaveSelection={saveSelectionAsTemplate} onDelete={async (templateId) => setSnapshot(await databaseRepository.deleteTemplate(snapshot, templateId))} />}
       </div>
       {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
-      <div className="database-summary"><span>{snapshot.schema.name}</span><span className="database-compute-mark">已更新 {projection.recomputedCount} 项</span><span>{records.length} / {snapshot.records.length} 条记录</span></div>
+      <div className="database-summary"><DatabaseNameEditor name={snapshot.schema.name} onRename={async (name) => { const next = await databaseRepository.rename(snapshot, name); setSnapshot(next); setDatabaseSources((current) => current.map((source) => source.id === next.schema.id ? { ...source, name: next.schema.name } : source)) }} /><span className="database-compute-mark">已更新 {projection.recomputedCount} 项</span><span>{records.length} / {snapshot.records.length} 条记录</span></div>
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
       {recordGroups.length > 0 && <div className="database-group-ledger"><span>分组</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
       {activeView.type === 'table' && (snapshot.schema.id === 'roadmap-db'
@@ -261,7 +261,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       {activeView.type === 'timeline' && <TimelineView records={records} schema={snapshot.schema} startDatePropertyId={activeView.config.startDatePropertyId} endDatePropertyId={activeView.config.endDatePropertyId} updateCell={updateCell} />}
       {activeView.type === 'gallery' && <GalleryView records={records} schema={snapshot.schema} coverPropertyId={activeView.config.coverPropertyId} visiblePropertyIds={activeView.config.visiblePropertyIds} cardSize={activeView.config.cardSize} updateCell={updateCell} />}
       {rulesOpen && createPortal(<ViewRulesPanel schema={snapshot.schema} config={activeView.config} initialTab={rulesOpen} onClose={() => setRulesOpen(null)} onSave={(config) => { saveViewConfig(config); setRulesOpen(null) }} />, document.body)}
-      {schemaOpen && createPortal(<SchemaPanel schema={snapshot.schema} previewRecord={derivedRecords[0]} databaseSources={databaseSources} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onConfigure={async (propertyId, config) => setSnapshot(await databaseRepository.updatePropertyConfig(snapshot, propertyId, config))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
+      {schemaOpen && createPortal(<SchemaPanel schema={snapshot.schema} previewRecord={derivedRecords[0]} databaseSources={databaseSources} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onReorder={async (propertyIds) => setSnapshot(await databaseRepository.reorderProperties(snapshot, propertyIds))} onConfigure={async (propertyId, config) => setSnapshot(await databaseRepository.updatePropertyConfig(snapshot, propertyId, config))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
       {editingTemplate && createPortal(<TemplateEditorPanel schema={snapshot.schema} template={editingTemplate === 'new' ? null : editingTemplate} onClose={() => setEditingTemplate(null)} onSave={saveEditedTemplate} />, document.body)}
       {csvImportOpen && createPortal(<CsvImportPanel schema={snapshot.schema} onClose={() => setCsvImportOpen(false)} onImport={importCsvRecords} />, document.body)}
       {openRecordId && derivedRecords.find((record) => record.id === openRecordId) && createPortal(<RecordDetailPanel key={openRecordId} record={derivedRecords.find((record) => record.id === openRecordId)!} schema={snapshot.schema} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} onClose={() => setOpenRecordId(null)} onUpdateCell={updateCell} onUpdateContent={updateRecordContent} />, document.body)}
@@ -279,6 +279,20 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       }} />}
     </section>
   )
+}
+
+function DatabaseNameEditor({ name, onRename }: { name: string; onRename: (name: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => setDraft(name), [name])
+  const save = async () => {
+    const normalized = draft.trim()
+    if (!normalized || normalized === name) { setDraft(name); setEditing(false); return }
+    setBusy(true); try { await onRename(normalized); setEditing(false) } finally { setBusy(false) }
+  }
+  return editing ? <span className="database-name-editor"><input aria-label="数据库名称" autoFocus maxLength={200} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => void save()} onKeyDown={(event) => { if (event.key === 'Enter') void save(); if (event.key === 'Escape') { setDraft(name); setEditing(false) } }} /><i>{busy ? '保存中' : 'Enter 保存'}</i></span>
+    : <button className="database-name-trigger" title="重命名数据库" onClick={() => setEditing(true)}><span>{name}</span><PencilLine size={10} /></button>
 }
 
 const databaseViewTypes: Array<{ type: DatabaseView['type']; label: string; description: string; icon: typeof Table2 }> = [
@@ -461,18 +475,18 @@ export function BulkEditToolbar({ schema, count, onClear, onApply }: { schema: D
   </div>
 }
 
-const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title' | 'rollup'>; label: string }> = [
+const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title'>; label: string }> = [
   { id: 'text', label: '文本' }, { id: 'number', label: '数字' }, { id: 'checkbox', label: '复选框' },
   { id: 'select', label: '单选' }, { id: 'multiSelect', label: '多选' }, { id: 'date', label: '日期' }, { id: 'url', label: '网址' },
-  { id: 'relation', label: '关联' }, { id: 'formula', label: '公式' },
+  { id: 'relation', label: '关联' }, { id: 'rollup', label: '汇总' }, { id: 'formula', label: '公式' },
 ]
 
-type PropertyConfig = Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'formula'>>
+type PropertyConfig = Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'rollup' | 'formula'>>
 type DatabaseSource = { id: string; pageId: string; name: string; pageTitle: string; recordCount: number }
 
-export function SchemaPanel({ schema, previewRecord, databaseSources, onClose, onAdd, onRename, onConfigure, onDelete }: {
-  schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; onClose: () => void
-  onAdd: (name: string, type: Exclude<PropertyType, 'title' | 'rollup'>) => Promise<void>; onRename: (propertyId: string, name: string) => Promise<void>
+export function SchemaPanel({ schema, previewRecord, databaseSources, relationTargets, onClose, onAdd, onRename, onReorder, onConfigure, onDelete }: {
+  schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; relationTargets: RelationTargets; onClose: () => void
+  onAdd: (name: string, type: Exclude<PropertyType, 'title'>) => Promise<void>; onRename: (propertyId: string, name: string) => Promise<void>; onReorder: (propertyIds: string[]) => Promise<void>
   onConfigure: (propertyId: string, config: PropertyConfig) => Promise<void>; onDelete: (propertyId: string) => Promise<void>
 }) {
   const [name, setName] = useState('')
@@ -480,45 +494,82 @@ export function SchemaPanel({ schema, previewRecord, databaseSources, onClose, o
   const [busy, setBusy] = useState(false)
   const [deletePending, setDeletePending] = useState<string | null>(null)
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null)
+  const [draggingPropertyId, setDraggingPropertyId] = useState<string | null>(null)
   const editingProperty = schema.properties.find((property) => property.id === editingPropertyId)
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key !== 'Escape') return; if (editingPropertyId) setEditingPropertyId(null); else onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [editingPropertyId, onClose])
   const add = async () => {
     if (!name.trim() || busy || schema.properties.length >= 50) return
     setBusy(true); try { await onAdd(name.trim(), type); setName('') } finally { setBusy(false) }
   }
+  const reorder = (targetId: string) => {
+    if (!draggingPropertyId || draggingPropertyId === targetId) return
+    const ids = schema.properties.map((property) => property.id)
+    const from = ids.indexOf(draggingPropertyId); const to = ids.indexOf(targetId)
+    ids.splice(to, 0, ids.splice(from, 1)[0]!)
+    setDraggingPropertyId(null); void onReorder(ids)
+  }
   return <div className="schema-panel-backdrop" onMouseDown={onClose}><section className={`schema-panel ${editingProperty ? 'is-configuring' : ''}`} role="dialog" aria-modal="true" aria-label="数据库属性管理" onMouseDown={(event) => event.stopPropagation()}>
     <header><div><small>SCHEMA DESK / {schema.name.toLocaleUpperCase()}</small><strong>定义资料的骨架</strong></div><button aria-label="关闭属性管理" onClick={onClose}><X size={15} /></button></header>
     <main className="schema-workbench"><section className="schema-ledger"><div className="schema-ledger-head"><span>序号</span><span>属性名称</span><span>类型</span><span>操作</span></div>{schema.properties.map((property, index) => {
-      const configurable = ['select', 'multiSelect', 'relation', 'formula'].includes(property.type)
-      return <div className={`schema-ledger-row ${editingPropertyId === property.id ? 'is-selected' : ''}`} key={property.id}><em>{String(index + 1).padStart(2, '0')}</em><input aria-label={`${property.name} 属性名称`} defaultValue={property.name} maxLength={100} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== property.name) void onRename(property.id, next) }} /><span><i>{propertyTypeLabel(property.type)}</i>{propertyTypeName(property.type)}</span><div>{configurable && <button aria-label={`配置 ${property.name}`} onClick={() => setEditingPropertyId(property.id)}><Settings2 size={12} /></button>}{property.type === 'title' || property.type === 'rollup' ? <small>{property.type === 'title' ? '主属性' : '只读派生'}</small> : <button aria-label={`删除属性 ${property.name}`} className={deletePending === property.id ? 'is-confirm' : ''} onClick={() => { if (deletePending !== property.id) return setDeletePending(property.id); void onDelete(property.id).then(() => setDeletePending(null)) }}><Trash2 size={11} /></button>}</div></div>
-    })}</section>{editingProperty && <PropertyConfigEditor key={editingProperty.id} property={editingProperty} schema={schema} previewRecord={previewRecord} databaseSources={databaseSources} onClose={() => setEditingPropertyId(null)} onSave={async (config) => { setBusy(true); try { await onConfigure(editingProperty.id, config); setEditingPropertyId(null) } finally { setBusy(false) } }} />}</main>
-    <footer><div><input aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span>{schema.properties.length} / 50 个属性 · 标题属性受保护</span></footer>
+      const configurable = ['select', 'multiSelect', 'relation', 'rollup', 'formula'].includes(property.type)
+      return <div className={`schema-ledger-row ${editingPropertyId === property.id ? 'is-selected' : ''} ${draggingPropertyId === property.id ? 'is-dragging' : ''}`} key={property.id} onDragOver={(event) => event.preventDefault()} onDrop={() => reorder(property.id)}><em><button draggable aria-label={`拖动排序 ${property.name}`} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDraggingPropertyId(property.id) }} onDragEnd={() => setDraggingPropertyId(null)}><GripVertical size={13} /></button>{String(index + 1).padStart(2, '0')}</em><input aria-label={`${property.name} 属性名称`} defaultValue={property.name} maxLength={100} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== property.name) void onRename(property.id, next) }} /><span><i>{propertyTypeLabel(property.type)}</i>{propertyTypeName(property.type)}</span><div>{configurable && <button aria-label={`配置 ${property.name}`} onClick={() => setEditingPropertyId(property.id)}><Settings2 size={12} /></button>}{property.type === 'title' ? <small>主属性</small> : <button aria-label={`删除属性 ${property.name}`} className={deletePending === property.id ? 'is-confirm' : ''} onClick={() => { if (deletePending !== property.id) return setDeletePending(property.id); void onDelete(property.id).then(() => setDeletePending(null)) }}><Trash2 size={11} /></button>}</div></div>
+    })}</section>{editingProperty && <PropertyConfigEditor key={editingProperty.id} property={editingProperty} schema={schema} previewRecord={previewRecord} databaseSources={databaseSources} relationTargets={relationTargets} onClose={() => setEditingPropertyId(null)} onSave={async (config) => { setBusy(true); try { await onConfigure(editingProperty.id, config); setEditingPropertyId(null) } finally { setBusy(false) } }} />}</main>
+    <footer><div><input aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option disabled={candidate.id === 'rollup' && !schema.properties.some((property) => property.type === 'relation')} key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50 || (type === 'rollup' && !schema.properties.some((property) => property.type === 'relation'))} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span>{schema.properties.length} / 50 个属性 · 拖动手柄调整顺序 · 标题属性受保护</span></footer>
   </section></div>
 }
 
 const optionColors: SelectOption['color'][] = ['slate', 'gray', 'brown', 'red', 'orange', 'amber', 'green', 'blue', 'purple', 'pink']
+const rollupAggregations: Array<{ id: NonNullable<DatabaseProperty['rollup']>['aggregation']; label: string }> = [
+  { id: 'count', label: '计数' }, { id: 'showOriginal', label: '显示原值' }, { id: 'sum', label: '求和' },
+  { id: 'average', label: '平均值' }, { id: 'min', label: '最小值' }, { id: 'max', label: '最大值' },
+]
 
-function PropertyConfigEditor({ property, schema, previewRecord, databaseSources, onClose, onSave }: { property: DatabaseProperty; schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; onClose: () => void; onSave: (config: PropertyConfig) => Promise<void> }) {
+function PropertyConfigEditor({ property, schema, previewRecord, databaseSources, relationTargets, onClose, onSave }: { property: DatabaseProperty; schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; relationTargets: RelationTargets; onClose: () => void; onSave: (config: PropertyConfig) => Promise<void> }) {
   const [options, setOptions] = useState<SelectOption[]>(() => structuredClone(property.options ?? []))
   const [relationDatabaseId, setRelationDatabaseId] = useState(property.relation?.databaseId ?? schema.id)
   const [expression, setExpression] = useState(property.formula?.expression ?? '""')
+  const relationProperties = schema.properties.filter((candidate) => candidate.type === 'relation' && candidate.relation)
+  const [rollupRelationId, setRollupRelationId] = useState(property.rollup?.relationPropertyId ?? relationProperties[0]?.id ?? '')
+  const rollupRelation = relationProperties.find((candidate) => candidate.id === rollupRelationId)
+  const rollupTarget = rollupRelation ? relationTargets[rollupRelation.relation!.databaseId] : undefined
+  const rollupTargetProperties = (rollupTarget?.schema.properties ?? []).filter((candidate) => candidate.id !== property.id && !['formula', 'rollup'].includes(candidate.type))
+  const [rollupTargetPropertyId, setRollupTargetPropertyId] = useState(property.rollup?.targetPropertyId ?? rollupTargetProperties[0]?.id ?? '')
+  const [rollupAggregation, setRollupAggregation] = useState<NonNullable<DatabaseProperty['rollup']>['aggregation']>(property.rollup?.aggregation ?? 'count')
+  const selectedRollupTarget = rollupTargetProperties.find((candidate) => candidate.id === rollupTargetPropertyId)
+  const availableRollupAggregations = selectedRollupTarget?.type === 'number' ? rollupAggregations : rollupAggregations.filter((candidate) => ['count', 'showOriginal'].includes(candidate.id))
   const [busy, setBusy] = useState(false)
   const validFormula = property.type !== 'formula' || validateFormulaExpression(expression)
   const duplicateOption = options.some((option, index) => options.findIndex((candidate) => candidate.name.trim().toLocaleLowerCase() === option.name.trim().toLocaleLowerCase()) !== index || !option.name.trim())
   const save = async () => {
-    const config: PropertyConfig = ['select', 'multiSelect'].includes(property.type) ? { options } : property.type === 'relation' ? { relation: { databaseId: relationDatabaseId } } : { formula: { expression: expression.trim() } }
+    const config: PropertyConfig = ['select', 'multiSelect'].includes(property.type) ? { options } : property.type === 'relation' ? { relation: { databaseId: relationDatabaseId } } : property.type === 'rollup' ? { rollup: { relationPropertyId: rollupRelationId, targetPropertyId: rollupTargetPropertyId, aggregation: rollupAggregation } } : { formula: { expression: expression.trim() } }
     setBusy(true); try { await onSave(config) } finally { setBusy(false) }
   }
   const previewValues = { ...(previewRecord?.values ?? {}) }
   for (const candidate of schema.properties) previewValues[candidate.name] = previewRecord?.values[candidate.id] ?? null
   const preview = property.type === 'formula' ? evaluateFormula(expression, previewValues) : null
+  const rollupPreview = previewRollup(previewRecord, rollupRelation, rollupTarget, rollupTargetPropertyId, rollupAggregation)
   return <aside className="property-config-editor" aria-label={`${property.name} 属性配置`}>
     <header><div><i>{propertyTypeLabel(property.type)}</i><span><small>{propertyTypeName(property.type).toLocaleUpperCase()} PROPERTY</small><strong>{property.name}</strong></span></div><button aria-label="关闭属性配置" onClick={onClose}><X size={14} /></button></header>
     {['select', 'multiSelect'].includes(property.type) && <div className="option-config"><p>选项会立即用于表格、筛选和分组。拖动排序将在下一阶段开放。</p>{options.map((option, index) => <div className="option-config-row" key={option.id}><span className={`option-swatch color-${option.color}`} /><input aria-label={`选项 ${index + 1} 名称`} maxLength={100} value={option.name} onChange={(event) => setOptions((current) => current.map((candidate, position) => position === index ? { ...candidate, name: event.target.value } : candidate))} /><details><summary aria-label={`选项 ${index + 1} 颜色`} className={`color-${option.color}`} /><div>{optionColors.map((color) => <button aria-label={`颜色 ${color}`} className={`color-${color}`} key={color} onClick={() => setOptions((current) => current.map((candidate, position) => position === index ? { ...candidate, color } : candidate))} />)}</div></details><button aria-label={`删除选项 ${option.name}`} onClick={() => setOptions((current) => current.filter((_, position) => position !== index))}><Trash2 size={12} /></button></div>)}<button className="option-add" disabled={options.length >= 100} onClick={() => setOptions((current) => [...current, { id: crypto.randomUUID(), name: `选项 ${current.length + 1}`, color: optionColors[current.length % optionColors.length]! }])}><Plus size={13} />添加选项</button>{duplicateOption && <small className="property-config-error">选项名称不能为空或重复。</small>}</div>}
     {property.type === 'relation' && <div className="relation-config"><p>选择要关联的数据库。已有不属于新目标的关联值将保留显示，但再次编辑时需要重新选择。</p><label><span>目标数据库</span><select aria-label="关联目标数据库" value={relationDatabaseId} onChange={(event) => setRelationDatabaseId(event.target.value)}>{databaseSources.map((source) => <option key={source.id} value={source.id}>{source.name} · {source.recordCount} 条</option>)}</select></label><div className="relation-preview"><Link2 size={15} /><span><small>RELATION TARGET</small><strong>{databaseSources.find((source) => source.id === relationDatabaseId)?.pageTitle ?? schema.name}</strong></span></div></div>}
+    {property.type === 'rollup' && <div className="rollup-config"><p>先沿关联属性找到记录，再选择目标属性与计算方式。汇总结果始终只读。</p><label><span>关联属性</span><select aria-label="汇总关联属性" value={rollupRelationId} onChange={(event) => { const relationId = event.target.value; const relation = relationProperties.find((candidate) => candidate.id === relationId); const targets = relation ? relationTargets[relation.relation!.databaseId]?.schema.properties.filter((candidate) => !['formula', 'rollup'].includes(candidate.type)) ?? [] : []; setRollupRelationId(relationId); setRollupTargetPropertyId(targets[0]?.id ?? ''); setRollupAggregation('count') }}>{relationProperties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label><label><span>目标属性</span><select aria-label="汇总目标属性" value={rollupTargetPropertyId} onChange={(event) => { const targetId = event.target.value; setRollupTargetPropertyId(targetId); if (rollupTargetProperties.find((candidate) => candidate.id === targetId)?.type !== 'number') setRollupAggregation('count') }}>{rollupTargetProperties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {propertyTypeName(candidate.type)}</option>)}</select></label><label><span>计算方式</span><select aria-label="汇总计算方式" value={rollupAggregation} onChange={(event) => setRollupAggregation(event.target.value as typeof rollupAggregation)}>{availableRollupAggregations.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select></label><div className="rollup-preview"><Sigma size={15} /><span><small>当前记录预览</small><strong>{formatPropertyValue(rollupPreview) || '—'}</strong></span></div></div>}
     {property.type === 'formula' && <div className="formula-config"><p>使用属性名称，例如 <code>[评分] * 2</code>。支持 if、concat、round、min、max 与基础运算。</p><textarea aria-label="公式表达式" spellCheck={false} value={expression} onChange={(event) => setExpression(event.target.value)} /><div className="formula-token-list"><small>插入属性</small>{schema.properties.filter((candidate) => candidate.id !== property.id && candidate.type !== 'formula').map((candidate) => <button key={candidate.id} onClick={() => setExpression((current) => `${current}${current && !/\s$/u.test(current) ? ' ' : ''}[${candidate.name}]`)}>{candidate.name}</button>)}</div><div className={`formula-preview ${validFormula ? '' : 'is-error'}`}><Sigma size={15} /><span><small>{validFormula ? '当前记录预览' : '表达式不完整'}</small><strong>{validFormula ? formatPropertyValue(preview) || '—' : '检查括号、引号或运算符'}</strong></span></div></div>}
-    <footer><button onClick={onClose}>取消</button><button disabled={busy || duplicateOption || !validFormula || (property.type === 'relation' && !relationDatabaseId)} onClick={() => void save()}>{busy ? '保存中…' : '保存配置'}</button></footer>
+    <footer><button onClick={onClose}>取消</button><button disabled={busy || duplicateOption || !validFormula || (property.type === 'relation' && !relationDatabaseId) || (property.type === 'rollup' && (!rollupRelationId || !rollupTargetPropertyId))} onClick={() => void save()}>{busy ? '保存中…' : '保存配置'}</button></footer>
   </aside>
+}
+
+function previewRollup(record: DatabaseRecord | undefined, relation: DatabaseProperty | undefined, target: RelationTargets[string] | undefined, targetPropertyId: string, aggregation: NonNullable<DatabaseProperty['rollup']>['aggregation']): PropertyValue {
+  const relatedIds = relation && record?.values[relation.id]
+  if (!Array.isArray(relatedIds) || !target) return aggregation === 'count' ? 0 : null
+  const byId = new Map(target.records.map((candidate) => [candidate.id, candidate]))
+  const values = relatedIds.map((id) => byId.get(id)?.values[targetPropertyId] ?? null).filter((value) => value !== null)
+  if (aggregation === 'count') return values.length
+  if (aggregation === 'showOriginal') return values.flatMap((value) => Array.isArray(value) ? value : [String(value)])
+  const numbers = values.map(Number).filter(Number.isFinite)
+  if (!numbers.length) return null
+  if (aggregation === 'sum') return numbers.reduce((sum, value) => sum + value, 0)
+  if (aggregation === 'average') return numbers.reduce((sum, value) => sum + value, 0) / numbers.length
+  return aggregation === 'min' ? Math.min(...numbers) : Math.max(...numbers)
 }
 
 function propertyTypeName(type: PropertyType) {

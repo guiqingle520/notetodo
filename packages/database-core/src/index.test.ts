@@ -107,6 +107,17 @@ describe('database query engine', () => {
     ])[0]?.values.label).toBe('分数 3')
   })
 
+  it('resolves rollups from a related external database', () => {
+    const projectSchema: DatabaseSchema = { id: 'projects', name: 'Projects', properties: [
+      { id: 'tasks', name: 'Tasks', type: 'relation', relation: { databaseId: 'tasks' } },
+      { id: 'points', name: 'Points', type: 'rollup', rollup: { relationPropertyId: 'tasks', targetPropertyId: 'score', aggregation: 'sum' } },
+    ] }
+    const taskSchema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [{ id: 'score', name: 'Score', type: 'number' }] }
+    const records: DatabaseRecord[] = [{ id: 'project-1', values: { tasks: ['task-1', 'task-2'] }, createdAt: '', updatedAt: '' }]
+    const taskRecords: DatabaseRecord[] = [{ id: 'task-1', values: { score: 2 }, createdAt: '', updatedAt: '' }, { id: 'task-2', values: { score: 5 }, createdAt: '', updatedAt: '' }]
+    expect(resolveDerivedRecords(projectSchema, records, { tasks: { schema: taskSchema, records: taskRecords } })[0]?.values.points).toBe(7)
+  })
+
   it('incrementally recomputes only edited records and rollup dependents at 10k scale', () => {
     const schema: DatabaseSchema = { id: 'large', name: 'Large', properties: [
       { id: 'score', name: 'Score', type: 'number' },

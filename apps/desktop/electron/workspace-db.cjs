@@ -1081,10 +1081,18 @@ class WorkspaceDatabase {
   }
 
   addDatabaseProperty(databaseId, propertyId, name, type) {
-    const config = type === 'select' || type === 'multiSelect' ? JSON.stringify({ options: [
+    let config = type === 'select' || type === 'multiSelect' ? JSON.stringify({ options: [
       { id: 'option-1', name: '选项 1', color: 'slate' },
       { id: 'option-2', name: '选项 2', color: 'amber' },
     ] }) : type === 'relation' ? JSON.stringify({ relation: { databaseId } }) : type === 'formula' ? JSON.stringify({ formula: { expression: '""' } }) : '{}'
+    if (type === 'rollup') {
+      const relation = this.database.prepare("SELECT id, config_json FROM database_properties WHERE database_id = ? AND type = 'relation' ORDER BY position LIMIT 1").get(databaseId)
+      if (!relation) throw new Error('Rollup requires an existing relation property.')
+      const targetDatabaseId = JSON.parse(relation.config_json || '{}').relation?.databaseId || databaseId
+      const target = this.database.prepare("SELECT id FROM database_properties WHERE database_id = ? AND type NOT IN ('formula', 'rollup') ORDER BY position LIMIT 1").get(targetDatabaseId)
+      if (!target) throw new Error('The relation target has no properties.')
+      config = JSON.stringify({ rollup: { relationPropertyId: relation.id, targetPropertyId: target.id, aggregation: 'count' } })
+    }
     const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_properties WHERE database_id = ?').get(databaseId).position
     const result = this.database.prepare('INSERT INTO database_properties(id, database_id, name, type, position, config_json) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)')
       .run(propertyId, databaseId, name, type, position, config, databaseId)
@@ -1125,6 +1133,16 @@ class WorkspaceDatabase {
       const expression = typeof config?.formula?.expression === 'string' ? config.formula.expression.trim() : ''
       if (!expression || expression.length > 1000) throw new TypeError('Formula expression must contain 1 to 1,000 characters.')
       normalized = { formula: { expression } }
+    } else if (property.type === 'rollup') {
+      const rollup = config?.rollup
+      const relation = this.database.prepare("SELECT config_json FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'").get(rollup?.relationPropertyId, databaseId)
+      if (!relation) throw new TypeError('Rollup relation property does not exist.')
+      const targetDatabaseId = JSON.parse(relation.config_json || '{}').relation?.databaseId || databaseId
+      const target = this.database.prepare("SELECT type FROM database_properties WHERE id = ? AND database_id = ? AND type NOT IN ('formula', 'rollup')").get(rollup?.targetPropertyId, targetDatabaseId)
+      const aggregations = new Set(['count', 'sum', 'average', 'min', 'max', 'showOriginal'])
+      const numericAggregations = new Set(['sum', 'average', 'min', 'max'])
+      if (!target || !aggregations.has(rollup?.aggregation) || (numericAggregations.has(rollup?.aggregation) && target.type !== 'number')) throw new TypeError('Rollup target property or aggregation is invalid.')
+      normalized = { rollup: { relationPropertyId: rollup.relationPropertyId, targetPropertyId: rollup.targetPropertyId, aggregation: rollup.aggregation } }
     } else if (Object.keys(config ?? {}).length) throw new TypeError('This property type has no configurable settings.')
     const result = this.database.prepare('UPDATE database_properties SET config_json = ? WHERE id = ? AND database_id = ?').run(JSON.stringify(normalized), propertyId, databaseId)
     if (result.changes !== 1) throw new Error('Database property does not exist.')
@@ -1134,6 +1152,22 @@ class WorkspaceDatabase {
   renameDatabaseProperty(databaseId, propertyId, name) {
     const result = this.database.prepare('UPDATE database_properties SET name = ? WHERE id = ? AND database_id = ?').run(name, propertyId, databaseId)
     if (result.changes !== 1) throw new Error('Database property does not exist.')
+    return this.loadDatabaseById(databaseId)
+  }
+
+  renameDatabase(databaseId, name) {
+    const result = this.database.prepare('UPDATE databases SET name = ? WHERE id = ?').run(name, databaseId)
+    if (result.changes !== 1) throw new Error('Database does not exist.')
+    return this.loadDatabaseById(databaseId)
+  }
+
+  reorderDatabaseProperties(databaseId, propertyIds) {
+    const existing = this.database.prepare('SELECT id FROM database_properties WHERE database_id = ? ORDER BY position').all(databaseId).map((row) => row.id)
+    if (propertyIds.length !== existing.length || new Set(propertyIds).size !== existing.length || propertyIds.some((id) => !existing.includes(id))) throw new TypeError('Property order must contain every property exactly once.')
+    const update = this.database.prepare('UPDATE database_properties SET position = ? WHERE id = ? AND database_id = ?')
+    this.database.exec('BEGIN IMMEDIATE')
+    try { propertyIds.forEach((id, position) => update.run(position, id, databaseId)); this.database.exec('COMMIT') }
+    catch (error) { this.database.exec('ROLLBACK'); throw error }
     return this.loadDatabaseById(databaseId)
   }
 

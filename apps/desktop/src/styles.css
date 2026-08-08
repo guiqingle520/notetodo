@@ -1187,6 +1187,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .linked-database-error { color: #eb5757; background: rgba(235,87,87,.10); font-family: inherit; }
 
 .database-summary { height: 26px; color: var(--notion-faint); background: #fff; font-size: 10px; }
+.database-name-trigger { min-width: 0; width: max-content; max-width: 280px; display: flex; align-items: center; gap: 5px; padding: 3px 5px; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; cursor: pointer; font: inherit; }
+.database-name-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.database-name-trigger svg { flex: 0 0 auto; opacity: 0; }
+.database-name-trigger:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-name-trigger:hover svg { opacity: 1; }
+.database-name-editor { width: min(280px, 100%); display: flex; align-items: center; gap: 6px; }
+.database-name-editor input { min-width: 80px; height: 22px; padding: 0 5px; color: var(--notion-text); border: 1px solid var(--notion-blue); border-radius: 3px; outline: 2px solid rgba(35,131,226,.15); background: #fff; font: inherit; }
+.database-name-editor i { color: var(--notion-faint); font: normal 9px var(--font-ui); white-space: nowrap; }
 .database-compute-mark { color: var(--notion-muted); background: var(--notion-sidebar); font-size: 10px; }
 .view-rule-summary { color: var(--notion-muted); border-color: var(--notion-divider); background: #fff; }
 .view-rule-summary > span, .view-rule-summary button { font-family: inherit; letter-spacing: 0; }
@@ -1232,10 +1240,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .schema-ledger-head, .schema-ledger-row > em, .schema-ledger-row > small,
 .schema-ledger-row > input, .schema-ledger-row > span, .schema-ledger-row > button { font-family: inherit; }
 .schema-ledger-row > span i { color: var(--notion-muted); background: var(--notion-sidebar); }
+.schema-ledger-row > em { display: flex; align-items: center; gap: 2px; }
+.schema-ledger-row > em button { width: 18px; height: 28px; display: grid; place-items: center; padding: 0; color: var(--notion-faint); border: 0; border-radius: 3px; background: transparent; cursor: grab; }
+.schema-ledger-row > em button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.schema-ledger-row > em button:active { cursor: grabbing; }
+.schema-ledger-row.is-dragging { opacity: .38; background: rgba(35,131,226,.06); }
 .schema-ledger-row > input:hover, .schema-ledger-row > input:focus { background: #fff; }
 .schema-panel > footer, .view-rules-panel > footer { border-color: var(--notion-divider); background: var(--notion-sidebar); }
 .schema-panel > footer input, .schema-panel > footer select { color: var(--notion-text); border-color: var(--notion-border); background: #fff; font-family: inherit; }
 .schema-panel > footer button, .schema-panel > footer > span, .view-rules-panel > footer button, .view-rules-panel > footer > span { font-family: inherit; letter-spacing: 0; }
+.rollup-config { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.rollup-config > p { margin: 0 0 2px; color: var(--notion-muted); font-size: 11px; line-height: 1.6; }
+.rollup-config > label { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 10px; }
+.rollup-config > label > span { color: var(--notion-muted); font-size: 11px; }
+.rollup-config select { min-width: 0; width: 100%; height: 32px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); border-radius: 4px; background: #fff; font: 11px var(--font-ui); }
+.rollup-preview { display: flex; align-items: center; gap: 9px; min-height: 48px; margin-top: 4px; padding: 8px 10px; color: var(--notion-muted); border: 1px solid var(--notion-divider); border-radius: 5px; background: var(--notion-sidebar); }
+.rollup-preview > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rollup-preview small { color: var(--notion-faint); font-size: 9px; }
+.rollup-preview strong { overflow: hidden; color: var(--notion-text); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .view-rules-panel > nav, .automation-panel > nav { border-color: var(--notion-divider); background: #fff; }
 .view-rules-panel > nav button, .automation-panel > nav button { color: var(--notion-muted); border-color: var(--notion-divider); background: transparent; font-family: inherit; }
 .view-rules-panel > nav button.is-active, .automation-panel > nav button.is-active { color: var(--notion-text); background: var(--notion-sidebar); box-shadow: inset 0 -2px var(--notion-text); }

@@ -281,7 +281,7 @@ function registerWorkspaceIpc(database) {
   ipcMain.handle('database:add-property', (_event, databaseId, propertyId, name, type) => {
     assertId(databaseId); assertId(propertyId)
     if (typeof name !== 'string' || name.trim().length < 1 || name.length > 100) throw new TypeError('Invalid property name.')
-    if (!['text', 'number', 'checkbox', 'select', 'multiSelect', 'date', 'url', 'relation', 'formula'].includes(type)) throw new TypeError('Invalid property type.')
+    if (!['text', 'number', 'checkbox', 'select', 'multiSelect', 'date', 'url', 'relation', 'rollup', 'formula'].includes(type)) throw new TypeError('Invalid property type.')
     return database.addDatabaseProperty(databaseId, propertyId, name.trim(), type)
   })
   ipcMain.handle('database:list-sources', () => database.listDatabaseSources())
@@ -294,6 +294,17 @@ function registerWorkspaceIpc(database) {
     assertId(databaseId); assertId(propertyId)
     if (typeof name !== 'string' || name.trim().length < 1 || name.length > 100) throw new TypeError('Invalid property name.')
     return database.renameDatabaseProperty(databaseId, propertyId, name.trim())
+  })
+  ipcMain.handle('database:rename', (_event, databaseId, name) => {
+    assertId(databaseId)
+    if (typeof name !== 'string' || name.trim().length < 1 || name.length > 200) throw new TypeError('Invalid database name.')
+    return database.renameDatabase(databaseId, name.trim())
+  })
+  ipcMain.handle('database:reorder-properties', (_event, databaseId, propertyIds) => {
+    assertId(databaseId)
+    if (!Array.isArray(propertyIds) || propertyIds.length > 50) throw new TypeError('Invalid property order.')
+    propertyIds.forEach(assertId)
+    return database.reorderDatabaseProperties(databaseId, propertyIds)
   })
   ipcMain.handle('database:delete-property', (_event, databaseId, propertyId) => {
     assertId(databaseId); assertId(propertyId)

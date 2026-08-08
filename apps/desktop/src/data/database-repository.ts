@@ -73,12 +73,17 @@ class DatabaseRepository {
     return structuredClone(snapshot)
   }
 
-  async addProperty(snapshot: DatabaseSnapshot, name: string, type: Exclude<PropertyType, 'title' | 'rollup'>) {
+  async addProperty(snapshot: DatabaseSnapshot, name: string, type: Exclude<PropertyType, 'title'>) {
     const propertyId = crypto.randomUUID()
     if (window.notetodo?.database) return window.notetodo.database.addProperty(snapshot.schema.id, propertyId, name, type)
+    const relation = type === 'rollup' ? snapshot.schema.properties.find((candidate) => candidate.type === 'relation' && candidate.relation) : undefined
+    if (type === 'rollup' && !relation) throw new Error('请先创建关联属性。')
+    const targetSnapshot = relation ? this.findByDatabaseId(relation.relation!.databaseId) ?? snapshot : snapshot
+    const targetProperty = targetSnapshot.schema.properties.find((candidate) => !['formula', 'rollup'].includes(candidate.type))
+    if (type === 'rollup' && !targetProperty) throw new Error('关联数据库没有可汇总的属性。')
     const property = { id: propertyId, name, type, ...(['select', 'multiSelect'].includes(type) ? { options: [
       { id: 'option-1', name: '选项 1', color: 'slate' as const }, { id: 'option-2', name: '选项 2', color: 'amber' as const },
-    ] } : type === 'relation' ? { relation: { databaseId: snapshot.schema.id } } : type === 'formula' ? { formula: { expression: '""' } } : {}) }
+    ] } : type === 'relation' ? { relation: { databaseId: snapshot.schema.id } } : type === 'rollup' ? { rollup: { relationPropertyId: relation!.id, targetPropertyId: targetProperty!.id, aggregation: 'count' as const } } : type === 'formula' ? { formula: { expression: '""' } } : {}) }
     const next = { ...snapshot, schema: { ...snapshot.schema, properties: [...snapshot.schema.properties, property] } }
     this.write(next); return structuredClone(next)
   }
@@ -88,7 +93,7 @@ class DatabaseRepository {
     return Object.entries(this.readCollections()).map(([pageId, snapshot]) => ({ id: snapshot.schema.id, pageId, name: snapshot.schema.name, pageTitle: snapshot.schema.name, recordCount: snapshot.records.length }))
   }
 
-  async updatePropertyConfig(snapshot: DatabaseSnapshot, propertyId: string, config: Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'formula'>>) {
+  async updatePropertyConfig(snapshot: DatabaseSnapshot, propertyId: string, config: Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'rollup' | 'formula'>>) {
     if (window.notetodo?.database) return window.notetodo.database.updatePropertyConfig(snapshot.schema.id, propertyId, config)
     const next = { ...snapshot, schema: { ...snapshot.schema, properties: snapshot.schema.properties.map((property) => property.id === propertyId ? { ...property, ...structuredClone(config) } : property) } }
     this.write(next); return structuredClone(next)
@@ -97,6 +102,20 @@ class DatabaseRepository {
   async renameProperty(snapshot: DatabaseSnapshot, propertyId: string, name: string) {
     if (window.notetodo?.database) return window.notetodo.database.renameProperty(snapshot.schema.id, propertyId, name)
     const next = { ...snapshot, schema: { ...snapshot.schema, properties: snapshot.schema.properties.map((property) => property.id === propertyId ? { ...property, name } : property) } }
+    this.write(next); return structuredClone(next)
+  }
+
+  async rename(snapshot: DatabaseSnapshot, name: string) {
+    if (window.notetodo?.database) return window.notetodo.database.rename(snapshot.schema.id, name)
+    const next = { ...snapshot, schema: { ...snapshot.schema, name } }
+    this.write(next); return structuredClone(next)
+  }
+
+  async reorderProperties(snapshot: DatabaseSnapshot, propertyIds: string[]) {
+    if (window.notetodo?.database) return window.notetodo.database.reorderProperties(snapshot.schema.id, propertyIds)
+    const byId = new Map(snapshot.schema.properties.map((property) => [property.id, property]))
+    if (propertyIds.length !== byId.size || new Set(propertyIds).size !== byId.size || propertyIds.some((id) => !byId.has(id))) throw new Error('属性顺序无效。')
+    const next = { ...snapshot, schema: { ...snapshot.schema, properties: propertyIds.map((id) => byId.get(id)!) } }
     this.write(next); return structuredClone(next)
   }
 
@@ -113,6 +132,10 @@ class DatabaseRepository {
     if (window.notetodo?.database) return window.notetodo.database.updateCell(recordId, propertyId, value)
     this.write(snapshot)
     return undefined
+  }
+
+  private findByDatabaseId(databaseId: string) {
+    return Object.values(this.readCollections()).find((snapshot) => snapshot.schema.id === databaseId)
   }
 
   async createRecord(snapshot: DatabaseSnapshot, recordId: string) {

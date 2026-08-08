@@ -19,6 +19,8 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     listDatabaseSources(): Array<{ id: string; pageId: string; name: string; pageTitle: string; recordCount: number }>
     updateDatabasePropertyConfig(databaseId: string, propertyId: string, config: object): DatabaseSnapshot
     renameDatabaseProperty(databaseId: string, propertyId: string, name: string): DatabaseSnapshot
+    renameDatabase(databaseId: string, name: string): DatabaseSnapshot
+    reorderDatabaseProperties(databaseId: string, propertyIds: string[]): DatabaseSnapshot
     deleteDatabaseProperty(databaseId: string, propertyId: string): DatabaseSnapshot
     updateDatabaseCell(recordId: string, propertyId: string, value: unknown): { automationRuns: string[] }
     createDatabaseRecord(databaseId: string, recordId: string): void
@@ -171,6 +173,11 @@ describe('WorkspaceDatabase', () => {
     expect(database.updateDatabasePropertyConfig('research-db', 'research-relation', { relation: { databaseId: 'roadmap-db' } }).schema.properties.at(-1)).toMatchObject({ relation: { databaseId: 'roadmap-db' } })
     database.addDatabaseProperty('research-db', 'research-formula', '评分标签', 'formula')
     expect(database.updateDatabasePropertyConfig('research-db', 'research-formula', { formula: { expression: 'concat("P", [research-db-date])' } }).schema.properties.at(-1)).toMatchObject({ formula: { expression: expect.stringContaining('concat') } })
+    database.addDatabaseProperty('research-db', 'research-rollup', '路线任务数', 'rollup')
+    expect(database.updateDatabasePropertyConfig('research-db', 'research-rollup', { rollup: { relationPropertyId: 'research-relation', targetPropertyId: 'task-title', aggregation: 'count' } }).schema.properties.at(-1)).toMatchObject({ rollup: { relationPropertyId: 'research-relation', targetPropertyId: 'task-title', aggregation: 'count' } })
+    expect(database.renameDatabase('research-db', '研究资料库').schema.name).toBe('研究资料库')
+    const reordered = database.reorderDatabaseProperties('research-db', ['research-db-title', 'research-rollup', 'research-db-status', 'research-db-date', 'research-stage', 'research-relation', 'research-formula'])
+    expect(reordered.schema.properties[1]?.id).toBe('research-rollup')
     expect(database.listDatabaseSources()).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'research-db', pageId: 'research' }), expect.objectContaining({ id: 'roadmap-db' })]))
     expect(() => database?.updateDatabasePropertyConfig('research-db', 'research-stage', { options: [{ id: 'x', name: '重复', color: 'blue' }, { id: 'y', name: '重复', color: 'red' }] })).toThrow(/unique names/)
   })

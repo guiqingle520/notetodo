@@ -219,10 +219,12 @@ export function normalizePropertyValue(property: DatabaseProperty, input: unknow
 }
 
 /** Resolves rollups before formulas without mutating persisted source values. */
-export function resolveDerivedRecords(schema: DatabaseSchema, records: DatabaseRecord[]): DatabaseRecord[] {
+export type RelationTargetSnapshot = { schema: DatabaseSchema; records: DatabaseRecord[] }
+
+export function resolveDerivedRecords(schema: DatabaseSchema, records: DatabaseRecord[], relationTargets: Record<string, RelationTargetSnapshot> = {}): DatabaseRecord[] {
   const byId = new Map(records.map((record) => [record.id, record]))
   const derived = derivedProperties(schema)
-  return records.map((record) => resolveRecord(record, byId, derived))
+  return records.map((record) => resolveRecord(record, byId, derived, relationTargets))
 }
 
 /**
@@ -235,8 +237,9 @@ export function resolveDerivedRecordsIncremental(
   records: DatabaseRecord[],
   previous: DatabaseRecord[] | undefined,
   changedRecordIds: Iterable<string>,
+  relationTargets: Record<string, RelationTargetSnapshot> = {},
 ) {
-  if (!previous?.length) return { records: resolveDerivedRecords(schema, records), recomputedCount: records.length }
+  if (!previous?.length) return { records: resolveDerivedRecords(schema, records, relationTargets), recomputedCount: records.length }
   const changed = new Set(changedRecordIds)
   const previousById = new Map(previous.map((record) => [record.id, record]))
   const byId = new Map(records.map((record) => [record.id, record]))
@@ -257,26 +260,33 @@ export function resolveDerivedRecordsIncremental(
     const cached = previousById.get(record.id)
     if (cached && !changed.has(record.id) && cached.updatedAt === record.updatedAt) return cached
     recomputedCount += 1
-    return resolveRecord(record, byId, derived)
+    return resolveRecord(record, byId, derived, relationTargets)
   })
   return { records: projected, recomputedCount }
 }
 
 function derivedProperties(schema: DatabaseSchema) {
   return {
+    schemaId: schema.id,
     properties: schema.properties,
     rollups: schema.properties.filter((candidate) => candidate.type === 'rollup' && candidate.rollup),
     formulas: schema.properties.filter((candidate) => candidate.type === 'formula' && candidate.formula),
   }
 }
 
-function resolveRecord(record: DatabaseRecord, byId: Map<string, DatabaseRecord>, derived: ReturnType<typeof derivedProperties>) {
+function resolveRecord(record: DatabaseRecord, byId: Map<string, DatabaseRecord>, derived: ReturnType<typeof derivedProperties>, relationTargets: Record<string, RelationTargetSnapshot>) {
   const values = { ...record.values }
   for (const property of derived.rollups) {
     const config = property.rollup!
+    const relationProperty = derived.properties.find((candidate) => candidate.id === config.relationPropertyId && candidate.type === 'relation')
+    const targetDatabaseId = relationProperty?.relation?.databaseId
+    const targetRecords = targetDatabaseId && targetDatabaseId !== derived.schemaId
+      ? relationTargets[targetDatabaseId]?.records
+      : undefined
+    const targetById = targetRecords ? new Map(targetRecords.map((candidate) => [candidate.id, candidate])) : byId
     const relatedIds = values[config.relationPropertyId]
     const relatedValues = Array.isArray(relatedIds)
-      ? relatedIds.map((id) => byId.get(id)?.values[config.targetPropertyId] ?? null).filter((value) => value !== null)
+      ? relatedIds.map((id) => targetById.get(id)?.values[config.targetPropertyId] ?? null).filter((value) => value !== null)
       : []
     values[property.id] = aggregateRollup(relatedValues, config.aggregation)
   }

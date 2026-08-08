@@ -120,12 +120,15 @@ describe('database authoring', () => {
   })
 
   it('adds, renames and confirms deletion of schema properties', () => {
-    const onAdd = vi.fn().mockResolvedValue(undefined); const onRename = vi.fn().mockResolvedValue(undefined); const onDelete = vi.fn().mockResolvedValue(undefined); const onConfigure = vi.fn().mockResolvedValue(undefined)
+    const onAdd = vi.fn().mockResolvedValue(undefined); const onRename = vi.fn().mockResolvedValue(undefined); const onDelete = vi.fn().mockResolvedValue(undefined); const onConfigure = vi.fn().mockResolvedValue(undefined); const onReorder = vi.fn().mockResolvedValue(undefined)
     const authoringSchema: DatabaseSchema = { id: 'research-db', name: '研究', properties: [
       { id: 'name', name: '名称', type: 'title' }, { id: 'notes', name: '备注', type: 'text' },
       { id: 'status', name: '状态', type: 'select', options: [{ id: 'todo', name: '待开始', color: 'slate' }] },
     ] }
-    const { getByRole } = render(<SchemaPanel schema={authoringSchema} databaseSources={[{ id: 'research-db', pageId: 'research', name: '研究', pageTitle: '研究', recordCount: 1 }]} onClose={vi.fn()} onAdd={onAdd} onRename={onRename} onConfigure={onConfigure} onDelete={onDelete} />)
+    const { getByRole } = render(<SchemaPanel schema={authoringSchema} databaseSources={[{ id: 'research-db', pageId: 'research', name: '研究', pageTitle: '研究', recordCount: 1 }]} relationTargets={{ 'research-db': { schema: authoringSchema, records: [] } }} onClose={vi.fn()} onAdd={onAdd} onRename={onRename} onReorder={onReorder} onConfigure={onConfigure} onDelete={onDelete} />)
+    fireEvent.dragStart(getByRole('button', { name: '拖动排序 备注' }), { dataTransfer: { effectAllowed: 'none' } })
+    fireEvent.dragOver(getByRole('textbox', { name: '状态 属性名称' }).closest('.schema-ledger-row')!)
+    fireEvent.drop(getByRole('textbox', { name: '状态 属性名称' }).closest('.schema-ledger-row')!)
     fireEvent.change(getByRole('textbox', { name: '新属性名称' }), { target: { value: '评分' } })
     fireEvent.change(getByRole('combobox', { name: '新属性类型' }), { target: { value: 'number' } })
     fireEvent.click(getByRole('button', { name: /添加属性/ }))
@@ -138,9 +141,28 @@ describe('database authoring', () => {
     fireEvent.change(getByRole('textbox', { name: '选项 1 名称' }), { target: { value: '待处理' } })
     fireEvent.click(getByRole('button', { name: '保存配置' }))
     expect(onAdd).toHaveBeenCalledWith('评分', 'number')
+    expect(onReorder).toHaveBeenCalledWith(['name', 'status', 'notes'])
     expect(onRename).toHaveBeenCalledWith('notes', '研究备注')
     expect(onDelete).toHaveBeenCalledWith('notes')
     expect(onConfigure).toHaveBeenCalledWith('status', { options: [{ id: 'todo', name: '待处理', color: 'slate' }] })
+  })
+
+  it('configures a Rollup through relation, target property and aggregation selectors', () => {
+    const onConfigure = vi.fn().mockResolvedValue(undefined)
+    const rollupSchema: DatabaseSchema = { id: 'projects', name: '项目', properties: [
+      { id: 'name', name: '名称', type: 'title' },
+      { id: 'tasks', name: '任务', type: 'relation', relation: { databaseId: 'tasks-db' } },
+      { id: 'points', name: '任务分值', type: 'rollup', rollup: { relationPropertyId: 'tasks', targetPropertyId: 'score', aggregation: 'sum' } },
+    ] }
+    const taskSchema: DatabaseSchema = { id: 'tasks-db', name: '任务', properties: [{ id: 'title', name: '任务', type: 'title' }, { id: 'score', name: '分值', type: 'number' }] }
+    const record: DatabaseRecord = { id: 'project-1', values: { name: '发布', tasks: ['task-1'] }, createdAt: '', updatedAt: '' }
+    const targets = { 'tasks-db': { schema: taskSchema, records: [{ id: 'task-1', values: { title: '测试', score: 5 }, createdAt: '', updatedAt: '' }] } }
+    const { getByRole, getByText } = render(<SchemaPanel schema={rollupSchema} previewRecord={record} databaseSources={[]} relationTargets={targets} onClose={vi.fn()} onAdd={vi.fn()} onRename={vi.fn()} onReorder={vi.fn()} onConfigure={onConfigure} onDelete={vi.fn()} />)
+    fireEvent.click(getByRole('button', { name: '配置 任务分值' }))
+    expect(getByText('5')).toBeTruthy()
+    fireEvent.change(getByRole('combobox', { name: '汇总计算方式' }), { target: { value: 'average' } })
+    fireEvent.click(getByRole('button', { name: '保存配置' }))
+    expect(onConfigure).toHaveBeenCalledWith('points', { rollup: { relationPropertyId: 'tasks', targetPropertyId: 'score', aggregation: 'average' } })
   })
 
   it('opens a record detail surface with body and editable properties', () => {

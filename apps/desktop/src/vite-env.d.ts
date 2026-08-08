@@ -42,7 +42,9 @@ interface Window {
       create: (pageId: string, databaseId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       addProperty: (databaseId: string, propertyId: string, name: string, type: import('@notetodo/database-core').PropertyType) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       listSources: () => Promise<Array<{ id: string; pageId: string; name: string; pageTitle: string; recordCount: number }>>
-      updatePropertyConfig: (databaseId: string, propertyId: string, config: Partial<Pick<import('@notetodo/database-core').DatabaseProperty, 'options' | 'relation' | 'formula'>>) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      updatePropertyConfig: (databaseId: string, propertyId: string, config: Partial<Pick<import('@notetodo/database-core').DatabaseProperty, 'options' | 'relation' | 'rollup' | 'formula'>>) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      rename: (databaseId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
+      reorderProperties: (databaseId: string, propertyIds: string[]) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       renameProperty: (databaseId: string, propertyId: string, name: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       deleteProperty: (databaseId: string, propertyId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       updateCell: (recordId: string, propertyId: string, value: import('@notetodo/database-core').PropertyValue) => Promise<{ automationRuns: string[] }>
