@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render, waitFor } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema, DatabaseView } from '@notetodo/database-core'
-import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewLayoutMenu, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -63,6 +63,34 @@ describe('ViewRulesPanel', () => {
     fireEvent.click(getByRole('button', { name: '保存到当前视图' }))
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ filterMode: 'or', filters: expect.arrayContaining([expect.objectContaining({ propertyId: 'status', value: 'todo' })]) }))
     expect(onSave.mock.calls[0]?.[0].filters).toHaveLength(2)
+  })
+})
+
+describe('table view layout', () => {
+  const layoutSchema: DatabaseSchema = { id: 'layout', name: 'Layout', properties: [
+    { id: 'title', name: '名称', type: 'title' }, { id: 'status', name: '状态', type: 'text' }, { id: 'score', name: '分数', type: 'number' },
+  ] }
+
+  it('persists per-view property visibility and density choices', () => {
+    const onSave = vi.fn()
+    const { getByRole } = render(<ViewLayoutMenu schema={layoutSchema} config={{}} onClose={vi.fn()} onSave={onSave} />)
+    fireEvent.click(getByRole('button', { name: '隐藏属性 状态' }))
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ visiblePropertyIds: ['title', 'score'] }))
+    fireEvent.click(getByRole('button', { name: '宽松' }))
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ rowHeight: 'comfortable' }))
+    expect(getByRole('button', { name: '隐藏属性 名称' })).toBeDisabled()
+  })
+
+  it('renders only visible properties and persists resized widths', () => {
+    const onConfigChange = vi.fn()
+    const record: DatabaseRecord = { id: 'row', values: { title: '文档', status: '进行中', score: 3 }, createdAt: '', updatedAt: '' }
+    const { container, getByRole } = render(<GenericTable records={[record]} schema={layoutSchema} config={{ visiblePropertyIds: ['title', 'score'], rowHeight: 'compact' }} onConfigChange={onConfigChange} updateCell={vi.fn()} />)
+    expect([...container.querySelectorAll('.generic-database-head > span > b')].map((node) => node.textContent)).toEqual(['名称', '分数'])
+    expect(container.querySelector<HTMLElement>('.generic-database-row')?.style.height).toBe('34px')
+    fireEvent.mouseDown(getByRole('button', { name: '调整列宽 名称' }), { clientX: 100 })
+    fireEvent.mouseMove(window, { clientX: 150 })
+    fireEvent.mouseUp(window, { clientX: 150 })
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ propertyWidths: { title: 270 } }))
   })
 })
 

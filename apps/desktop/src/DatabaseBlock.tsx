@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Settings2, Sigma, Star, Table2, Trash2, X, Zap } from 'lucide-react'
+import { Activity, ArrowRight, ArrowUpDown, BookOpen, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
 import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, validateFormulaExpression, virtualWindow, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
@@ -57,6 +57,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null>(initialSnapshot ?? null)
   const [rulesOpen, setRulesOpen] = useState<'filters' | 'sorts' | 'group' | null>(null)
   const [schemaOpen, setSchemaOpen] = useState(false)
+  const [layoutOpen, setLayoutOpen] = useState(false)
   const [databaseSources, setDatabaseSources] = useState<Array<{ id: string; pageId: string; name: string; pageTitle: string; recordCount: number }>>([])
   const [relationTargets, setRelationTargets] = useState<Record<string, { schema: DatabaseSchema; records: DatabaseRecord[] }>>({})
   const [automationOpen, setAutomationOpen] = useState(false)
@@ -167,6 +168,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     const next = { ...snapshot, activeViewId: viewId }
     setSnapshot(next)
     setSelectedRecordIds(new Set())
+    setLayoutOpen(false)
     void databaseRepository.setActiveView(next, viewId)
   }
 
@@ -234,12 +236,13 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
           <button className="database-view-add" aria-label="新建数据库视图" onClick={() => setViewMenuOpen('create')}><Plus size={14} /></button>
         </div>
         <div className="database-tools">
-          <button className={viewMenuOpen === 'manage' ? 'is-active' : ''} aria-label="管理当前视图" onClick={() => setViewMenuOpen((current) => current === 'manage' ? null : 'manage')}><MoreHorizontal size={14} /></button>
-          <button className={schemaOpen ? 'is-active' : ''} onClick={() => setSchemaOpen(true)}><Settings2 size={13} />属性 · {snapshot.schema.properties.length}</button>
+          <button className={viewMenuOpen === 'manage' ? 'is-active' : ''} aria-label="管理当前视图" onClick={() => { setLayoutOpen(false); setViewMenuOpen((current) => current === 'manage' ? null : 'manage') }}><MoreHorizontal size={14} /></button>
+          <button className={schemaOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setSchemaOpen(true) }}><Settings2 size={13} />属性 · {snapshot.schema.properties.length}</button>
+          {activeView.type === 'table' && <button className={layoutOpen ? 'is-active' : ''} onClick={() => { setViewMenuOpen(null); setTemplateMenuOpen(false); setLayoutOpen((open) => !open) }}><SlidersHorizontal size={13} />布局</button>}
           <button className={activeView.config.filters?.length ? 'is-active' : ''} onClick={() => setRulesOpen('filters')}><Filter size={13} />筛选{activeView.config.filters?.length ? ` · ${activeView.config.filters.length}` : ''}</button>
           <button className={activeView.config.sorts?.length ? 'is-active' : ''} onClick={() => setRulesOpen('sorts')}><ArrowUpDown size={13} />排序{activeView.config.sorts?.length ? ` · ${activeView.config.sorts.length}` : ''}</button>
           <button className={activeView.config.groupByPropertyId ? 'is-active' : ''} onClick={() => setRulesOpen('group')}><Layers3 size={13} />分组</button>
-          <button className={templateMenuOpen ? 'is-active' : ''} onClick={() => setTemplateMenuOpen((open) => !open)}><LayoutTemplate size={13} />模板{snapshot.templates?.length ? ` · ${snapshot.templates.length}` : ''}</button>
+          <button className={templateMenuOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setTemplateMenuOpen((open) => !open) }}><LayoutTemplate size={13} />模板{snapshot.templates?.length ? ` · ${snapshot.templates.length}` : ''}</button>
           <button className={csvImportOpen ? 'is-active' : ''} onClick={() => setCsvImportOpen(true)}><FileUp size={13} />导入</button>
           <button onClick={() => void exportCsv()} disabled={exportState === 'working'}><Download size={13} />{exportState === 'working' ? '导出中' : exportState === 'done' ? '已导出' : 'CSV'}</button>
           <button className="database-automation" onClick={() => setAutomationOpen(true)}><Zap size={13} />自动化 · {automations.filter((rule) => rule.enabled).length}</button>
@@ -247,14 +250,13 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
         </div>
         {viewMenuOpen && <ViewManagementMenu key={`${viewMenuOpen}-${activeView.id}`} mode={viewMenuOpen} views={snapshot.views} activeView={activeView} defaultViewId={snapshot.views[0]!.id} onClose={() => setViewMenuOpen(null)} onCreate={createView} onRename={async (name) => { setSnapshot(await databaseRepository.renameView(snapshot, activeView.id, name)); setViewMenuOpen(null) }} onDuplicate={duplicateView} onDelete={async () => { setSnapshot(await databaseRepository.deleteView(snapshot, activeView.id)); setViewMenuOpen(null) }} onSetDefault={async () => { setSnapshot(await databaseRepository.setDefaultView(snapshot, activeView.id)); setViewMenuOpen(null) }} />}
         {templateMenuOpen && <DatabaseTemplateMenu templates={snapshot.templates ?? []} selectedCount={selectedRecordIds.size} onClose={() => setTemplateMenuOpen(false)} onCreateBlank={addRecord} onApply={createFromTemplate} onEdit={(template) => { setTemplateMenuOpen(false); setEditingTemplate(template ?? 'new') }} onSaveSelection={saveSelectionAsTemplate} onDelete={async (templateId) => setSnapshot(await databaseRepository.deleteTemplate(snapshot, templateId))} />}
+        {layoutOpen && <ViewLayoutMenu schema={snapshot.schema} config={activeView.config} onClose={() => setLayoutOpen(false)} onSave={saveViewConfig} />}
       </div>
       {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
       <div className="database-summary"><DatabaseNameEditor name={snapshot.schema.name} onRename={async (name) => { const next = await databaseRepository.rename(snapshot, name); setSnapshot(next); setDatabaseSources((current) => current.map((source) => source.id === next.schema.id ? { ...source, name: next.schema.name } : source)) }} /><span className="database-compute-mark">已更新 {projection.recomputedCount} 项</span><span>{records.length} / {snapshot.records.length} 条记录</span></div>
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
       {recordGroups.length > 0 && <div className="database-group-ledger"><span>分组</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
-      {activeView.type === 'table' && (snapshot.schema.id === 'roadmap-db'
-        ? <VirtualTable records={records} allRecords={derivedRecords} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />
-        : <GenericTable records={records} schema={snapshot.schema} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />)}
+      {activeView.type === 'table' && <GenericTable records={records} schema={snapshot.schema} config={activeView.config} onConfigChange={saveViewConfig} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />}
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
       {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
@@ -313,6 +315,29 @@ function defaultViewConfig(schema: DatabaseSchema, type: DatabaseView['type']): 
   if (type === 'timeline') return { startDatePropertyId: dates[0]?.id, endDatePropertyId: dates[1]?.id ?? dates[0]?.id }
   if (type === 'gallery') return { coverPropertyId: cover?.id, visiblePropertyIds: schema.properties.filter((property) => property.type !== 'title').slice(0, 3).map((property) => property.id), cardSize: 'medium' }
   return {}
+}
+
+export function ViewLayoutMenu({ schema, config, onClose, onSave }: { schema: DatabaseSchema; config: DatabaseViewConfig; onClose: () => void; onSave: (config: DatabaseViewConfig) => void }) {
+  const [draft, setDraft] = useState<DatabaseViewConfig>(() => structuredClone(config))
+  const titleId = schema.properties.find((property) => property.type === 'title')?.id
+  const visible = new Set(draft.visiblePropertyIds ?? schema.properties.map((property) => property.id))
+  if (titleId) visible.add(titleId)
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [onClose])
+  const commit = (next: DatabaseViewConfig) => { setDraft(next); onSave(next) }
+  const toggle = (propertyId: string) => {
+    if (propertyId === titleId) return
+    const nextVisible = new Set(visible)
+    if (nextVisible.has(propertyId)) nextVisible.delete(propertyId); else nextVisible.add(propertyId)
+    commit({ ...draft, visiblePropertyIds: schema.properties.filter((property) => nextVisible.has(property.id)).map((property) => property.id) })
+  }
+  const visibleCount = schema.properties.filter((property) => visible.has(property.id)).length
+  return <section className="database-layout-menu" role="dialog" aria-label="表格布局">
+    <header><div><strong>表格布局</strong><small>仅作用于当前视图</small></div><button aria-label="关闭表格布局" onClick={onClose}><X size={14} /></button></header>
+    <div className="layout-density"><span><Rows3 size={14} />行高</span><div>{(['compact', 'default', 'comfortable'] as const).map((density) => <button aria-pressed={(draft.rowHeight ?? 'default') === density} className={(draft.rowHeight ?? 'default') === density ? 'is-selected' : ''} key={density} onClick={() => commit({ ...draft, rowHeight: density })}>{density === 'compact' ? '紧凑' : density === 'default' ? '标准' : '宽松'}</button>)}</div></div>
+    <div className="layout-property-heading"><span>显示属性</span><em>{visibleCount} / {schema.properties.length}</em></div>
+    <div className="layout-property-list">{schema.properties.map((property) => { const shown = visible.has(property.id); return <button aria-label={`${shown ? '隐藏' : '显示'}属性 ${property.name}`} disabled={property.id === titleId} key={property.id} onClick={() => toggle(property.id)}><i>{propertyTypeLabel(property.type)}</i><span>{property.name}</span>{shown ? <Eye size={14} /> : <EyeOff size={14} />}</button> })}</div>
+    <footer><button onClick={() => commit({ ...draft, propertyWidths: {} })}>重置列宽</button><span>拖动表头边缘可调整列宽</span></footer>
+  </section>
 }
 
 export function ViewManagementMenu({ mode, views, activeView, defaultViewId, onClose, onCreate, onRename, onDuplicate, onDelete, onSetDefault }: {
@@ -813,16 +838,39 @@ function defaultPropertyValue(property: DatabaseProperty): PropertyValue {
 
 type RelationTargets = Record<string, { schema: DatabaseSchema; records: DatabaseRecord[] }>
 
-export function GenericTable({ records, schema, relationTargets = {}, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll }: { records: DatabaseRecord[]; schema: DatabaseSchema; relationTargets?: RelationTargets; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void }) {
+export function GenericTable({ records, schema, config = {}, onConfigChange, relationTargets = {}, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll }: { records: DatabaseRecord[]; schema: DatabaseSchema; config?: DatabaseViewConfig; onConfigChange?: (config: DatabaseViewConfig) => void; relationTargets?: RelationTargets; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void }) {
   const [scrollTop, setScrollTop] = useState(0)
-  const properties = schema.properties.slice(0, 20)
-  const { start, end, totalSize } = virtualWindow(records.length, scrollTop, ROW_HEIGHT, VIEWPORT_HEIGHT, OVERSCAN)
-  const template = `34px ${properties.map((property, index) => index === 0 || property.type === 'title' ? 'minmax(180px, 1.6fr)' : 'minmax(120px, 1fr)').join(' ')}`
-  const minWidth = Math.max(454, properties.length * 140 + 34)
-  return <div className="generic-database-table">
-    <div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}><label className="database-row-select"><input aria-label="选择全部记录" type="checkbox" checked={records.length > 0 && selectedIds.size === records.length} onChange={() => onToggleAll?.()} /><span /></label>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i>{property.name}</span>)}</div>
-    <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(ROW_HEIGHT, records.length * ROW_HEIGHT)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className={`generic-database-grid generic-database-row ${selectedIds.has(record.id) ? 'is-selected' : ''}`} key={record.id} style={{ gridTemplateColumns: template, transform: `translateY(${(start + offset) * ROW_HEIGHT}px)` }}><label className="database-row-select"><input aria-label={`选择记录 ${String(record.values[properties.find((property) => property.type === 'title')?.id ?? ''] || record.id)}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} relationTargets={relationTargets} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
+  const [liveWidths, setLiveWidths] = useState<Record<string, number>>(() => ({ ...config.propertyWidths }))
+  useEffect(() => setLiveWidths({ ...config.propertyWidths }), [config.propertyWidths])
+  const visibleIds = config.visiblePropertyIds ? new Set(config.visiblePropertyIds) : null
+  const properties = schema.properties.filter((property) => property.type === 'title' || !visibleIds || visibleIds.has(property.id)).slice(0, 20)
+  const rowHeight = config.rowHeight === 'compact' ? 34 : config.rowHeight === 'comfortable' ? 52 : ROW_HEIGHT
+  const { start, end, totalSize } = virtualWindow(records.length, scrollTop, rowHeight, VIEWPORT_HEIGHT, OVERSCAN)
+  const propertyWidth = (property: DatabaseProperty) => liveWidths[property.id] ?? (property.type === 'title' ? 220 : 140)
+  const template = `34px ${properties.map((property) => `${propertyWidth(property)}px`).join(' ')}`
+  const minWidth = 34 + properties.reduce((sum, property) => sum + propertyWidth(property), 0)
+  const beginResize = (event: ReactMouseEvent<HTMLButtonElement>, property: DatabaseProperty) => {
+    event.preventDefault(); event.stopPropagation()
+    const startX = event.clientX; const startWidth = propertyWidth(property)
+    let pendingWidth = startWidth; let animationFrame = 0
+    const move = (moveEvent: MouseEvent) => {
+      pendingWidth = Math.max(80, Math.min(600, Math.round(startWidth + moveEvent.clientX - startX)))
+      if (animationFrame) return
+      animationFrame = window.requestAnimationFrame(() => { animationFrame = 0; setLiveWidths((current) => ({ ...current, [property.id]: pendingWidth })) })
+    }
+    const end = (endEvent: MouseEvent) => {
+      const width = Math.max(80, Math.min(600, Math.round(startWidth + endEvent.clientX - startX)))
+      if (animationFrame) window.cancelAnimationFrame(animationFrame)
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', end)
+      const propertyWidths = { ...liveWidths, [property.id]: width }
+      setLiveWidths(propertyWidths); onConfigChange?.({ ...config, propertyWidths })
+    }
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', end)
+  }
+  return <div className="generic-database-table" style={{ '--database-row-height': `${rowHeight}px` } as CSSProperties}>
+    <div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}><label className="database-row-select"><input aria-label="选择全部记录" type="checkbox" checked={records.length > 0 && selectedIds.size === records.length} onChange={() => onToggleAll?.()} /><span /></label>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i><b>{property.name}</b><button className="database-column-resizer" aria-label={`调整列宽 ${property.name}`} onMouseDown={(event) => beginResize(event, property)} /></span>)}</div>
+    <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(rowHeight, records.length * rowHeight)) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className={`generic-database-grid generic-database-row ${selectedIds.has(record.id) ? 'is-selected' : ''}`} key={record.id} style={{ gridTemplateColumns: template, height: rowHeight, transform: `translateY(${(start + offset) * rowHeight}px)` }}><label className="database-row-select"><input aria-label={`选择记录 ${String(record.values[properties.find((property) => property.type === 'title')?.id ?? ''] || record.id)}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} relationTargets={relationTargets} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
     </div>
     {!records.length && <div className="generic-database-empty"><Database size={17} /><span>还没有记录</span><small>点击右上角“新建”写入第一行</small></div>}
   </div>

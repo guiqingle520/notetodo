@@ -337,8 +337,9 @@ function registerWorkspaceIpc(database) {
     assertId(viewId)
     if (!config || typeof config !== 'object' || Array.isArray(config)) throw new TypeError('Invalid database view configuration.')
     const serialized = JSON.stringify(config)
-    if ((config.filters !== undefined && !Array.isArray(config.filters)) || (config.sorts !== undefined && !Array.isArray(config.sorts))) throw new TypeError('Database view rules must be arrays.')
-    if (serialized.length > 50_000 || (config.filters?.length ?? 0) > 20 || (config.sorts?.length ?? 0) > 10) throw new TypeError('Database view configuration is too large.')
+    if ((config.filters !== undefined && !Array.isArray(config.filters)) || (config.sorts !== undefined && !Array.isArray(config.sorts)) || (config.visiblePropertyIds !== undefined && !Array.isArray(config.visiblePropertyIds))) throw new TypeError('Database view rules must be arrays.')
+    if (config.propertyWidths !== undefined && (!config.propertyWidths || typeof config.propertyWidths !== 'object' || Array.isArray(config.propertyWidths))) throw new TypeError('Database property widths must be an object.')
+    if (serialized.length > 50_000 || (config.filters?.length ?? 0) > 20 || (config.sorts?.length ?? 0) > 10 || (config.visiblePropertyIds?.length ?? 0) > 50 || Object.keys(config.propertyWidths ?? {}).length > 50) throw new TypeError('Database view configuration is too large.')
     database.updateDatabaseViewConfig(databaseId, viewId, config)
   })
   ipcMain.handle('database:create-view', (_event, databaseId, viewId, name, type, config) => {

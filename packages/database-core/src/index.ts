@@ -51,6 +51,8 @@ export interface DatabaseViewConfig {
   endDatePropertyId?: string
   coverPropertyId?: string
   visiblePropertyIds?: string[]
+  propertyWidths?: Record<string, number>
+  rowHeight?: 'compact' | 'default' | 'comfortable'
   cardSize?: 'small' | 'medium' | 'large'
 }
 
@@ -446,7 +448,10 @@ export function normalizeViewConfig(schema: DatabaseSchema, config: DatabaseView
   const seenSorts = new Set<string>()
   const sorts = (config.sorts ?? []).filter((rule) => propertyIds.has(rule.propertyId) && ['asc', 'desc'].includes(rule.direction) && !seenSorts.has(rule.propertyId) && Boolean(seenSorts.add(rule.propertyId))).slice(0, 10)
   const groupByPropertyId = config.groupByPropertyId && propertyIds.has(config.groupByPropertyId) ? config.groupByPropertyId : undefined
-  return { ...config, filters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId }
+  const visiblePropertyIds = config.visiblePropertyIds === undefined ? undefined : [...new Set(config.visiblePropertyIds.filter((id) => propertyIds.has(id)))].slice(0, 50)
+  const propertyWidths = Object.fromEntries(Object.entries(config.propertyWidths ?? {}).filter(([id, width]) => propertyIds.has(id) && Number.isFinite(width)).map(([id, width]) => [id, Math.max(80, Math.min(600, Math.round(width)))]))
+  const rowHeight = ['compact', 'default', 'comfortable'].includes(config.rowHeight ?? '') ? config.rowHeight : 'default'
+  return { ...config, filters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId, visiblePropertyIds, propertyWidths, rowHeight }
 }
 
 /**
