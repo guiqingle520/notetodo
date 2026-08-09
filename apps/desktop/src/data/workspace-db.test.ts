@@ -24,6 +24,11 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     deleteDatabaseProperty(databaseId: string, propertyId: string): DatabaseSnapshot
     updateDatabaseCell(recordId: string, propertyId: string, value: unknown): { automationRuns: string[] }
     createDatabaseRecord(databaseId: string, recordId: string): void
+    duplicateDatabaseRecord(databaseId: string, sourceRecordId: string, recordId: string): DatabaseSnapshot
+    trashDatabaseRecords(databaseId: string, recordIds: string[]): DatabaseSnapshot
+    listTrashedDatabaseRecords(databaseId: string): Array<{ id: string; title: string; trashedAt: string }>
+    restoreDatabaseRecords(databaseId: string, recordIds: string[]): DatabaseSnapshot
+    deleteDatabaseRecordsPermanently(databaseId: string, recordIds: string[]): void
     updateDatabaseRecordContent(recordId: string, content: string): void
     setActiveDatabaseView(databaseId: string, viewId: string): void
     updateDatabaseViewConfig(databaseId: string, viewId: string, config: object): void
@@ -147,6 +152,19 @@ describe('WorkspaceDatabase', () => {
     expect(updated?.activeViewId).toBe('roadmap-board')
     expect(updated?.views.find((view) => view.id === 'roadmap-board')?.config.filters).toHaveLength(1)
     expect(() => database?.updateDatabaseViewConfig('roadmap-db', 'missing-view', {})).toThrow(/does not exist/)
+  })
+
+  it('duplicates, trashes, restores and permanently deletes records transactionally', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const duplicate = database.duplicateDatabaseRecord('roadmap-db', 'task-1', 'task-copy')
+    expect(duplicate.records.find((record) => record.id === 'task-copy')?.values).toEqual(duplicate.records.find((record) => record.id === 'task-1')?.values)
+    const trashed = database.trashDatabaseRecords('roadmap-db', ['task-copy', 'task-2'])
+    expect(trashed.records.some((record) => ['task-copy', 'task-2'].includes(record.id))).toBe(false)
+    expect(database.listTrashedDatabaseRecords('roadmap-db')).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'task-copy', title: '编辑器交互收尾' }), expect.objectContaining({ id: 'task-2', title: 'SQLite 数据迁移' })]))
+    expect(database.restoreDatabaseRecords('roadmap-db', ['task-2']).records.some((record) => record.id === 'task-2')).toBe(true)
+    database.deleteDatabaseRecordsPermanently('roadmap-db', ['task-copy'])
+    expect(database.listTrashedDatabaseRecords('roadmap-db')).toEqual([])
+    expect(() => database?.restoreDatabaseRecords('roadmap-db', ['task-copy'])).toThrow(/does not exist/)
   })
 
   it('creates a typed database atomically on any existing page', () => {

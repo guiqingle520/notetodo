@@ -322,6 +322,32 @@ function registerWorkspaceIpc(database) {
     assertId(recordId)
     database.createDatabaseRecord(databaseId, recordId)
   })
+  ipcMain.handle('database:duplicate-record', (_event, databaseId, sourceRecordId, recordId) => {
+    assertId(databaseId); assertId(sourceRecordId); assertId(recordId)
+    return database.duplicateDatabaseRecord(databaseId, sourceRecordId, recordId)
+  })
+  ipcMain.handle('database:trash-records', (_event, databaseId, recordIds) => {
+    assertId(databaseId)
+    if (!Array.isArray(recordIds) || recordIds.length < 1 || recordIds.length > 1000) throw new TypeError('Select between 1 and 1000 database records.')
+    const uniqueIds = [...new Set(recordIds)]; uniqueIds.forEach(assertId)
+    return database.trashDatabaseRecords(databaseId, uniqueIds)
+  })
+  ipcMain.handle('database:list-trashed-records', (_event, databaseId) => {
+    assertId(databaseId)
+    return database.listTrashedDatabaseRecords(databaseId)
+  })
+  ipcMain.handle('database:restore-records', (_event, databaseId, recordIds) => {
+    assertId(databaseId)
+    if (!Array.isArray(recordIds) || recordIds.length < 1 || recordIds.length > 1000) throw new TypeError('Select between 1 and 1000 database records.')
+    const uniqueIds = [...new Set(recordIds)]; uniqueIds.forEach(assertId)
+    return database.restoreDatabaseRecords(databaseId, uniqueIds)
+  })
+  ipcMain.handle('database:delete-records-permanently', (_event, databaseId, recordIds) => {
+    assertId(databaseId)
+    if (!Array.isArray(recordIds) || recordIds.length < 1 || recordIds.length > 1000) throw new TypeError('Select between 1 and 1000 database records.')
+    const uniqueIds = [...new Set(recordIds)]; uniqueIds.forEach(assertId)
+    database.deleteDatabaseRecordsPermanently(databaseId, uniqueIds)
+  })
   ipcMain.handle('database:update-record-content', (_event, recordId, content) => {
     assertId(recordId)
     if (typeof content !== 'string' || content.length > 2_000_000) throw new TypeError('Database record content is invalid or too large.')

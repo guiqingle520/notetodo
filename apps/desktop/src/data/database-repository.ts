@@ -1,4 +1,6 @@
-import type { DatabaseProperty, DatabaseRecord, DatabaseSnapshot, DatabaseTemplate, DatabaseView, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
+import type { DatabaseProperty, DatabaseRecord, DatabaseSnapshot, DatabaseTemplate, DatabaseTrashRecord, DatabaseView, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
+
+type BrowserTrashRecord = DatabaseTrashRecord & { record: DatabaseRecord }
 
 const now = new Date().toISOString()
 const seedSnapshot: DatabaseSnapshot = {
@@ -47,6 +49,7 @@ function record(id: string, values: [string, string, string, string, number, str
 class DatabaseRepository {
   private readonly key = 'notetodo-browser-database-v1'
   private readonly collectionKey = 'notetodo-browser-databases-v2'
+  private readonly trashKey = 'notetodo-browser-database-trash-v1'
   private readonly pageByDatabase = new Map<string, string>()
 
   async loadByPage(pageId: string) {
@@ -141,6 +144,49 @@ class DatabaseRepository {
   async createRecord(snapshot: DatabaseSnapshot, recordId: string) {
     if (window.notetodo?.database) return window.notetodo.database.createRecord(snapshot.schema.id, recordId)
     this.write(snapshot)
+  }
+
+  async duplicateRecord(snapshot: DatabaseSnapshot, sourceRecordId: string, recordId: string) {
+    if (window.notetodo?.database) return window.notetodo.database.duplicateRecord(snapshot.schema.id, sourceRecordId, recordId)
+    const source = snapshot.records.find((record) => record.id === sourceRecordId)
+    if (!source) throw new Error('记录不存在。')
+    const createdAt = new Date().toISOString()
+    const duplicate: DatabaseRecord = { ...structuredClone(source), id: recordId, createdAt, updatedAt: createdAt }
+    const next = { ...snapshot, records: [...snapshot.records, duplicate] }
+    this.write(next); return structuredClone(next)
+  }
+
+  async trashRecords(snapshot: DatabaseSnapshot, recordIds: string[]) {
+    if (window.notetodo?.database) return window.notetodo.database.trashRecords(snapshot.schema.id, recordIds)
+    const selected = new Set(recordIds); const trashedAt = new Date().toISOString()
+    const titleId = snapshot.schema.properties.find((property) => property.type === 'title')?.id ?? ''
+    const trash = this.readTrash(); const existing = trash[snapshot.schema.id] ?? []
+    const additions = snapshot.records.filter((record) => selected.has(record.id)).map((record): BrowserTrashRecord => ({ id: record.id, title: String(record.values[titleId] || '无标题'), trashedAt, record }))
+    trash[snapshot.schema.id] = [...additions, ...existing.filter((item) => !selected.has(item.id))].slice(0, 500)
+    localStorage.setItem(this.trashKey, JSON.stringify(trash))
+    const next = { ...snapshot, records: snapshot.records.filter((record) => !selected.has(record.id)) }
+    this.write(next); return structuredClone(next)
+  }
+
+  async listTrashedRecords(databaseId: string): Promise<DatabaseTrashRecord[]> {
+    if (window.notetodo?.database) return window.notetodo.database.listTrashedRecords(databaseId)
+    return (this.readTrash()[databaseId] ?? []).map(({ id, title, trashedAt }) => ({ id, title, trashedAt }))
+  }
+
+  async restoreRecords(snapshot: DatabaseSnapshot, recordIds: string[]) {
+    if (window.notetodo?.database) return window.notetodo.database.restoreRecords(snapshot.schema.id, recordIds)
+    const selected = new Set(recordIds); const trash = this.readTrash(); const current = trash[snapshot.schema.id] ?? []
+    const restored = current.filter((item) => selected.has(item.id)).map((item) => item.record)
+    trash[snapshot.schema.id] = current.filter((item) => !selected.has(item.id)); localStorage.setItem(this.trashKey, JSON.stringify(trash))
+    const next = { ...snapshot, records: [...snapshot.records, ...restored] }
+    this.write(next); return structuredClone(next)
+  }
+
+  async deleteRecordsPermanently(databaseId: string, recordIds: string[]) {
+    if (window.notetodo?.database) return window.notetodo.database.deleteRecordsPermanently(databaseId, recordIds)
+    const selected = new Set(recordIds); const trash = this.readTrash()
+    trash[databaseId] = (trash[databaseId] ?? []).filter((item) => !selected.has(item.id))
+    localStorage.setItem(this.trashKey, JSON.stringify(trash))
   }
 
   async updateRecordContent(snapshot: DatabaseSnapshot, recordId: string, content: string) {
@@ -240,6 +286,11 @@ class DatabaseRepository {
     collections[pageId] = snapshot
     localStorage.setItem(this.collectionKey, JSON.stringify(collections))
     if (pageId === 'projects') localStorage.setItem(this.key, JSON.stringify(snapshot))
+  }
+
+  private readTrash(): Record<string, BrowserTrashRecord[]> {
+    try { return JSON.parse(localStorage.getItem(this.trashKey) ?? '{}') as Record<string, BrowserTrashRecord[]> }
+    catch { return {} }
   }
 
   private readCollections() {

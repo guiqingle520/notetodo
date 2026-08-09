@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render, waitFor } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema, DatabaseView } from '@notetodo/database-core'
-import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, GroupLedger, ListView, QuickFilterMenu, RecordDetailPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewLayoutMenu, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, GroupLedger, ListView, QuickFilterMenu, RecordDetailPanel, RecordTrashPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewLayoutMenu, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -345,5 +345,20 @@ describe('database authoring', () => {
     fireEvent.change(editor.getByRole('combobox', { name: '状态 模板预设' }), { target: { value: 'done' } })
     fireEvent.click(editor.getByRole('button', { name: '保存模板' }))
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: '缺陷处理', values: { status: 'done' } })))
+  })
+
+  it('duplicates selected records and requires confirmation before permanent deletion', async () => {
+    const lifecycleSchema: DatabaseSchema = { id: 'life', name: 'Life', properties: [{ id: 'title', name: '名称', type: 'title' }] }
+    const onDuplicate = vi.fn().mockResolvedValue(undefined); const onTrash = vi.fn().mockResolvedValue(undefined)
+    const toolbar = render(<BulkEditToolbar schema={lifecycleSchema} count={1} onClear={vi.fn()} onApply={vi.fn()} onDuplicate={onDuplicate} onTrash={onTrash} />)
+    fireEvent.click(toolbar.getByRole('button', { name: '复制' })); await waitFor(() => expect(onDuplicate).toHaveBeenCalledOnce())
+    toolbar.unmount()
+
+    const onRestore = vi.fn().mockResolvedValue(undefined); const onDelete = vi.fn().mockResolvedValue(undefined)
+    const trash = render(<RecordTrashPanel records={[{ id: 'record-a', title: '离线索引', trashedAt: '2026-08-09T01:00:00Z' }]} onClose={vi.fn()} onRestore={onRestore} onDeletePermanently={onDelete} />)
+    fireEvent.click(trash.getByRole('button', { name: '恢复' })); await waitFor(() => expect(onRestore).toHaveBeenCalledWith(['record-a']))
+    fireEvent.click(trash.getByRole('button', { name: '永久删除' }))
+    expect(onDelete).not.toHaveBeenCalled()
+    fireEvent.click(trash.getByRole('button', { name: '确认永久删除' })); await waitFor(() => expect(onDelete).toHaveBeenCalledWith(['record-a']))
   })
 })

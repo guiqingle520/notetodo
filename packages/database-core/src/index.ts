@@ -27,6 +27,12 @@ export interface DatabaseRecord {
   updatedAt: string
 }
 
+export interface DatabaseTrashRecord {
+  id: string
+  title: string
+  trashedAt: string
+}
+
 export interface DatabaseSchema {
   id: string
   name: string

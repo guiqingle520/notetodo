@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Activity, ArrowRight, ArrowUpDown, BookOpen, Calculator, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, Lock, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Search, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, moveRecordInOrder, normalizeViewConfig, orderRecordsByView, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validColumnCalculations, validateFormulaExpression, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
+import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, moveRecordInOrder, normalizeViewConfig, orderRecordsByView, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validColumnCalculations, validateFormulaExpression, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -68,6 +68,8 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<DatabaseTemplate | 'new' | null>(null)
   const [csvImportOpen, setCsvImportOpen] = useState(false)
+  const [recordTrashOpen, setRecordTrashOpen] = useState(false)
+  const [trashedRecords, setTrashedRecords] = useState<DatabaseTrashRecord[]>([])
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(() => new Set())
   const [exportState, setExportState] = useState<'idle' | 'working' | 'done'>('idle')
   const [openRecordId, setOpenRecordId] = useState<string | null>(null)
@@ -255,6 +257,22 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     const imported = rows.map((values): DatabaseRecord => ({ id: crypto.randomUUID(), values, content: '', createdAt: now, updatedAt: now }))
     setSnapshot(await databaseRepository.importRecords(snapshot, imported)); setCsvImportOpen(false)
   }
+  const duplicateSelectedRecord = async () => {
+    const sourceId = [...selectedRecordIds][0]
+    if (!sourceId || selectedRecordIds.size !== 1) return
+    setSnapshot(await databaseRepository.duplicateRecord(snapshot, sourceId, crypto.randomUUID())); setSelectedRecordIds(new Set())
+  }
+  const trashSelectedRecords = async () => {
+    if (!selectedRecordIds.size) return
+    setSnapshot(await databaseRepository.trashRecords(snapshot, [...selectedRecordIds])); setSelectedRecordIds(new Set()); setOpenRecordId(null)
+  }
+  const openRecordTrash = async () => { setTrashedRecords(await databaseRepository.listTrashedRecords(snapshot.schema.id)); setRecordTrashOpen(true) }
+  const restoreTrashedRecords = async (recordIds: string[]) => {
+    setSnapshot(await databaseRepository.restoreRecords(snapshot, recordIds)); setTrashedRecords(await databaseRepository.listTrashedRecords(snapshot.schema.id))
+  }
+  const deleteTrashedRecords = async (recordIds: string[]) => {
+    await databaseRepository.deleteRecordsPermanently(snapshot.schema.id, recordIds); setTrashedRecords(await databaseRepository.listTrashedRecords(snapshot.schema.id))
+  }
 
   return (
     <section className="database-block">
@@ -277,6 +295,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
           <button className={activeView.config.groupByPropertyId ? 'is-active' : ''} onClick={() => setRulesOpen('group')}><Layers3 size={13} />分组</button>
           <button className={templateMenuOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setTemplateMenuOpen((open) => !open) }}><LayoutTemplate size={13} />模板{snapshot.templates?.length ? ` · ${snapshot.templates.length}` : ''}</button>
           <button className={csvImportOpen ? 'is-active' : ''} onClick={() => setCsvImportOpen(true)}><FileUp size={13} />导入</button>
+          <button className={recordTrashOpen ? 'is-active' : ''} onClick={() => void openRecordTrash()}><Trash2 size={13} />回收站</button>
           <button onClick={() => void exportCsv()} disabled={exportState === 'working'}><Download size={13} />{exportState === 'working' ? '导出中' : exportState === 'done' ? '已导出' : 'CSV'}</button>
           <button className="database-automation" onClick={() => setAutomationOpen(true)}><Zap size={13} />自动化 · {automations.filter((rule) => rule.enabled).length}</button>
           <button className="database-new" onClick={addRecord}><Plus size={13} />新建</button>
@@ -286,7 +305,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
         {quickFilterOpen && <QuickFilterMenu schema={snapshot.schema} filters={activeView.config.quickFilters ?? []} onClose={() => setQuickFilterOpen(false)} onChange={(quickFilters) => saveViewConfig({ ...activeView.config, quickFilters })} />}
         {layoutOpen && <ViewLayoutMenu schema={snapshot.schema} config={activeView.config} onClose={() => setLayoutOpen(false)} onSave={saveViewConfig} />}
       </div>
-      {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
+      {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onDuplicate={duplicateSelectedRecord} onTrash={trashSelectedRecords} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
       <div className="database-summary"><DatabaseNameEditor name={snapshot.schema.name} onRename={async (name) => { const next = await databaseRepository.rename(snapshot, name); setSnapshot(next); setDatabaseSources((current) => current.map((source) => source.id === next.schema.id ? { ...source, name: next.schema.name } : source)) }} /><span className="database-compute-mark">已更新 {projection.recomputedCount} 项</span><span>{records.length} / {snapshot.records.length} 条记录</span></div>
       {(activeView.config.quickFilters?.length || searchQuery) && <div className="database-active-query">{searchQuery && <span><Search size={11} />“{searchQuery}”<button aria-label="清除数据库搜索" onClick={() => setSearchQuery('')}><X size={10} /></button></span>}{activeView.config.quickFilters?.map((filter, index) => <span key={`${filter.propertyId}-${index}`}><Filter size={11} />{quickFilterLabel(snapshot.schema, filter)}<button aria-label={`移除快速筛选 ${index + 1}`} onClick={() => saveViewConfig({ ...activeView.config, quickFilters: activeView.config.quickFilters?.filter((_, candidate) => candidate !== index) })}><X size={10} /></button></span>)}</div>}
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
@@ -301,6 +320,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       {schemaOpen && createPortal(<SchemaPanel schema={snapshot.schema} previewRecord={derivedRecords[0]} databaseSources={databaseSources} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onReorder={async (propertyIds) => setSnapshot(await databaseRepository.reorderProperties(snapshot, propertyIds))} onConfigure={async (propertyId, config) => setSnapshot(await databaseRepository.updatePropertyConfig(snapshot, propertyId, config))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
       {editingTemplate && createPortal(<TemplateEditorPanel schema={snapshot.schema} template={editingTemplate === 'new' ? null : editingTemplate} onClose={() => setEditingTemplate(null)} onSave={saveEditedTemplate} />, document.body)}
       {csvImportOpen && createPortal(<CsvImportPanel schema={snapshot.schema} onClose={() => setCsvImportOpen(false)} onImport={importCsvRecords} />, document.body)}
+      {recordTrashOpen && createPortal(<RecordTrashPanel records={trashedRecords} onClose={() => setRecordTrashOpen(false)} onRestore={restoreTrashedRecords} onDeletePermanently={deleteTrashedRecords} />, document.body)}
       {openRecordId && derivedRecords.find((record) => record.id === openRecordId) && createPortal(<RecordDetailPanel key={openRecordId} record={derivedRecords.find((record) => record.id === openRecordId)!} schema={snapshot.schema} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} onClose={() => setOpenRecordId(null)} onUpdateCell={updateCell} onUpdateContent={updateRecordContent} />, document.body)}
       {automationOpen && <AutomationPanel schema={snapshot.schema} rules={automations} runs={automationRuns} onClose={() => setAutomationOpen(false)} onSave={async (rule) => {
         if (window.notetodo?.automations) { await window.notetodo.automations.save(snapshot.schema.id, rule); setAutomations(await window.notetodo.automations.list(snapshot.schema.id)) }
@@ -561,7 +581,7 @@ export function CsvImportPanel({ schema, onClose, onImport }: {
   </section></div>
 }
 
-export function BulkEditToolbar({ schema, count, onClear, onApply }: { schema: DatabaseSchema; count: number; onClear: () => void; onApply: (propertyId: string, value: PropertyValue) => Promise<void> }) {
+export function BulkEditToolbar({ schema, count, onClear, onApply, onDuplicate, onTrash }: { schema: DatabaseSchema; count: number; onClear: () => void; onApply: (propertyId: string, value: PropertyValue) => Promise<void>; onDuplicate?: () => Promise<void>; onTrash?: () => Promise<void> }) {
   const properties = schema.properties.filter((property) => !['formula', 'rollup', 'relation'].includes(property.type))
   const [propertyId, setPropertyId] = useState(properties[0]?.id ?? '')
   const property = properties.find((candidate) => candidate.id === propertyId)
@@ -581,8 +601,26 @@ export function BulkEditToolbar({ schema, count, onClear, onApply }: { schema: D
       : property?.type === 'checkbox' ? <label><input aria-label="批量编辑值" type="checkbox" checked={Boolean(value)} onChange={(event) => setValue(event.target.checked)} /><span>{value ? '已勾选' : '未勾选'}</span></label>
         : <input aria-label="批量编辑值" type={property?.type === 'number' ? 'number' : property?.type === 'date' ? 'date' : 'text'} value={String(value)} placeholder={property?.type === 'multiSelect' ? '用逗号分隔多个值' : '输入统一值'} onChange={(event) => setValue(event.target.value)} />}
     <button disabled={!propertyId || busy} onClick={() => { setBusy(true); void onApply(propertyId, parsedValue()).finally(() => setBusy(false)) }}>{busy ? '应用中…' : '应用'}</button>
+    {onDuplicate && <button className="bulk-secondary" disabled={count !== 1 || busy} onClick={() => { setBusy(true); void onDuplicate().finally(() => setBusy(false)) }}><Copy size={12} />复制</button>}
+    {onTrash && <button className="bulk-danger" disabled={busy} onClick={() => { setBusy(true); void onTrash().finally(() => setBusy(false)) }}><Trash2 size={12} />删除</button>}
     <button aria-label="取消批量选择" onClick={onClear}><X size={14} /></button>
   </div>
+}
+
+export function RecordTrashPanel({ records, onClose, onRestore, onDeletePermanently }: { records: DatabaseTrashRecord[]; onClose: () => void; onRestore: (recordIds: string[]) => Promise<void>; onDeletePermanently: (recordIds: string[]) => Promise<void> }) {
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [onClose])
+  const restore = async (id: string) => { setBusyId(id); try { await onRestore([id]) } finally { setBusyId(null) } }
+  const remove = async (id: string) => {
+    if (confirmId !== id) { setConfirmId(id); return }
+    setBusyId(id); try { await onDeletePermanently([id]); setConfirmId(null) } finally { setBusyId(null) }
+  }
+  return <div className="record-trash-backdrop" onMouseDown={onClose}><section className="record-trash-panel" role="dialog" aria-modal="true" aria-label="数据库记录回收站" onMouseDown={(event) => event.stopPropagation()}>
+    <header><span><Trash2 size={15} /><div><small>DATABASE TRASH</small><strong>记录回收站</strong></div></span><button aria-label="关闭记录回收站" onClick={onClose}><X size={15} /></button></header>
+    <main>{records.map((record) => <article key={record.id}><span><strong>{record.title || '无标题'}</strong><small>删除于 {new Date(record.trashedAt).toLocaleString('zh-CN')}</small></span><button disabled={busyId !== null} onClick={() => void restore(record.id)}><RotateCcw size={12} />恢复</button><button className={confirmId === record.id ? 'is-confirm' : ''} disabled={busyId !== null} onClick={() => void remove(record.id)}><Trash2 size={12} />{confirmId === record.id ? '确认永久删除' : '永久删除'}</button></article>)}{!records.length && <div className="record-trash-empty"><Trash2 size={20} /><strong>回收站是空的</strong><span>删除的数据库记录会保留在这里，直到永久删除。</span></div>}</main>
+    <footer><span>{records.length} 条已删除记录</span><button onClick={onClose}>完成</button></footer>
+  </section></div>
 }
 
 const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title'>; label: string }> = [
@@ -946,8 +984,8 @@ export function GenericTable({ records, schema, config = {}, onConfigChange, rel
   const rowHeight = config.rowHeight === 'compact' ? 34 : config.rowHeight === 'comfortable' ? 52 : ROW_HEIGHT
   const { start, end, totalSize } = virtualWindow(records.length, scrollTop, rowHeight, VIEWPORT_HEIGHT, OVERSCAN)
   const propertyWidth = (property: DatabaseProperty) => liveWidths[property.id] ?? (property.type === 'title' ? 220 : 140)
-  const template = `34px ${properties.map((property) => `${propertyWidth(property)}px`).join(' ')}`
-  const minWidth = 34 + properties.reduce((sum, property) => sum + propertyWidth(property), 0)
+  const template = `52px ${properties.map((property) => `${propertyWidth(property)}px`).join(' ')}`
+  const minWidth = 52 + properties.reduce((sum, property) => sum + propertyWidth(property), 0)
   const manualOrderEnabled = Boolean(onReorder && !config.sorts?.length)
   const titlePropertyId = properties.find((property) => property.type === 'title')?.id ?? ''
   const calculationValues = useMemo(() => Object.fromEntries(properties.map((property) => {

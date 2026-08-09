@@ -6,7 +6,7 @@ const { createApiToken, verifyApiToken } = require('@notetodo/auth-core')
 const { planAutomationRuns, validateAutomationRule } = require('@notetodo/automation-core')
 const { WEBHOOK_EVENTS, createWebhookEnvelope, nextWebhookAttempt, stableJson, validateWebhookUrl } = require('@notetodo/webhook-core')
 
-const LATEST_SCHEMA_VERSION = 14
+const LATEST_SCHEMA_VERSION = 15
 
 /**
  * SQLite is owned by the Electron main process. Keeping SQL out of the renderer
@@ -470,6 +470,17 @@ class WorkspaceDatabase {
         );
         CREATE INDEX database_templates_order ON database_templates(database_id, created_at, id);
         INSERT INTO app_meta(key, value) VALUES ('schema_version', '14')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
+    if (currentVersion < 15) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        ALTER TABLE database_records ADD COLUMN archived_at TEXT;
+        CREATE INDEX database_records_archive ON database_records(database_id, archived_at DESC);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '15')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value;
         COMMIT;
       `)
@@ -1029,7 +1040,7 @@ class WorkspaceDatabase {
       type: property.type,
       ...JSON.parse(property.config_json),
     }))
-    const recordRows = this.database.prepare('SELECT id, content, created_at, updated_at FROM database_records WHERE database_id = ? ORDER BY position').all(database.id)
+    const recordRows = this.database.prepare('SELECT id, content, created_at, updated_at FROM database_records WHERE database_id = ? AND archived_at IS NULL ORDER BY position').all(database.id)
     const valueStatement = this.database.prepare(`
       SELECT property_id, text_value, number_value, boolean_value, json_value
       FROM property_values WHERE record_id = ?
@@ -1238,6 +1249,64 @@ class WorkspaceDatabase {
       const nextPosition = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
       this.database.prepare('INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(recordId, databaseId, nextPosition, now, now)
       this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, createdAt: now } }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+  }
+
+  duplicateDatabaseRecord(databaseId, sourceRecordId, recordId) {
+    const source = this.database.prepare('SELECT content FROM database_records WHERE id = ? AND database_id = ? AND archived_at IS NULL').get(sourceRecordId, databaseId)
+    if (!source) throw new Error('Database record does not exist.')
+    const now = new Date().toISOString()
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const nextPosition = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
+      this.database.prepare('INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(recordId, databaseId, nextPosition, source.content, now, now)
+      this.database.prepare(`INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
+        SELECT ?, property_id, text_value, number_value, boolean_value, json_value, ? FROM property_values WHERE record_id = ?`).run(recordId, now, sourceRecordId)
+      this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, duplicatedFrom: sourceRecordId, createdAt: now } }, now)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseById(databaseId)
+  }
+
+  trashDatabaseRecords(databaseId, recordIds) {
+    const now = new Date().toISOString()
+    const update = this.database.prepare('UPDATE database_records SET archived_at = ?, updated_at = ? WHERE id = ? AND database_id = ? AND archived_at IS NULL')
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      for (const recordId of recordIds) if (update.run(now, now, recordId, databaseId).changes !== 1) throw new Error('A selected database record does not exist.')
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseById(databaseId)
+  }
+
+  listTrashedDatabaseRecords(databaseId, limit = 200) {
+    return this.database.prepare(`
+      SELECT records.id, COALESCE(title_value.text_value, '无标题') AS title, records.archived_at AS trashedAt
+      FROM database_records records
+      LEFT JOIN database_properties title ON title.database_id = records.database_id AND title.type = 'title'
+      LEFT JOIN property_values title_value ON title_value.record_id = records.id AND title_value.property_id = title.id
+      WHERE records.database_id = ? AND records.archived_at IS NOT NULL
+      ORDER BY records.archived_at DESC, records.id DESC LIMIT ?
+    `).all(databaseId, Math.max(1, Math.min(500, Math.trunc(limit))))
+  }
+
+  restoreDatabaseRecords(databaseId, recordIds) {
+    const now = new Date().toISOString()
+    const update = this.database.prepare('UPDATE database_records SET archived_at = NULL, updated_at = ? WHERE id = ? AND database_id = ? AND archived_at IS NOT NULL')
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      for (const recordId of recordIds) if (update.run(now, recordId, databaseId).changes !== 1) throw new Error('A trashed database record does not exist.')
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    return this.loadDatabaseById(databaseId)
+  }
+
+  deleteDatabaseRecordsPermanently(databaseId, recordIds) {
+    const remove = this.database.prepare('DELETE FROM database_records WHERE id = ? AND database_id = ? AND archived_at IS NOT NULL')
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      for (const recordId of recordIds) if (remove.run(recordId, databaseId).changes !== 1) throw new Error('A trashed database record does not exist.')
       this.database.exec('COMMIT')
     } catch (error) { this.database.exec('ROLLBACK'); throw error }
   }
