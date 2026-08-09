@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Activity, ArrowRight, ArrowUpDown, BookOpen, Calculator, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, Lock, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, serializeDatabaseCsv, timelineDays, validColumnCalculations, validateFormulaExpression, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
+import { Activity, ArrowRight, ArrowUpDown, BookOpen, Calculator, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, Lock, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Search, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validColumnCalculations, validateFormulaExpression, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -58,6 +58,9 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [rulesOpen, setRulesOpen] = useState<'filters' | 'sorts' | 'group' | null>(null)
   const [schemaOpen, setSchemaOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [quickFilterOpen, setQuickFilterOpen] = useState(false)
   const [databaseSources, setDatabaseSources] = useState<Array<{ id: string; pageId: string; name: string; pageTitle: string; recordCount: number }>>([])
   const [relationTargets, setRelationTargets] = useState<Record<string, { schema: DatabaseSchema; records: DatabaseRecord[] }>>({})
   const [automationOpen, setAutomationOpen] = useState(false)
@@ -110,14 +113,18 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   }, [snapshot, relationTargets])
   const derivedRecords = projection.records
   const activeView = snapshot ? snapshot.views.find((view) => view.id === snapshot.activeViewId) ?? snapshot.views[0] : undefined
-  const queriedRecords = useMemo(() => snapshot && activeView ? queryRecords(
+  useEffect(() => { setSearchOpen(false); setSearchQuery(''); setQuickFilterOpen(false) }, [activeView?.id])
+  const filteredRecords = useMemo(() => snapshot && activeView ? queryRecords(
     derivedRecords,
     activeView.config.filters,
     activeView.config.sorts,
     activeView.config.filterMode,
   ) : [], [snapshot, activeView, derivedRecords])
+  const quickFilteredRecords = useMemo(() => activeView ? queryRecords(filteredRecords, activeView.config.quickFilters, [], 'and') : [], [activeView, filteredRecords])
+  const queriedRecords = useMemo(() => snapshot ? searchDatabaseRecords(quickFilteredRecords, snapshot.schema, searchQuery) : [], [quickFilteredRecords, searchQuery, snapshot])
   const recordGroups = useMemo(() => activeView?.config.groupByPropertyId ? groupRecordsByProperty(queriedRecords, activeView.config.groupByPropertyId) : [], [queriedRecords, activeView])
-  const records = recordGroups.length ? recordGroups.flatMap((group) => group.records) : queriedRecords
+  const collapsedGroups = useMemo(() => new Set(activeView?.config.collapsedGroupKeys ?? []), [activeView?.config.collapsedGroupKeys])
+  const records = recordGroups.length ? recordGroups.filter((group) => !collapsedGroups.has(group.key)).flatMap((group) => group.records) : queriedRecords
 
   if (!snapshot || !activeView) return <div className="database-loading">正在打开本地数据库…</div>
 
@@ -179,6 +186,12 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     void databaseRepository.updateViewConfig(next, activeView.id, normalized)
   }
 
+  const toggleGroup = (groupKey: string) => {
+    const collapsed = new Set(activeView.config.collapsedGroupKeys ?? [])
+    if (collapsed.has(groupKey)) collapsed.delete(groupKey); else collapsed.add(groupKey)
+    saveViewConfig({ ...activeView.config, collapsedGroupKeys: [...collapsed] })
+  }
+
   const createView = async (name: string, type: DatabaseView['type']) => {
     const view: DatabaseView = { id: crypto.randomUUID(), databaseId: snapshot.schema.id, name, type, config: defaultViewConfig(snapshot.schema, type) }
     setSnapshot(await databaseRepository.createView(snapshot, view))
@@ -236,10 +249,12 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
           <button className="database-view-add" aria-label="新建数据库视图" onClick={() => setViewMenuOpen('create')}><Plus size={14} /></button>
         </div>
         <div className="database-tools">
+          {searchOpen ? <label className="database-inline-search"><Search size={13} /><input autoFocus aria-label="搜索当前数据库" value={searchQuery} placeholder="搜索" onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') { setSearchQuery(''); setSearchOpen(false) } }} /><button aria-label="关闭数据库搜索" onClick={() => { setSearchQuery(''); setSearchOpen(false) }}><X size={12} /></button></label> : <button aria-label="搜索当前数据库" onClick={() => { setQuickFilterOpen(false); setSearchOpen(true) }}><Search size={13} /></button>}
           <button className={viewMenuOpen === 'manage' ? 'is-active' : ''} aria-label="管理当前视图" onClick={() => { setLayoutOpen(false); setViewMenuOpen((current) => current === 'manage' ? null : 'manage') }}><MoreHorizontal size={14} /></button>
           <button className={schemaOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setSchemaOpen(true) }}><Settings2 size={13} />属性 · {snapshot.schema.properties.length}</button>
           {activeView.type === 'table' && <button className={layoutOpen ? 'is-active' : ''} onClick={() => { setViewMenuOpen(null); setTemplateMenuOpen(false); setLayoutOpen((open) => !open) }}><SlidersHorizontal size={13} />布局</button>}
           <button className={activeView.config.filters?.length ? 'is-active' : ''} onClick={() => setRulesOpen('filters')}><Filter size={13} />筛选{activeView.config.filters?.length ? ` · ${activeView.config.filters.length}` : ''}</button>
+          <button className={activeView.config.quickFilters?.length || quickFilterOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setQuickFilterOpen((open) => !open) }}><Zap size={13} />快速{activeView.config.quickFilters?.length ? ` · ${activeView.config.quickFilters.length}` : ''}</button>
           <button className={activeView.config.sorts?.length ? 'is-active' : ''} onClick={() => setRulesOpen('sorts')}><ArrowUpDown size={13} />排序{activeView.config.sorts?.length ? ` · ${activeView.config.sorts.length}` : ''}</button>
           <button className={activeView.config.groupByPropertyId ? 'is-active' : ''} onClick={() => setRulesOpen('group')}><Layers3 size={13} />分组</button>
           <button className={templateMenuOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setTemplateMenuOpen((open) => !open) }}><LayoutTemplate size={13} />模板{snapshot.templates?.length ? ` · ${snapshot.templates.length}` : ''}</button>
@@ -250,12 +265,14 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
         </div>
         {viewMenuOpen && <ViewManagementMenu key={`${viewMenuOpen}-${activeView.id}`} mode={viewMenuOpen} views={snapshot.views} activeView={activeView} defaultViewId={snapshot.views[0]!.id} onClose={() => setViewMenuOpen(null)} onCreate={createView} onRename={async (name) => { setSnapshot(await databaseRepository.renameView(snapshot, activeView.id, name)); setViewMenuOpen(null) }} onDuplicate={duplicateView} onDelete={async () => { setSnapshot(await databaseRepository.deleteView(snapshot, activeView.id)); setViewMenuOpen(null) }} onSetDefault={async () => { setSnapshot(await databaseRepository.setDefaultView(snapshot, activeView.id)); setViewMenuOpen(null) }} />}
         {templateMenuOpen && <DatabaseTemplateMenu templates={snapshot.templates ?? []} selectedCount={selectedRecordIds.size} onClose={() => setTemplateMenuOpen(false)} onCreateBlank={addRecord} onApply={createFromTemplate} onEdit={(template) => { setTemplateMenuOpen(false); setEditingTemplate(template ?? 'new') }} onSaveSelection={saveSelectionAsTemplate} onDelete={async (templateId) => setSnapshot(await databaseRepository.deleteTemplate(snapshot, templateId))} />}
+        {quickFilterOpen && <QuickFilterMenu schema={snapshot.schema} filters={activeView.config.quickFilters ?? []} onClose={() => setQuickFilterOpen(false)} onChange={(quickFilters) => saveViewConfig({ ...activeView.config, quickFilters })} />}
         {layoutOpen && <ViewLayoutMenu schema={snapshot.schema} config={activeView.config} onClose={() => setLayoutOpen(false)} onSave={saveViewConfig} />}
       </div>
       {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
       <div className="database-summary"><DatabaseNameEditor name={snapshot.schema.name} onRename={async (name) => { const next = await databaseRepository.rename(snapshot, name); setSnapshot(next); setDatabaseSources((current) => current.map((source) => source.id === next.schema.id ? { ...source, name: next.schema.name } : source)) }} /><span className="database-compute-mark">已更新 {projection.recomputedCount} 项</span><span>{records.length} / {snapshot.records.length} 条记录</span></div>
+      {(activeView.config.quickFilters?.length || searchQuery) && <div className="database-active-query">{searchQuery && <span><Search size={11} />“{searchQuery}”<button aria-label="清除数据库搜索" onClick={() => setSearchQuery('')}><X size={10} /></button></span>}{activeView.config.quickFilters?.map((filter, index) => <span key={`${filter.propertyId}-${index}`}><Filter size={11} />{quickFilterLabel(snapshot.schema, filter)}<button aria-label={`移除快速筛选 ${index + 1}`} onClick={() => saveViewConfig({ ...activeView.config, quickFilters: activeView.config.quickFilters?.filter((_, candidate) => candidate !== index) })}><X size={10} /></button></span>)}</div>}
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
-      {recordGroups.length > 0 && <div className="database-group-ledger"><span>分组</span>{recordGroups.map((group) => <div key={group.key}><strong>{displayGroupLabel(group.label, snapshot.schema, activeView.config.groupByPropertyId)}</strong><em>{group.records.length}</em></div>)}</div>}
+      {recordGroups.length > 0 && <GroupLedger groups={recordGroups} schema={snapshot.schema} propertyId={activeView.config.groupByPropertyId} collapsedKeys={collapsedGroups} onToggle={toggleGroup} />}
       {activeView.type === 'table' && <GenericTable records={records} schema={snapshot.schema} config={activeView.config} onConfigChange={saveViewConfig} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />}
       {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
@@ -315,6 +332,46 @@ function defaultViewConfig(schema: DatabaseSchema, type: DatabaseView['type']): 
   if (type === 'timeline') return { startDatePropertyId: dates[0]?.id, endDatePropertyId: dates[1]?.id ?? dates[0]?.id }
   if (type === 'gallery') return { coverPropertyId: cover?.id, visiblePropertyIds: schema.properties.filter((property) => property.type !== 'title').slice(0, 3).map((property) => property.id), cardSize: 'medium' }
   return {}
+}
+
+export function QuickFilterMenu({ schema, filters, onClose, onChange }: { schema: DatabaseSchema; filters: FilterRule[]; onClose: () => void; onChange: (filters: FilterRule[]) => void }) {
+  const available = schema.properties.filter((property) => !filters.some((filter) => filter.propertyId === property.id))
+  const initialProperty = available.find((property) => property.type === 'select') ?? available.find((property) => property.type === 'checkbox') ?? available[0] ?? schema.properties[0]!
+  const [propertyId, setPropertyId] = useState(initialProperty.id)
+  const property = schema.properties.find((candidate) => candidate.id === propertyId) ?? initialProperty
+  const [value, setValue] = useState<PropertyValue>(() => quickFilterDefaultValue(initialProperty))
+  const selectProperty = (nextId: string) => {
+    const next = schema.properties.find((candidate) => candidate.id === nextId) ?? initialProperty
+    setPropertyId(next.id); setValue(quickFilterDefaultValue(next))
+  }
+  const add = () => {
+    if (filters.length >= 5 || filters.some((filter) => filter.propertyId === property.id)) return
+    const nextFilters = [...filters, { propertyId: property.id, operator: quickFilterOperator(property), value }]
+    onChange(nextFilters)
+    const nextProperty = schema.properties.find((candidate) => !nextFilters.some((filter) => filter.propertyId === candidate.id))
+    if (nextProperty) selectProperty(nextProperty.id)
+  }
+  return <section className="quick-filter-menu" role="dialog" aria-label="快速筛选">
+    <header><span><Filter size={13} /><strong>快速筛选</strong></span><button aria-label="关闭快速筛选" onClick={onClose}><X size={13} /></button></header>
+    {filters.length > 0 && <div className="quick-filter-list">{filters.map((filter, index) => <span key={`${filter.propertyId}-${index}`}>{quickFilterLabel(schema, filter)}<button aria-label={`删除快速筛选 ${index + 1}`} onClick={() => onChange(filters.filter((_, candidate) => candidate !== index))}><X size={11} /></button></span>)}</div>}
+    {available.length > 0 && filters.length < 5 ? <div className="quick-filter-composer"><select aria-label="快速筛选属性" value={property.id} onChange={(event) => selectProperty(event.target.value)}>{available.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select><QuickFilterValueInput property={property} value={value} onChange={setValue} /><button onClick={add}><Plus size={12} />添加</button></div> : <p>当前视图已添加全部可用的快速筛选。</p>}
+    <footer>快速筛选按“全部满足”组合，并随当前视图保存。</footer>
+  </section>
+}
+
+function QuickFilterValueInput({ property, value, onChange }: { property: DatabaseProperty; value: PropertyValue; onChange: (value: PropertyValue) => void }) {
+  if (['select', 'multiSelect'].includes(property.type) && property.options?.length) return <select aria-label="快速筛选值" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)}>{property.options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+  if (property.type === 'checkbox') return <select aria-label="快速筛选值" value={String(value)} onChange={(event) => onChange(event.target.value === 'true')}><option value="true">已勾选</option><option value="false">未勾选</option></select>
+  return <input aria-label="快速筛选值" type={property.type === 'number' ? 'number' : property.type === 'date' ? 'date' : 'text'} value={String(value ?? '')} placeholder="输入值" onChange={(event) => onChange(property.type === 'number' ? Number(event.target.value) : event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.closest('.quick-filter-composer')?.querySelector<HTMLButtonElement>('button')?.click() }} />
+}
+
+function quickFilterOperator(property: DatabaseProperty): FilterRule['operator'] { return ['title', 'text', 'url', 'multiSelect', 'relation'].includes(property.type) ? 'contains' : 'equals' }
+function quickFilterDefaultValue(property: DatabaseProperty): PropertyValue { return ['select', 'multiSelect'].includes(property.type) ? property.options?.[0]?.id ?? '' : property.type === 'checkbox' ? true : property.type === 'number' ? 0 : '' }
+function quickFilterLabel(schema: DatabaseSchema, filter: FilterRule) {
+  const property = schema.properties.find((candidate) => candidate.id === filter.propertyId)
+  const raw = Array.isArray(filter.value) ? filter.value.join(', ') : filter.value
+  const value = property?.options?.find((option) => option.id === raw)?.name ?? (typeof raw === 'boolean' ? raw ? '已勾选' : '未勾选' : String(raw ?? ''))
+  return `${property?.name ?? filter.propertyId} · ${value}`
 }
 
 export function ViewLayoutMenu({ schema, config, onClose, onSave }: { schema: DatabaseSchema; config: DatabaseViewConfig; onClose: () => void; onSave: (config: DatabaseViewConfig) => void }) {
@@ -643,7 +700,7 @@ export function ViewRulesPanel({ schema, config, initialTab, onClose, onSave }: 
           return <div className="filter-rule" key={`${index}-${rule.propertyId}`}><em>{String(index + 1).padStart(2, '0')}</em><select aria-label={`筛选 ${index + 1} 属性`} value={rule.propertyId} onChange={(event) => { const nextProperty = schema.properties.find((candidate) => candidate.id === event.target.value)!; setFilter(index, { propertyId: nextProperty.id, value: defaultFilterValue(nextProperty) }) }}>{schema.properties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select><select aria-label={`筛选 ${index + 1} 条件`} value={rule.operator} onChange={(event) => setFilter(index, { operator: event.target.value as FilterRule['operator'] })}>{filterOperators.map((operator) => <option key={operator.id} value={operator.id}>{operator.label}</option>)}</select>{!['isEmpty', 'isNotEmpty'].includes(rule.operator) && <FilterValueInput property={property} value={rule.value} onChange={(value) => setFilter(index, { value })} />}<button aria-label={`删除筛选 ${index + 1}`} onClick={() => setDraft({ ...draft, filters: filters.filter((_, candidate) => candidate !== index) })}><Trash2 size={12} /></button></div>
         })}{!filters.length && <RuleEmpty icon={<Filter size={18} />} title="还没有筛选条件" detail="添加条件后，结果会即时按保存视图恢复。" />}</div><button className="rule-add" disabled={filters.length >= 20} onClick={addFilter}><Plus size={12} />添加条件</button></>}
         {tab === 'sorts' && <><div className="rule-intro"><strong>排序优先级</strong><span>从上到下依次比较；同值记录保持原有顺序。</span></div><div className="rule-stack">{sorts.map((sort, index) => <div className="sort-rule" key={sort.propertyId}><em>{String(index + 1).padStart(2, '0')}</em><select aria-label={`排序 ${index + 1} 属性`} value={sort.propertyId} onChange={(event) => setDraft({ ...draft, sorts: sorts.map((candidate, position) => position === index ? { ...candidate, propertyId: event.target.value } : candidate) })}>{schema.properties.map((property) => <option disabled={sorts.some((candidate, position) => position !== index && candidate.propertyId === property.id)} key={property.id} value={property.id}>{property.name}</option>)}</select><select aria-label={`排序 ${index + 1} 方向`} value={sort.direction} onChange={(event) => setDraft({ ...draft, sorts: sorts.map((candidate, position) => position === index ? { ...candidate, direction: event.target.value as SortRule['direction'] } : candidate) })}><option value="asc">升序 / A→Z</option><option value="desc">降序 / Z→A</option></select><button aria-label={`删除排序 ${index + 1}`} onClick={() => setDraft({ ...draft, sorts: sorts.filter((_, candidate) => candidate !== index) })}><Trash2 size={12} /></button></div>)}{!sorts.length && <RuleEmpty icon={<ArrowUpDown size={18} />} title="保留数据库原始顺序" detail="可叠加最多 10 个稳定排序键。" />}</div><button className="rule-add" disabled={sorts.length >= Math.min(10, schema.properties.length)} onClick={addSort}><Plus size={12} />添加排序</button></>}
-        {tab === 'group' && <div className="group-rule"><div><Layers3 size={19} /><span><strong>分组目录</strong><small>视图会按属性聚拢记录，并显示每组数量。</small></span></div><label><span>分组依据</span><select value={draft.groupByPropertyId ?? ''} onChange={(event) => setDraft({ ...draft, groupByPropertyId: event.target.value || undefined })}><option value="">不分组</option>{schema.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label><p>空值进入“未填写”；多选与关联属性可让记录出现在多个分组。最多生成 100 个分组，其余收纳到“其他”。</p></div>}
+        {tab === 'group' && <div className="group-rule"><div><Layers3 size={19} /><span><strong>分组目录</strong><small>视图会按属性聚拢记录，并显示每组数量。</small></span></div><label><span>分组依据</span><select value={draft.groupByPropertyId ?? ''} onChange={(event) => setDraft({ ...draft, groupByPropertyId: event.target.value || undefined, collapsedGroupKeys: [] })}><option value="">不分组</option>{schema.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label><p>空值进入“未填写”；多选与关联属性可让记录出现在多个分组。最多生成 100 个分组，其余收纳到“其他”。</p></div>}
       </main>
       <footer><span>{filters.length} FILTERS / {sorts.length} SORTS / {draft.groupByPropertyId ? 'GROUPED' : 'FLAT'}</span><div><button onClick={onClose}>取消</button><button onClick={() => onSave(draft)}>保存到当前视图</button></div></footer>
     </section>
@@ -659,6 +716,14 @@ function RuleEmpty({ icon, title, detail }: { icon: ReactNode; title: string; de
 const filterOperators: Array<{ id: FilterRule['operator']; label: string }> = [{ id: 'equals', label: '等于' }, { id: 'notEquals', label: '不等于' }, { id: 'contains', label: '包含' }, { id: 'isEmpty', label: '为空' }, { id: 'isNotEmpty', label: '不为空' }, { id: 'greaterThan', label: '大于' }, { id: 'lessThan', label: '小于' }]
 function defaultFilterValue(property: DatabaseProperty): PropertyValue { return property.type === 'select' ? property.options?.[0]?.id ?? '' : property.type === 'number' ? 0 : ['multiSelect', 'relation'].includes(property.type) ? [] : '' }
 function displayGroupLabel(value: string, schema: DatabaseSchema, propertyId?: string) { const property = schema.properties.find((candidate) => candidate.id === propertyId); return property?.options?.find((option) => option.id === value)?.name ?? value }
+
+export function GroupLedger({ groups, schema, propertyId, collapsedKeys, onToggle }: { groups: Array<{ key: string; label: string; records: DatabaseRecord[] }>; schema: DatabaseSchema; propertyId?: string; collapsedKeys: ReadonlySet<string>; onToggle: (groupKey: string) => void }) {
+  return <div className="database-group-ledger"><span>分组</span>{groups.map((group) => {
+    const collapsed = collapsedKeys.has(group.key)
+    const label = displayGroupLabel(group.label, schema, propertyId)
+    return <button aria-expanded={!collapsed} aria-label={`${collapsed ? '展开' : '折叠'}分组 ${label}`} className={collapsed ? 'is-collapsed' : ''} key={group.key} onClick={() => onToggle(group.key)}>{collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}<strong>{label}</strong><em>{group.records.length}</em></button>
+  })}</div>
+}
 
 export function GalleryView({ records, schema, coverPropertyId, visiblePropertyIds, cardSize = 'medium', updateCell }: { records: DatabaseRecord[]; schema: DatabaseSchema; coverPropertyId?: string; visiblePropertyIds?: string[]; cardSize?: 'small' | 'medium' | 'large'; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
   const titleProperty = schema.properties.find((property) => property.type === 'title')

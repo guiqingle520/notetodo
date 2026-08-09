@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, serializeDatabaseCsv, timelineDays, validateFormulaExpression, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizePropertyValue, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validateFormulaExpression, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -35,10 +35,23 @@ describe('database query engine', () => {
     expect(performance.now() - start).toBeLessThan(500)
   })
 
+  it('searches raw values and human-readable option labels within budget', () => {
+    const searchSchema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
+      { id: 'title', name: '名称', type: 'title' },
+      { id: 'status', name: '状态', type: 'select', options: [{ id: 'doing', name: '进行中', color: 'blue' }] },
+    ] }
+    expect(searchDatabaseRecords(records, searchSchema, '进行')).toEqual([records[0], records[2]])
+    expect(searchDatabaseRecords(records, searchSchema, '发布')).toEqual([records[1]])
+    const many = Array.from({ length: 10_000 }, (_, index): DatabaseRecord => ({ ...records[0]!, id: String(index), values: { title: `任务 ${index}`, status: index % 2 ? 'doing' : 'done' } }))
+    const start = performance.now(); const result = searchDatabaseRecords(many, searchSchema, '任务 999')
+    expect(result.length).toBeGreaterThan(0)
+    expect(performance.now() - start).toBeLessThan(500)
+  })
+
   it('combines OR filters, sanitizes saved rules and groups in one pass', () => {
     expect(queryRecords(records, [{ propertyId: 'status', operator: 'equals', value: 'done' }, { propertyId: 'score', operator: 'lessThan', value: 4 }], [], 'or').map((record) => record.id)).toEqual(['a', 'b'])
     const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [{ id: 'status', name: 'Status', type: 'select' }, { id: 'score', name: 'Score', type: 'number' }] }
-    expect(normalizeViewConfig(schema, { filters: [{ propertyId: 'missing', operator: 'equals', value: 1 }], sorts: [{ propertyId: 'score', direction: 'desc' }, { propertyId: 'score', direction: 'asc' }], groupByPropertyId: 'status', visiblePropertyIds: ['status', 'missing', 'status'], propertyWidths: { score: 900, missing: 120 }, rowHeight: 'compact', propertyOrder: ['score', 'missing'], freezeFirstColumn: true, calculations: { score: 'sum', status: 'average' } })).toMatchObject({ filters: [], sorts: [{ propertyId: 'score', direction: 'desc' }], groupByPropertyId: 'status', filterMode: 'and', visiblePropertyIds: ['status'], propertyWidths: { score: 600 }, rowHeight: 'compact', propertyOrder: ['score', 'status'], freezeFirstColumn: true, calculations: { score: 'sum' } })
+    expect(normalizeViewConfig(schema, { filters: [{ propertyId: 'missing', operator: 'equals', value: 1 }], quickFilters: [{ propertyId: 'status', operator: 'equals', value: 'doing' }, { propertyId: 'missing', operator: 'equals', value: 1 }], sorts: [{ propertyId: 'score', direction: 'desc' }, { propertyId: 'score', direction: 'asc' }], groupByPropertyId: 'status', collapsedGroupKeys: ['doing', 'doing', '', 'x'.repeat(201)], visiblePropertyIds: ['status', 'missing', 'status'], propertyWidths: { score: 900, missing: 120 }, rowHeight: 'compact', propertyOrder: ['score', 'missing'], freezeFirstColumn: true, calculations: { score: 'sum', status: 'average' } })).toMatchObject({ filters: [], quickFilters: [{ propertyId: 'status', operator: 'equals', value: 'doing' }], sorts: [{ propertyId: 'score', direction: 'desc' }], groupByPropertyId: 'status', collapsedGroupKeys: ['doing'], filterMode: 'and', visiblePropertyIds: ['status'], propertyWidths: { score: 600 }, rowHeight: 'compact', propertyOrder: ['score', 'status'], freezeFirstColumn: true, calculations: { score: 'sum' } })
     const many = Array.from({ length: 10_000 }, (_, index): DatabaseRecord => ({ ...records[0]!, id: String(index), values: { status: index % 2 ? 'doing' : null } }))
     const start = performance.now(); const groups = groupRecordsByProperty(many, 'status')
     expect(groups.map((group) => [group.label, group.records.length])).toEqual([['未填写', 5_000], ['doing', 5_000]])

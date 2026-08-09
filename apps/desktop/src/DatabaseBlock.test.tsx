@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render, waitFor } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema, DatabaseView } from '@notetodo/database-core'
-import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, ListView, RecordDetailPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewLayoutMenu, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, GroupLedger, ListView, QuickFilterMenu, RecordDetailPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewLayoutMenu, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },
@@ -63,6 +63,36 @@ describe('ViewRulesPanel', () => {
     fireEvent.click(getByRole('button', { name: '保存到当前视图' }))
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ filterMode: 'or', filters: expect.arrayContaining([expect.objectContaining({ propertyId: 'status', value: 'todo' })]) }))
     expect(onSave.mock.calls[0]?.[0].filters).toHaveLength(2)
+  })
+})
+
+describe('database quick queries and groups', () => {
+  const querySchema: DatabaseSchema = { id: 'query', name: 'Query', properties: [
+    { id: 'title', name: '名称', type: 'title' },
+    { id: 'status', name: '状态', type: 'select', options: [{ id: 'todo', name: '待开始', color: 'slate' }, { id: 'doing', name: '进行中', color: 'blue' }] },
+  ] }
+
+  it('builds and removes persisted quick-filter chips', () => {
+    const onChange = vi.fn()
+    const menu = render(<QuickFilterMenu schema={querySchema} filters={[]} onClose={vi.fn()} onChange={onChange} />)
+    fireEvent.change(menu.getByRole('combobox', { name: '快速筛选值' }), { target: { value: 'doing' } })
+    fireEvent.click(menu.getByRole('button', { name: '添加' }))
+    expect(onChange).toHaveBeenCalledWith([{ propertyId: 'status', operator: 'equals', value: 'doing' }])
+    menu.unmount()
+    const saved = [{ propertyId: 'status', operator: 'equals', value: 'doing' }] as const
+    const persisted = render(<QuickFilterMenu schema={querySchema} filters={[...saved]} onClose={vi.fn()} onChange={onChange} />)
+    fireEvent.click(persisted.getByRole('button', { name: '删除快速筛选 1' }))
+    expect(onChange).toHaveBeenLastCalledWith([])
+  })
+
+  it('renders saved collapsed groups and reports toggle intent', () => {
+    const onToggle = vi.fn()
+    const groups = [{ key: 'doing', label: 'doing', records: [record] }]
+    const { getByRole } = render(<GroupLedger groups={groups} schema={querySchema} propertyId="status" collapsedKeys={new Set(['doing'])} onToggle={onToggle} />)
+    const button = getByRole('button', { name: '展开分组 进行中' })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(button)
+    expect(onToggle).toHaveBeenCalledWith('doing')
   })
 })
 

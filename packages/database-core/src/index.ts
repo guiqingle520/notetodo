@@ -43,9 +43,13 @@ export interface DatabaseView {
 
 export interface DatabaseViewConfig {
   filters?: FilterRule[]
+  /** Compact AND filters shown as removable chips in the view toolbar. */
+  quickFilters?: FilterRule[]
   filterMode?: 'and' | 'or'
   sorts?: SortRule[]
   groupByPropertyId?: string
+  /** Stable group keys collapsed by the user in this saved view. */
+  collapsedGroupKeys?: string[]
   datePropertyId?: string
   startDatePropertyId?: string
   endDatePropertyId?: string
@@ -445,14 +449,38 @@ export function queryRecords(
   })
 }
 
+/**
+ * Searches every visible database value without allocating a joined string per
+ * record. Option labels are indexed once so saved IDs also match human text.
+ */
+export function searchDatabaseRecords(records: DatabaseRecord[], schema: DatabaseSchema, query: string): DatabaseRecord[] {
+  const needle = query.trim().normalize('NFKC').toLocaleLowerCase().slice(0, 200)
+  if (!needle) return records
+  const properties = schema.properties.slice(0, 50)
+  const optionLabels = new Map<string, string>()
+  for (const property of properties) for (const option of property.options ?? []) optionLabels.set(`${property.id}\u0000${option.id}`, option.name.normalize('NFKC').toLocaleLowerCase())
+  return records.filter((record) => properties.some((property) => {
+    const raw = record.values[property.id]
+    const values = Array.isArray(raw) ? raw : [raw]
+    return values.some((value) => {
+      if (value === null) return false
+      const normalized = String(value).normalize('NFKC').toLocaleLowerCase()
+      return normalized.includes(needle) || (optionLabels.get(`${property.id}\u0000${String(value)}`)?.includes(needle) ?? false)
+    })
+  }))
+}
+
 /** Removes stale or oversized rules before view configuration is persisted. */
 export function normalizeViewConfig(schema: DatabaseSchema, config: DatabaseViewConfig): DatabaseViewConfig {
   const propertyIds = new Set(schema.properties.map((property) => property.id))
   const validOperators = new Set<FilterRule['operator']>(['equals', 'notEquals', 'contains', 'isEmpty', 'isNotEmpty', 'greaterThan', 'lessThan'])
-  const filters = (config.filters ?? []).filter((rule) => propertyIds.has(rule.propertyId) && validOperators.has(rule.operator)).slice(0, 20)
+  const sanitizeFilters = (rules: FilterRule[] | undefined, limit: number) => (rules ?? []).filter((rule) => propertyIds.has(rule.propertyId) && validOperators.has(rule.operator)).slice(0, limit)
+  const filters = sanitizeFilters(config.filters, 20)
+  const quickFilters = sanitizeFilters(config.quickFilters, 5)
   const seenSorts = new Set<string>()
   const sorts = (config.sorts ?? []).filter((rule) => propertyIds.has(rule.propertyId) && ['asc', 'desc'].includes(rule.direction) && !seenSorts.has(rule.propertyId) && Boolean(seenSorts.add(rule.propertyId))).slice(0, 10)
   const groupByPropertyId = config.groupByPropertyId && propertyIds.has(config.groupByPropertyId) ? config.groupByPropertyId : undefined
+  const collapsedGroupKeys = groupByPropertyId ? [...new Set((config.collapsedGroupKeys ?? []).filter((key) => typeof key === 'string' && key.length > 0 && key.length <= 200))].slice(0, 100) : []
   const visiblePropertyIds = config.visiblePropertyIds === undefined ? undefined : [...new Set(config.visiblePropertyIds.filter((id) => propertyIds.has(id)))].slice(0, 50)
   const propertyWidths = Object.fromEntries(Object.entries(config.propertyWidths ?? {}).filter(([id, width]) => propertyIds.has(id) && Number.isFinite(width)).map(([id, width]) => [id, Math.max(80, Math.min(600, Math.round(width)))]))
   const rowHeight = ['compact', 'default', 'comfortable'].includes(config.rowHeight ?? '') ? config.rowHeight : 'default'
@@ -462,7 +490,7 @@ export function normalizeViewConfig(schema: DatabaseSchema, config: DatabaseView
     const property = schema.properties.find((candidate) => candidate.id === id)
     return property && validColumnCalculations(property).includes(calculation)
   }))
-  return { ...config, filters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId, visiblePropertyIds, propertyWidths, rowHeight, propertyOrder, freezeFirstColumn: Boolean(config.freezeFirstColumn), calculations }
+  return { ...config, filters, quickFilters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId, collapsedGroupKeys, visiblePropertyIds, propertyWidths, rowHeight, propertyOrder, freezeFirstColumn: Boolean(config.freezeFirstColumn), calculations }
 }
 
 export function validColumnCalculations(property: DatabaseProperty): ColumnCalculation[] {
