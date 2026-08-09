@@ -22,6 +22,33 @@ function assertIpcResponse(value) {
   return value
 }
 
+function assertNoArguments(args) {
+  if (args.length !== 0) throw new TypeError('This IPC channel does not accept arguments.')
+}
+
+function assertAppInfoResponse(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Invalid app information response.')
+  }
+  const keys = Object.keys(value)
+  if (keys.length !== 2 || !keys.includes('version') || !keys.includes('platform')) {
+    throw new TypeError('Invalid app information response fields.')
+  }
+  if (typeof value.version !== 'string' || value.version.length < 1 || value.version.length > 100) {
+    throw new TypeError('Invalid app version response.')
+  }
+  if (typeof value.platform !== 'string' || value.platform.length < 1 || value.platform.length > 32) {
+    throw new TypeError('Invalid app platform response.')
+  }
+}
+
+// Contracts are colocated with transport guards so request and response rules
+// cannot silently diverge between the main process and security wrapper.
+const appInfoIpcContract = Object.freeze({
+  assertRequest: assertNoArguments,
+  assertResponse: assertAppInfoResponse,
+})
+
 function assertIpcValue(value, path, depth = 0, ancestors = new Set()) {
   if (depth > MAX_IPC_DEPTH) throw new TypeError(`${path} exceeds the IPC nesting limit.`)
   if (
@@ -61,4 +88,4 @@ function assertIpcValue(value, path, depth = 0, ancestors = new Set()) {
   }
 }
 
-module.exports = { assertIpcRequest, assertIpcResponse }
+module.exports = { appInfoIpcContract, assertIpcRequest, assertIpcResponse }

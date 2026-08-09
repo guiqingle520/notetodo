@@ -29,15 +29,28 @@ function createTrustedFrameValidator(options) {
 function createTrustedIpcHandler(ipcMain, options) {
   const isTrustedFrame = createTrustedFrameValidator(options)
 
-  return function handleTrusted(channel, listener) {
+  return function handleTrusted(channel, contractOrListener, optionalListener) {
+    const contract = typeof contractOrListener === 'function' ? null : contractOrListener
+    const listener = optionalListener ?? contractOrListener
+    if (typeof listener !== 'function') throw new TypeError('IPC listener is required.')
+    if (contract && (typeof contract.assertRequest !== 'function' || typeof contract.assertResponse !== 'function')) {
+      throw new TypeError('IPC contract must validate requests and responses.')
+    }
+
     ipcMain.handle(channel, (event, ...args) => {
       if (!isTrustedFrame(event.senderFrame?.url)) throw new Error('IPC sender is not trusted.')
       assertIpcRequest(channel, args)
+      contract?.assertRequest(args)
       const result = listener(event, ...args)
-      if (result && typeof result.then === 'function') {
-        return result.then(assertIpcResponse)
+      const validateResponse = (value) => {
+        assertIpcResponse(value)
+        contract?.assertResponse(value)
+        return value
       }
-      return assertIpcResponse(result)
+      if (result && typeof result.then === 'function') {
+        return result.then(validateResponse)
+      }
+      return validateResponse(result)
     })
   }
 }

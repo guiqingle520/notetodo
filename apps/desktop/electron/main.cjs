@@ -10,7 +10,7 @@ const { API_SCOPES, signRoomTicket } = require('@notetodo/auth-core')
 const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomBytes, randomUUID } = require('node:crypto')
 const { createTrustedIpcHandler, createTrustedIpcListener } = require('./ipc-security.cjs')
-
+const { appInfoIpcContract } = require('./ipc-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -741,7 +741,7 @@ function createWindow() {
   return window
 }
 
-handleTrusted('app:info', () => ({
+handleTrusted('app:info', appInfoIpcContract, () => ({
   version: app.getVersion(),
   platform: process.platform,
 }))
