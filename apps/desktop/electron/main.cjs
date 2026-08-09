@@ -13,6 +13,7 @@ const { createTrustedIpcHandler, createTrustedIpcListener } = require('./ipc-sec
 const { appInfoIpcContract } = require('./ipc-contracts.cjs')
 const { workspaceIpcContracts } = require('./ipc-workspace-contracts.cjs')
 const { assertModelStreamEvent, modelIpcContracts, normalizeModelConfig } = require('./ipc-model-contracts.cjs')
+const { syncIpcContracts } = require('./ipc-sync-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -450,21 +451,9 @@ function registerWorkspaceIpc(database) {
     await fs.promises.writeFile(selected.filePath, `\uFEFF${csv}`, 'utf8')
     return true
   })
-  handleTrusted('sync:load-document', (_event, pageId) => {
-    assertId(pageId)
-    return database.loadSyncDocument(pageId)
-  })
-  handleTrusted('sync:append-update', (_event, pageId, clientId, data) => {
-    assertId(pageId)
-    assertId(clientId)
-    if (typeof data !== 'string' || data.length > 2_000_000) throw new TypeError('Invalid sync update.')
-    return database.appendSyncUpdate(pageId, clientId, data)
-  })
-  handleTrusted('sync:compact-document', (_event, pageId, snapshot, throughId) => {
-    assertId(pageId)
-    if (typeof snapshot !== 'string' || snapshot.length > 20_000_000 || !Number.isSafeInteger(throughId)) throw new TypeError('Invalid sync snapshot.')
-    database.compactSyncDocument(pageId, snapshot, throughId)
-  })
+  handleTrusted('sync:load-document', syncIpcContracts.loadDocument, (_event, pageId) => database.loadSyncDocument(pageId))
+  handleTrusted('sync:append-update', syncIpcContracts.appendUpdate, (_event, pageId, clientId, data) => database.appendSyncUpdate(pageId, clientId, data))
+  handleTrusted('sync:compact-document', syncIpcContracts.compactDocument, (_event, pageId, snapshot, throughId) => database.compactSyncDocument(pageId, snapshot, throughId))
   handleTrusted('collaboration:get-ticket', (_event, pageId) => {
     assertId(pageId)
     const secret = process.env.NOTETODO_COLLAB_TOKEN
