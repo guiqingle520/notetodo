@@ -367,29 +367,26 @@ module.exports = {
 
   createDatabaseRecord(databaseId, recordId) {
     const now = new Date().toISOString()
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      const nextPosition = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
-      this.database.prepare('INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(recordId, databaseId, nextPosition, now, now)
-      const properties = this.database.prepare("SELECT id, type, config_json FROM database_properties WHERE database_id = ? AND type NOT IN ('formula', 'rollup') ORDER BY position").all(databaseId)
+    this.recordRepository.transaction(() => {
+      const nextPosition = this.recordRepository.nextRecordPosition.get(databaseId).position
+      this.recordRepository.insertRecord.run(recordId, databaseId, nextPosition, now, now)
+      const properties = this.recordRepository.writableProperties.all(databaseId)
       for (const property of properties) {
         const constraints = JSON.parse(property.config_json || '{}').constraints || {}
         if (Object.hasOwn(constraints, 'defaultValue')) this.writeDatabasePropertyValue(recordId, property, constraints.defaultValue, now)
       }
       this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, createdAt: now } }, now)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
   },
 
   duplicateDatabaseRecord(databaseId, sourceRecordId, recordId) {
-    const source = this.database.prepare('SELECT content FROM database_records WHERE id = ? AND database_id = ? AND archived_at IS NULL').get(sourceRecordId, databaseId)
+    const source = this.recordRepository.activeRecordContent.get(sourceRecordId, databaseId)
     if (!source) throw new Error('Database record does not exist.')
     const now = new Date().toISOString()
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      const nextPosition = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
-      this.database.prepare('INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(recordId, databaseId, nextPosition, source.content, now, now)
-      const properties = this.database.prepare("SELECT id, type, config_json FROM database_properties WHERE database_id = ? AND type NOT IN ('formula', 'rollup') ORDER BY position").all(databaseId)
+    this.recordRepository.transaction(() => {
+      const nextPosition = this.recordRepository.nextRecordPosition.get(databaseId).position
+      this.recordRepository.insertRecordWithContent.run(recordId, databaseId, nextPosition, source.content, now, now)
+      const properties = this.recordRepository.writableProperties.all(databaseId)
       const sourceValues = this.loadDatabaseById(databaseId).records.find((record) => record.id === sourceRecordId)?.values || {}
       for (const property of properties) {
         const constraints = JSON.parse(property.config_json || '{}').constraints || {}
@@ -398,48 +395,30 @@ module.exports = {
       }
       // Preserve persisted null placeholders for derived columns so legacy
       // snapshots keep the same shape; actual values are still recomputed.
-      this.database.prepare(`INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
-        SELECT ?, value.property_id, value.text_value, value.number_value, value.boolean_value, value.json_value, ?
-        FROM property_values value JOIN database_properties property ON property.id = value.property_id
-        WHERE value.record_id = ? AND property.type IN ('formula', 'rollup')`).run(recordId, now, sourceRecordId)
+      this.recordRepository.copyDerivedValues.run(recordId, now, sourceRecordId)
       this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, duplicatedFrom: sourceRecordId, createdAt: now } }, now)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
     return this.loadDatabaseById(databaseId)
   },
 
   trashDatabaseRecords(databaseId, recordIds) {
     const now = new Date().toISOString()
-    const update = this.database.prepare('UPDATE database_records SET archived_at = ?, updated_at = ? WHERE id = ? AND database_id = ? AND archived_at IS NULL')
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
+    const update = this.recordRepository.trashRecord
+    this.recordRepository.transaction(() => {
       for (const recordId of recordIds) if (update.run(now, now, recordId, databaseId).changes !== 1) throw new Error('A selected database record does not exist.')
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
     return this.loadDatabaseById(databaseId)
   },
 
   listTrashedDatabaseRecords(databaseId, limit = 200) {
-    return this.database.prepare(`
-      SELECT records.id, COALESCE(title_value.text_value, '无标题') AS title, records.archived_at AS trashedAt
-      FROM database_records records
-      LEFT JOIN database_properties title ON title.database_id = records.database_id AND title.type = 'title'
-      LEFT JOIN property_values title_value ON title_value.record_id = records.id AND title_value.property_id = title.id
-      WHERE records.database_id = ? AND records.archived_at IS NOT NULL
-      ORDER BY records.archived_at DESC, records.id DESC LIMIT ?
-    `).all(databaseId, Math.max(1, Math.min(500, Math.trunc(limit))))
+    return this.recordRepository.trashedRecords.all(databaseId, Math.max(1, Math.min(500, Math.trunc(limit))))
   },
 
   restoreDatabaseRecords(databaseId, recordIds) {
     const now = new Date().toISOString()
-    const update = this.database.prepare('UPDATE database_records SET archived_at = NULL, updated_at = ? WHERE id = ? AND database_id = ? AND archived_at IS NOT NULL')
-    const constrainedValues = this.database.prepare(`
-      SELECT property.id, property.type, property.config_json, value.text_value, value.number_value, value.boolean_value, value.json_value
-      FROM database_properties property LEFT JOIN property_values value ON value.property_id = property.id AND value.record_id = ?
-      WHERE property.database_id = ? AND json_extract(property.config_json, '$.constraints') IS NOT NULL
-    `)
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
+    const update = this.recordRepository.restoreRecord
+    const constrainedValues = this.recordRepository.constrainedRecordValues
+    this.recordRepository.transaction(() => {
       for (const recordId of recordIds) {
         for (const row of constrainedValues.all(recordId, databaseId)) {
           let value = row.text_value ?? row.number_value ?? (row.boolean_value === null ? null : Boolean(row.boolean_value))
@@ -448,30 +427,25 @@ module.exports = {
         }
         if (update.run(now, recordId, databaseId).changes !== 1) throw new Error('A trashed database record does not exist.')
       }
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
     return this.loadDatabaseById(databaseId)
   },
 
   deleteDatabaseRecordsPermanently(databaseId, recordIds) {
-    const remove = this.database.prepare('DELETE FROM database_records WHERE id = ? AND database_id = ? AND archived_at IS NOT NULL')
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
+    const remove = this.recordRepository.deleteTrashedRecord
+    this.recordRepository.transaction(() => {
       for (const recordId of recordIds) if (remove.run(recordId, databaseId).changes !== 1) throw new Error('A trashed database record does not exist.')
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
   },
 
   updateDatabaseRecordContent(recordId, content) {
     const now = new Date().toISOString()
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      const record = this.database.prepare('SELECT content FROM database_records WHERE id = ?').get(recordId)
+    this.recordRepository.transaction(() => {
+      const record = this.recordRepository.recordContent.get(recordId)
       if (!record) throw new Error('Database record does not exist.')
-      this.database.prepare('UPDATE database_records SET content = ?, updated_at = ? WHERE id = ?').run(content, now, recordId)
+      this.recordRepository.updateRecordContent.run(content, now, recordId)
       this.appendDatabaseRecordHistory(recordId, null, 'content', record.content, content, now)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
   },
 
   bulkUpdateDatabaseRecords(databaseId, recordIds, propertyId, value) {

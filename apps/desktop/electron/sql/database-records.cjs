@@ -93,4 +93,27 @@ module.exports = Object.freeze({
     due_at=excluded.due_at, note=excluded.note, completed_at=NULL, updated_at=excluded.updated_at`,
   completeRecordReminder: 'UPDATE database_record_reminders SET completed_at = ?, updated_at = ? WHERE id = ?',
   deleteRecordReminder: 'DELETE FROM database_record_reminders WHERE id = ?',
+  nextRecordPosition: 'SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?',
+  insertRecord: 'INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+  writableProperties: "SELECT id, type, config_json FROM database_properties WHERE database_id = ? AND type NOT IN ('formula', 'rollup') ORDER BY position",
+  activeRecordContent: 'SELECT content FROM database_records WHERE id = ? AND database_id = ? AND archived_at IS NULL',
+  insertRecordWithContent: 'INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+  copyDerivedValues: `INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
+    SELECT ?, value.property_id, value.text_value, value.number_value, value.boolean_value, value.json_value, ?
+    FROM property_values value JOIN database_properties property ON property.id = value.property_id
+    WHERE value.record_id = ? AND property.type IN ('formula', 'rollup')`,
+  trashRecord: 'UPDATE database_records SET archived_at = ?, updated_at = ? WHERE id = ? AND database_id = ? AND archived_at IS NULL',
+  trashedRecords: `SELECT records.id, COALESCE(title_value.text_value, '无标题') AS title, records.archived_at AS trashedAt
+    FROM database_records records
+    LEFT JOIN database_properties title ON title.database_id = records.database_id AND title.type = 'title'
+    LEFT JOIN property_values title_value ON title_value.record_id = records.id AND title_value.property_id = title.id
+    WHERE records.database_id = ? AND records.archived_at IS NOT NULL
+    ORDER BY records.archived_at DESC, records.id DESC LIMIT ?`,
+  restoreRecord: 'UPDATE database_records SET archived_at = NULL, updated_at = ? WHERE id = ? AND database_id = ? AND archived_at IS NOT NULL',
+  constrainedRecordValues: `SELECT property.id, property.type, property.config_json, value.text_value, value.number_value, value.boolean_value, value.json_value
+    FROM database_properties property LEFT JOIN property_values value ON value.property_id = property.id AND value.record_id = ?
+    WHERE property.database_id = ? AND json_extract(property.config_json, '$.constraints') IS NOT NULL`,
+  deleteTrashedRecord: 'DELETE FROM database_records WHERE id = ? AND database_id = ? AND archived_at IS NOT NULL',
+  recordContent: 'SELECT content FROM database_records WHERE id = ?',
+  updateRecordContent: 'UPDATE database_records SET content = ?, updated_at = ? WHERE id = ?',
 })
