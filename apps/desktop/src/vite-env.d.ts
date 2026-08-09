@@ -76,6 +76,7 @@ interface Window {
         rawToken: string
         prefix: string
         scopes: import('@notetodo/auth-core').ApiScope[]
+        expiresAt: string | null
         createdAt: string
       }>
       revokeToken: (id: string) => Promise<boolean>

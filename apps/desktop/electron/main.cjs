@@ -6,7 +6,7 @@ const { WorkspaceDatabase } = require('./workspace-db.cjs')
 const { WebhookWorker } = require('./webhook-worker.cjs')
 const { ModelService } = require('./model-service.cjs')
 const { collectUnusedAssets, isRenderableImage, safeDisplayName, storeLocalAsset } = require('./asset-store.cjs')
-const { API_SCOPES, signRoomTicket } = require('@notetodo/auth-core')
+const { signRoomTicket } = require('@notetodo/auth-core')
 const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomBytes, randomUUID } = require('node:crypto')
 const { createTrustedIpcHandler, createTrustedIpcListener } = require('./ipc-security.cjs')
@@ -19,6 +19,7 @@ const { removePagePermission, resolveLocalCollaborationIdentity, upsertPagePermi
 const { commentsIpcContracts } = require('./ipc-comments-contracts.cjs')
 const { aiIpcContracts } = require('./ipc-ai-contracts.cjs')
 const { attachmentIpcContracts } = require('./ipc-attachment-contracts.cjs')
+const { platformIpcContracts } = require('./ipc-platform-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -112,12 +113,9 @@ function registerWorkspaceIpc(database) {
   handleTrusted('workspace:archive-page', workspaceIpcContracts.archivePage, (_event, id) => database.archivePage(id))
   handleTrusted('workspace:restore-page', workspaceIpcContracts.restorePage, (_event, id) => database.restorePage(id))
   handleTrusted('workspace:search', workspaceIpcContracts.search, (_event, query) => database.searchPages(query))
-  handleTrusted('platform:list-tokens', () => database.listApiTokens())
-  handleTrusted('platform:issue-token', (_event, name, scopes) => {
-    if (!Array.isArray(scopes) || scopes.some((scope) => !API_SCOPES.includes(scope))) throw new TypeError('Invalid API token scopes.')
-    return database.issueApiToken(name, scopes)
-  })
-  handleTrusted('platform:revoke-token', (_event, id) => { assertId(id); return database.revokeApiToken(id) })
+  handleTrusted('platform:list-tokens', platformIpcContracts.listTokens, () => database.listApiTokens())
+  handleTrusted('platform:issue-token', platformIpcContracts.issueToken, (_event, name, scopes) => database.issueApiToken(name, scopes))
+  handleTrusted('platform:revoke-token', platformIpcContracts.revokeToken, (_event, id) => database.revokeApiToken(id))
   handleTrusted('webhooks:list', () => database.listWebhookEndpoints())
   handleTrusted('webhooks:create', (_event, name, url, events) => {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('系统密钥库不可用，无法安全保存 Webhook 签名密钥。')
