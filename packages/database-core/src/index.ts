@@ -14,9 +14,17 @@ export interface DatabaseProperty {
   relation?: { databaseId: string }
   rollup?: { relationPropertyId: string; targetPropertyId: string; aggregation: 'count' | 'sum' | 'average' | 'min' | 'max' | 'showOriginal' }
   formula?: { expression: string }
+  /** Write-time rules shared by SQLite, imports and the browser fallback. */
+  constraints?: PropertyConstraints
 }
 
 export type PropertyValue = string | number | boolean | string[] | null
+
+export interface PropertyConstraints {
+  required?: boolean
+  unique?: boolean
+  defaultValue?: PropertyValue
+}
 
 export interface DatabaseRecord {
   id: string
@@ -235,6 +243,40 @@ export function normalizePropertyValue(property: DatabaseProperty, input: unknow
     case 'relation': return Array.isArray(input) ? [...new Set(input.filter((value): value is string => typeof value === 'string'))] : null
     default: return typeof input === 'string' ? input : String(input)
   }
+}
+
+/** Empty is deliberately narrower than JavaScript falsiness: 0 and false are valid values. */
+export function isEmptyPropertyValue(value: PropertyValue | undefined): boolean {
+  return value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
+}
+
+/** Returns the canonical configured default, or null when no default is configured. */
+export function configuredDefaultValue(property: DatabaseProperty): PropertyValue {
+  return Object.prototype.hasOwnProperty.call(property.constraints ?? {}, 'defaultValue')
+    ? normalizePropertyValue(property, property.constraints!.defaultValue)
+    : null
+}
+
+/**
+ * Checks record-level rules without knowing anything about persistence. The
+ * caller may exclude the edited record so unchanged unique values remain valid.
+ */
+export function validatePropertyConstraints(
+  property: DatabaseProperty,
+  value: PropertyValue,
+  records: DatabaseRecord[] = [],
+  recordId?: string,
+): string | null {
+  if (property.constraints?.required && isEmptyPropertyValue(value)) return `${property.name} 为必填属性。`
+  if (property.constraints?.unique && !isEmptyPropertyValue(value)) {
+    const key = stablePropertyValueKey(value)
+    if (records.some((record) => record.id !== recordId && stablePropertyValueKey(record.values[property.id] ?? null) === key)) return `${property.name} 的值必须唯一。`
+  }
+  return null
+}
+
+function stablePropertyValueKey(value: PropertyValue) {
+  return Array.isArray(value) ? `a:${[...value].sort().join('\u0000')}` : `${typeof value}:${String(value)}`
 }
 
 /** Resolves rollups before formulas without mutating persisted source values. */

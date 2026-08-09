@@ -1,4 +1,4 @@
-import type { DatabaseProperty, DatabaseRecord, DatabaseSnapshot, DatabaseTemplate, DatabaseTrashRecord, DatabaseView, DatabaseViewConfig, PropertyType, PropertyValue } from '@notetodo/database-core'
+import { configuredDefaultValue, validatePropertyConstraints, type DatabaseProperty, type DatabaseRecord, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type PropertyType, type PropertyValue } from '@notetodo/database-core'
 
 type BrowserTrashRecord = DatabaseTrashRecord & { record: DatabaseRecord }
 
@@ -96,9 +96,16 @@ class DatabaseRepository {
     return Object.entries(this.readCollections()).map(([pageId, snapshot]) => ({ id: snapshot.schema.id, pageId, name: snapshot.schema.name, pageTitle: snapshot.schema.name, recordCount: snapshot.records.length }))
   }
 
-  async updatePropertyConfig(snapshot: DatabaseSnapshot, propertyId: string, config: Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'rollup' | 'formula'>>) {
+  async updatePropertyConfig(snapshot: DatabaseSnapshot, propertyId: string, config: Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'rollup' | 'formula' | 'constraints'>>) {
     if (window.notetodo?.database) return window.notetodo.database.updatePropertyConfig(snapshot.schema.id, propertyId, config)
-    const next = { ...snapshot, schema: { ...snapshot.schema, properties: snapshot.schema.properties.map((property) => property.id === propertyId ? { ...property, ...structuredClone(config) } : property) } }
+    const candidate = snapshot.schema.properties.find((property) => property.id === propertyId)
+    if (!candidate) throw new Error('属性不存在。')
+    const configured = { ...candidate, ...structuredClone(config) }
+    for (const record of snapshot.records) {
+      const issue = validatePropertyConstraints(configured, record.values[propertyId] ?? null, snapshot.records, record.id)
+      if (issue) throw new Error(issue)
+    }
+    const next = { ...snapshot, schema: { ...snapshot.schema, properties: snapshot.schema.properties.map((property) => property.id === propertyId ? configured : property) } }
     this.write(next); return structuredClone(next)
   }
 
@@ -133,6 +140,8 @@ class DatabaseRepository {
 
   async updateCell(snapshot: DatabaseSnapshot, recordId: string, propertyId: string, value: PropertyValue) {
     if (window.notetodo?.database) return window.notetodo.database.updateCell(recordId, propertyId, value)
+    const property = snapshot.schema.properties.find((candidate) => candidate.id === propertyId)
+    if (property) { const issue = validatePropertyConstraints(property, value, snapshot.records, recordId); if (issue) throw new Error(issue) }
     this.write(snapshot)
     return undefined
   }
@@ -151,7 +160,10 @@ class DatabaseRepository {
     const source = snapshot.records.find((record) => record.id === sourceRecordId)
     if (!source) throw new Error('记录不存在。')
     const createdAt = new Date().toISOString()
-    const duplicate: DatabaseRecord = { ...structuredClone(source), id: recordId, createdAt, updatedAt: createdAt }
+    const values = { ...structuredClone(source.values) }
+    for (const property of snapshot.schema.properties) if (property.constraints?.unique) values[property.id] = configuredDefaultValue(property)
+    const duplicate: DatabaseRecord = { ...structuredClone(source), id: recordId, values, createdAt, updatedAt: createdAt }
+    for (const property of snapshot.schema.properties) { const issue = validatePropertyConstraints(property, values[property.id] ?? null, snapshot.records, recordId); if (issue) throw new Error(issue) }
     const next = { ...snapshot, records: [...snapshot.records, duplicate] }
     this.write(next); return structuredClone(next)
   }
@@ -237,13 +249,19 @@ class DatabaseRepository {
     if (window.notetodo?.database) return window.notetodo.database.bulkUpdate(snapshot.schema.id, recordIds, propertyId, value)
     const selected = new Set(recordIds)
     const now = new Date().toISOString()
-    const next = { ...snapshot, records: snapshot.records.map((record) => selected.has(record.id) ? { ...record, values: { ...record.values, [propertyId]: value }, updatedAt: now } : record) }
+    const property = snapshot.schema.properties.find((candidate) => candidate.id === propertyId)
+    const nextRecords = snapshot.records.map((record) => selected.has(record.id) ? { ...record, values: { ...record.values, [propertyId]: value }, updatedAt: now } : record)
+    if (property) for (const record of nextRecords) { const issue = validatePropertyConstraints(property, record.values[propertyId] ?? null, nextRecords, record.id); if (issue) throw new Error(issue) }
+    const next = { ...snapshot, records: nextRecords }
     this.write(next); return structuredClone(next)
   }
 
   async importRecords(snapshot: DatabaseSnapshot, records: DatabaseRecord[]) {
     if (window.notetodo?.database) return window.notetodo.database.importRecords(snapshot.schema.id, records.map(({ id, values }) => ({ id, values })))
-    const next = { ...snapshot, records: [...snapshot.records, ...records] }
+    const hydrated = records.map((record) => ({ ...record, values: Object.fromEntries(snapshot.schema.properties.filter((property) => !['formula', 'rollup'].includes(property.type)).map((property) => [property.id, Object.hasOwn(record.values, property.id) ? record.values[property.id] : configuredDefaultValue(property)])) }))
+    const nextRecords = [...snapshot.records, ...hydrated]
+    for (const record of hydrated) for (const property of snapshot.schema.properties) { const issue = validatePropertyConstraints(property, record.values[property.id] ?? null, nextRecords, record.id); if (issue) throw new Error(issue) }
+    const next = { ...snapshot, records: nextRecords }
     this.write(next); return structuredClone(next)
   }
 

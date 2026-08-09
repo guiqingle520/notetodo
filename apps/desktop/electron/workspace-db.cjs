@@ -1121,7 +1121,7 @@ class WorkspaceDatabase {
   }
 
   updateDatabasePropertyConfig(databaseId, propertyId, config) {
-    const property = this.database.prepare('SELECT type FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
+    const property = this.database.prepare('SELECT type, config_json FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
     if (!property) throw new Error('Database property does not exist.')
     let normalized = {}
     if (property.type === 'select' || property.type === 'multiSelect') {
@@ -1154,7 +1154,32 @@ class WorkspaceDatabase {
       const numericAggregations = new Set(['sum', 'average', 'min', 'max'])
       if (!target || !aggregations.has(rollup?.aggregation) || (numericAggregations.has(rollup?.aggregation) && target.type !== 'number')) throw new TypeError('Rollup target property or aggregation is invalid.')
       normalized = { rollup: { relationPropertyId: rollup.relationPropertyId, targetPropertyId: rollup.targetPropertyId, aggregation: rollup.aggregation } }
-    } else if (Object.keys(config ?? {}).length) throw new TypeError('This property type has no configurable settings.')
+    }
+    const constraints = config?.constraints ?? {}
+    if (!constraints || typeof constraints !== 'object' || Array.isArray(constraints)) throw new TypeError('Property constraints must be an object.')
+    if (['formula', 'rollup'].includes(property.type) && Object.keys(constraints).length) throw new TypeError('Derived properties cannot have write constraints.')
+    if (constraints.unique && ['checkbox', 'multiSelect', 'relation'].includes(property.type)) throw new TypeError('This property type cannot require unique values.')
+    const normalizedConstraints = {}
+    if (constraints.required === true) normalizedConstraints.required = true
+    if (constraints.unique === true) normalizedConstraints.unique = true
+    if (Object.hasOwn(constraints, 'defaultValue')) normalizedConstraints.defaultValue = this.normalizeDatabasePropertyValue({ type: property.type, config_json: JSON.stringify(normalized) }, constraints.defaultValue)
+    if (normalizedConstraints.required && !Object.hasOwn(normalizedConstraints, 'defaultValue')) throw new TypeError('A required property must define a default value for new records.')
+    if (normalizedConstraints.unique && Object.hasOwn(normalizedConstraints, 'defaultValue')) throw new TypeError('A unique property cannot define a shared default value.')
+    if (Object.keys(normalizedConstraints).length) normalized.constraints = normalizedConstraints
+
+    // Refuse a stricter rule when existing active records already violate it.
+    const snapshot = this.loadDatabaseById(databaseId)
+    if (normalizedConstraints.required && snapshot.records.some((record) => this.isEmptyDatabasePropertyValue(record.values[propertyId]))) throw new Error('请先补全现有记录，再启用必填。')
+    if (normalizedConstraints.unique) {
+      const seen = new Set()
+      for (const record of snapshot.records) {
+        const value = record.values[propertyId]
+        if (this.isEmptyDatabasePropertyValue(value)) continue
+        const key = JSON.stringify(Array.isArray(value) ? [...value].sort() : value)
+        if (seen.has(key)) throw new Error('请先处理现有重复值，再启用唯一值。')
+        seen.add(key)
+      }
+    }
     const result = this.database.prepare('UPDATE database_properties SET config_json = ? WHERE id = ? AND database_id = ?').run(JSON.stringify(normalized), propertyId, databaseId)
     if (result.changes !== 1) throw new Error('Database property does not exist.')
     return this.loadDatabaseById(databaseId)
@@ -1219,9 +1244,12 @@ class WorkspaceDatabase {
 
   writeDatabasePropertyValue(recordId, property, value, now) {
     if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
+    value = this.normalizeDatabasePropertyValue(property, value)
+    const constraints = JSON.parse(property.config_json || '{}').constraints || {}
+    if (constraints.required && this.isEmptyDatabasePropertyValue(value)) throw new TypeError('必填属性不能为空。')
     let textValue = null; let numberValue = null; let booleanValue = null; let jsonValue = null
     if (value !== null) {
-      if (property.type === 'number') { numberValue = Number(value); if (!Number.isFinite(numberValue)) throw new TypeError('Number property requires a finite value.') }
+      if (property.type === 'number') numberValue = value
       else if (property.type === 'checkbox') booleanValue = value ? 1 : 0
       else if (property.type === 'multiSelect') jsonValue = JSON.stringify(value)
       else if (property.type === 'relation') {
@@ -1234,6 +1262,15 @@ class WorkspaceDatabase {
         jsonValue = JSON.stringify(uniqueIds)
       } else textValue = String(value)
     }
+    if (constraints.unique && !this.isEmptyDatabasePropertyValue(value)) {
+      const duplicate = this.database.prepare(`
+        SELECT 1 FROM property_values value
+        JOIN database_records record ON record.id = value.record_id
+        WHERE value.property_id = ? AND value.record_id <> ? AND record.archived_at IS NULL
+          AND value.text_value IS ? AND value.number_value IS ? AND value.boolean_value IS ? AND value.json_value IS ? LIMIT 1
+      `).get(property.id, recordId, textValue, numberValue, booleanValue, jsonValue)
+      if (duplicate) throw new TypeError('属性值必须唯一。')
+    }
     this.database.prepare(`
       INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1242,12 +1279,32 @@ class WorkspaceDatabase {
     `).run(recordId, property.id, textValue, numberValue, booleanValue, jsonValue, now)
   }
 
+  normalizeDatabasePropertyValue(property, value) {
+    if (value === null || value === undefined || value === '') return null
+    if (property.type === 'number') { const number = Number(value); if (!Number.isFinite(number)) throw new TypeError('Number property requires a finite value.'); return number }
+    if (property.type === 'checkbox') return Boolean(value)
+    if (property.type === 'multiSelect' || property.type === 'relation') {
+      if (!Array.isArray(value)) throw new TypeError('Multi-value properties require an array.')
+      return [...new Set(value)]
+    }
+    return String(value)
+  }
+
+  isEmptyDatabasePropertyValue(value) {
+    return value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
+  }
+
   createDatabaseRecord(databaseId, recordId) {
     const now = new Date().toISOString()
     this.database.exec('BEGIN IMMEDIATE')
     try {
       const nextPosition = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
       this.database.prepare('INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(recordId, databaseId, nextPosition, now, now)
+      const properties = this.database.prepare("SELECT id, type, config_json FROM database_properties WHERE database_id = ? AND type NOT IN ('formula', 'rollup') ORDER BY position").all(databaseId)
+      for (const property of properties) {
+        const constraints = JSON.parse(property.config_json || '{}').constraints || {}
+        if (Object.hasOwn(constraints, 'defaultValue')) this.writeDatabasePropertyValue(recordId, property, constraints.defaultValue, now)
+      }
       this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, createdAt: now } }, now)
       this.database.exec('COMMIT')
     } catch (error) { this.database.exec('ROLLBACK'); throw error }
@@ -1261,8 +1318,19 @@ class WorkspaceDatabase {
     try {
       const nextPosition = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
       this.database.prepare('INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(recordId, databaseId, nextPosition, source.content, now, now)
+      const properties = this.database.prepare("SELECT id, type, config_json FROM database_properties WHERE database_id = ? AND type NOT IN ('formula', 'rollup') ORDER BY position").all(databaseId)
+      const sourceValues = this.loadDatabaseById(databaseId).records.find((record) => record.id === sourceRecordId)?.values || {}
+      for (const property of properties) {
+        const constraints = JSON.parse(property.config_json || '{}').constraints || {}
+        const value = constraints.unique ? null : sourceValues[property.id]
+        if (value !== undefined) this.writeDatabasePropertyValue(recordId, property, value, now)
+      }
+      // Preserve persisted null placeholders for derived columns so legacy
+      // snapshots keep the same shape; actual values are still recomputed.
       this.database.prepare(`INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
-        SELECT ?, property_id, text_value, number_value, boolean_value, json_value, ? FROM property_values WHERE record_id = ?`).run(recordId, now, sourceRecordId)
+        SELECT ?, value.property_id, value.text_value, value.number_value, value.boolean_value, value.json_value, ?
+        FROM property_values value JOIN database_properties property ON property.id = value.property_id
+        WHERE value.record_id = ? AND property.type IN ('formula', 'rollup')`).run(recordId, now, sourceRecordId)
       this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, duplicatedFrom: sourceRecordId, createdAt: now } }, now)
       this.database.exec('COMMIT')
     } catch (error) { this.database.exec('ROLLBACK'); throw error }
@@ -1294,9 +1362,21 @@ class WorkspaceDatabase {
   restoreDatabaseRecords(databaseId, recordIds) {
     const now = new Date().toISOString()
     const update = this.database.prepare('UPDATE database_records SET archived_at = NULL, updated_at = ? WHERE id = ? AND database_id = ? AND archived_at IS NOT NULL')
+    const constrainedValues = this.database.prepare(`
+      SELECT property.id, property.type, property.config_json, value.text_value, value.number_value, value.boolean_value, value.json_value
+      FROM database_properties property LEFT JOIN property_values value ON value.property_id = property.id AND value.record_id = ?
+      WHERE property.database_id = ? AND json_extract(property.config_json, '$.constraints') IS NOT NULL
+    `)
     this.database.exec('BEGIN IMMEDIATE')
     try {
-      for (const recordId of recordIds) if (update.run(now, recordId, databaseId).changes !== 1) throw new Error('A trashed database record does not exist.')
+      for (const recordId of recordIds) {
+        for (const row of constrainedValues.all(recordId, databaseId)) {
+          let value = row.text_value ?? row.number_value ?? (row.boolean_value === null ? null : Boolean(row.boolean_value))
+          if (row.json_value !== null) value = JSON.parse(row.json_value)
+          this.writeDatabasePropertyValue(recordId, row, value, now)
+        }
+        if (update.run(now, recordId, databaseId).changes !== 1) throw new Error('A trashed database record does not exist.')
+      }
       this.database.exec('COMMIT')
     } catch (error) { this.database.exec('ROLLBACK'); throw error }
     return this.loadDatabaseById(databaseId)
@@ -1350,9 +1430,10 @@ class WorkspaceDatabase {
       for (const record of records) {
         if (!record || typeof record.id !== 'string' || !record.id || typeof record.values !== 'object' || Array.isArray(record.values)) throw new TypeError('CSV import contains an invalid record.')
         insert.run(record.id, databaseId, position++, '', now, now)
-        for (const [propertyId, value] of Object.entries(record.values)) {
-          const property = writable.get(propertyId)
-          if (property) this.writeDatabasePropertyValue(record.id, property, value, now)
+        for (const property of writable.values()) {
+          const constraints = JSON.parse(property.config_json || '{}').constraints || {}
+          const value = Object.hasOwn(record.values, property.id) ? record.values[property.id] : constraints.defaultValue
+          if (Object.hasOwn(record.values, property.id) || Object.hasOwn(constraints, 'defaultValue') || constraints.required) this.writeDatabasePropertyValue(record.id, property, value, now)
         }
       }
       this.enqueueWebhookEvent('database.record.created', `${databaseId}:csv`, { databaseId, recordIds: records.map((record) => record.id), source: 'csv', createdAt: now }, now)
@@ -1394,7 +1475,11 @@ class WorkspaceDatabase {
     try {
       const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
       this.database.prepare('INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(recordId, databaseId, position, template.content, now, now)
-      for (const property of properties) if (!['formula', 'rollup'].includes(property.type) && Object.hasOwn(values, property.id)) this.writeDatabasePropertyValue(recordId, property, values[property.id], now)
+      for (const property of properties) if (!['formula', 'rollup'].includes(property.type)) {
+        const constraints = JSON.parse(property.config_json || '{}').constraints || {}
+        const value = Object.hasOwn(values, property.id) ? values[property.id] : constraints.defaultValue
+        if (Object.hasOwn(values, property.id) || Object.hasOwn(constraints, 'defaultValue') || constraints.required) this.writeDatabasePropertyValue(recordId, property, value, now)
+      }
       this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, templateId, createdAt: now } }, now)
       this.database.exec('COMMIT')
     } catch (error) { this.database.exec('ROLLBACK'); throw error }

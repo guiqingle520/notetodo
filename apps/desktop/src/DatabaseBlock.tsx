@@ -75,6 +75,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [openRecordId, setOpenRecordId] = useState<string | null>(null)
   const [automations, setAutomations] = useState<AutomationRule[]>([])
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([])
+  const [constraintNotice, setConstraintNotice] = useState<string | null>(null)
   const projectionCache = useRef<{ schemaId: string; records: DatabaseRecord[]; targets: typeof relationTargets }>({ schemaId: '', records: [], targets: {} })
   const changedRecordIds = useRef(new Set<string>())
 
@@ -148,7 +149,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       // edit. Reload only when a rule actually ran so normal typing stays cheap.
       if (result?.automationRuns?.length) setSnapshot(await databaseRepository.loadByPage(pageId))
       if (result?.automationRuns?.length && window.notetodo?.automations) setAutomationRuns(await window.notetodo.automations.listRuns(snapshot.schema.id))
-    })
+    }).catch((error: unknown) => { setSnapshot(snapshot); setConstraintNotice(error instanceof Error ? error.message : '属性值不符合约束。'); window.setTimeout(() => setConstraintNotice(null), 3200) })
   }
 
   const addRecord = () => {
@@ -276,6 +277,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
 
   return (
     <section className="database-block">
+      {constraintNotice && <div className="database-constraint-notice" role="alert"><CircleAlert size={14} />{constraintNotice}</div>}
       <div className="database-viewbar">
         <div className="database-tabs">
           {snapshot.views.map((view) => {
@@ -629,7 +631,7 @@ const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title'>; label: 
   { id: 'relation', label: '关联' }, { id: 'rollup', label: '汇总' }, { id: 'formula', label: '公式' },
 ]
 
-type PropertyConfig = Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'rollup' | 'formula'>>
+type PropertyConfig = Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'rollup' | 'formula' | 'constraints'>>
 type DatabaseSource = { id: string; pageId: string; name: string; pageTitle: string; recordCount: number }
 
 export function SchemaPanel({ schema, previewRecord, databaseSources, relationTargets, onClose, onAdd, onRename, onReorder, onConfigure, onDelete }: {
@@ -659,7 +661,7 @@ export function SchemaPanel({ schema, previewRecord, databaseSources, relationTa
   return <div className="schema-panel-backdrop" onMouseDown={onClose}><section className={`schema-panel ${editingProperty ? 'is-configuring' : ''}`} role="dialog" aria-modal="true" aria-label="数据库属性管理" onMouseDown={(event) => event.stopPropagation()}>
     <header><div><small>SCHEMA DESK / {schema.name.toLocaleUpperCase()}</small><strong>定义资料的骨架</strong></div><button aria-label="关闭属性管理" onClick={onClose}><X size={15} /></button></header>
     <main className="schema-workbench"><section className="schema-ledger"><div className="schema-ledger-head"><span>序号</span><span>属性名称</span><span>类型</span><span>操作</span></div>{schema.properties.map((property, index) => {
-      const configurable = ['select', 'multiSelect', 'relation', 'rollup', 'formula'].includes(property.type)
+      const configurable = true
       return <div className={`schema-ledger-row ${editingPropertyId === property.id ? 'is-selected' : ''} ${draggingPropertyId === property.id ? 'is-dragging' : ''}`} key={property.id} onDragOver={(event) => event.preventDefault()} onDrop={() => reorder(property.id)}><em><button draggable aria-label={`拖动排序 ${property.name}`} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDraggingPropertyId(property.id) }} onDragEnd={() => setDraggingPropertyId(null)}><GripVertical size={13} /></button>{String(index + 1).padStart(2, '0')}</em><input aria-label={`${property.name} 属性名称`} defaultValue={property.name} maxLength={100} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== property.name) void onRename(property.id, next) }} /><span><i>{propertyTypeLabel(property.type)}</i>{propertyTypeName(property.type)}</span><div>{configurable && <button aria-label={`配置 ${property.name}`} onClick={() => setEditingPropertyId(property.id)}><Settings2 size={12} /></button>}{property.type === 'title' ? <small>主属性</small> : <button aria-label={`删除属性 ${property.name}`} className={deletePending === property.id ? 'is-confirm' : ''} onClick={() => { if (deletePending !== property.id) return setDeletePending(property.id); void onDelete(property.id).then(() => setDeletePending(null)) }}><Trash2 size={11} /></button>}</div></div>
     })}</section>{editingProperty && <PropertyConfigEditor key={editingProperty.id} property={editingProperty} schema={schema} previewRecord={previewRecord} databaseSources={databaseSources} relationTargets={relationTargets} onClose={() => setEditingPropertyId(null)} onSave={async (config) => { setBusy(true); try { await onConfigure(editingProperty.id, config); setEditingPropertyId(null) } finally { setBusy(false) } }} />}</main>
     <footer><div><input aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option disabled={candidate.id === 'rollup' && !schema.properties.some((property) => property.type === 'relation')} key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50 || (type === 'rollup' && !schema.properties.some((property) => property.type === 'relation'))} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span>{schema.properties.length} / 50 个属性 · 拖动手柄调整顺序 · 标题属性受保护</span></footer>
@@ -673,9 +675,15 @@ const rollupAggregations: Array<{ id: NonNullable<DatabaseProperty['rollup']>['a
 ]
 
 function PropertyConfigEditor({ property, schema, previewRecord, databaseSources, relationTargets, onClose, onSave }: { property: DatabaseProperty; schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; relationTargets: RelationTargets; onClose: () => void; onSave: (config: PropertyConfig) => Promise<void> }) {
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [options, setOptions] = useState<SelectOption[]>(() => structuredClone(property.options ?? []))
   const [relationDatabaseId, setRelationDatabaseId] = useState(property.relation?.databaseId ?? schema.id)
   const [expression, setExpression] = useState(property.formula?.expression ?? '""')
+  const derived = ['formula', 'rollup'].includes(property.type)
+  const uniqueSupported = !['checkbox', 'multiSelect', 'relation', 'formula', 'rollup'].includes(property.type)
+  const [required, setRequired] = useState(property.constraints?.required ?? false)
+  const [unique, setUnique] = useState(property.constraints?.unique ?? false)
+  const [defaultValue, setDefaultValue] = useState<PropertyValue>(() => property.constraints && Object.hasOwn(property.constraints, 'defaultValue') ? property.constraints.defaultValue ?? null : null)
   const relationProperties = schema.properties.filter((candidate) => candidate.type === 'relation' && candidate.relation)
   const [rollupRelationId, setRollupRelationId] = useState(property.rollup?.relationPropertyId ?? relationProperties[0]?.id ?? '')
   const rollupRelation = relationProperties.find((candidate) => candidate.id === rollupRelationId)
@@ -689,8 +697,10 @@ function PropertyConfigEditor({ property, schema, previewRecord, databaseSources
   const validFormula = property.type !== 'formula' || validateFormulaExpression(expression)
   const duplicateOption = options.some((option, index) => options.findIndex((candidate) => candidate.name.trim().toLocaleLowerCase() === option.name.trim().toLocaleLowerCase()) !== index || !option.name.trim())
   const save = async () => {
-    const config: PropertyConfig = ['select', 'multiSelect'].includes(property.type) ? { options } : property.type === 'relation' ? { relation: { databaseId: relationDatabaseId } } : property.type === 'rollup' ? { rollup: { relationPropertyId: rollupRelationId, targetPropertyId: rollupTargetPropertyId, aggregation: rollupAggregation } } : { formula: { expression: expression.trim() } }
-    setBusy(true); try { await onSave(config) } finally { setBusy(false) }
+    const base: PropertyConfig = ['select', 'multiSelect'].includes(property.type) ? { options } : property.type === 'relation' ? { relation: { databaseId: relationDatabaseId } } : property.type === 'rollup' ? { rollup: { relationPropertyId: rollupRelationId, targetPropertyId: rollupTargetPropertyId, aggregation: rollupAggregation } } : property.type === 'formula' ? { formula: { expression: expression.trim() } } : {}
+    const constraints = { ...(required ? { required: true } : {}), ...(unique ? { unique: true } : {}), ...(!isEmptyConstraintValue(defaultValue) ? { defaultValue } : {}) }
+    const config: PropertyConfig = derived ? base : { ...base, ...(Object.keys(constraints).length || property.constraints ? { constraints } : {}) }
+    setBusy(true); setSaveError(null); try { await onSave(config) } catch (error) { setSaveError(error instanceof Error ? error.message : '无法保存属性配置。') } finally { setBusy(false) }
   }
   const previewValues = { ...(previewRecord?.values ?? {}) }
   for (const candidate of schema.properties) previewValues[candidate.name] = previewRecord?.values[candidate.id] ?? null
@@ -702,8 +712,20 @@ function PropertyConfigEditor({ property, schema, previewRecord, databaseSources
     {property.type === 'relation' && <div className="relation-config"><p>选择要关联的数据库。已有不属于新目标的关联值将保留显示，但再次编辑时需要重新选择。</p><label><span>目标数据库</span><select aria-label="关联目标数据库" value={relationDatabaseId} onChange={(event) => setRelationDatabaseId(event.target.value)}>{databaseSources.map((source) => <option key={source.id} value={source.id}>{source.name} · {source.recordCount} 条</option>)}</select></label><div className="relation-preview"><Link2 size={15} /><span><small>RELATION TARGET</small><strong>{databaseSources.find((source) => source.id === relationDatabaseId)?.pageTitle ?? schema.name}</strong></span></div></div>}
     {property.type === 'rollup' && <div className="rollup-config"><p>先沿关联属性找到记录，再选择目标属性与计算方式。汇总结果始终只读。</p><label><span>关联属性</span><select aria-label="汇总关联属性" value={rollupRelationId} onChange={(event) => { const relationId = event.target.value; const relation = relationProperties.find((candidate) => candidate.id === relationId); const targets = relation ? relationTargets[relation.relation!.databaseId]?.schema.properties.filter((candidate) => !['formula', 'rollup'].includes(candidate.type)) ?? [] : []; setRollupRelationId(relationId); setRollupTargetPropertyId(targets[0]?.id ?? ''); setRollupAggregation('count') }}>{relationProperties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label><label><span>目标属性</span><select aria-label="汇总目标属性" value={rollupTargetPropertyId} onChange={(event) => { const targetId = event.target.value; setRollupTargetPropertyId(targetId); if (rollupTargetProperties.find((candidate) => candidate.id === targetId)?.type !== 'number') setRollupAggregation('count') }}>{rollupTargetProperties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {propertyTypeName(candidate.type)}</option>)}</select></label><label><span>计算方式</span><select aria-label="汇总计算方式" value={rollupAggregation} onChange={(event) => setRollupAggregation(event.target.value as typeof rollupAggregation)}>{availableRollupAggregations.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select></label><div className="rollup-preview"><Sigma size={15} /><span><small>当前记录预览</small><strong>{formatPropertyValue(rollupPreview) || '—'}</strong></span></div></div>}
     {property.type === 'formula' && <div className="formula-config"><p>使用属性名称，例如 <code>[评分] * 2</code>。支持 if、concat、round、min、max 与基础运算。</p><textarea aria-label="公式表达式" spellCheck={false} value={expression} onChange={(event) => setExpression(event.target.value)} /><div className="formula-token-list"><small>插入属性</small>{schema.properties.filter((candidate) => candidate.id !== property.id && candidate.type !== 'formula').map((candidate) => <button key={candidate.id} onClick={() => setExpression((current) => `${current}${current && !/\s$/u.test(current) ? ' ' : ''}[${candidate.name}]`)}>{candidate.name}</button>)}</div><div className={`formula-preview ${validFormula ? '' : 'is-error'}`}><Sigma size={15} /><span><small>{validFormula ? '当前记录预览' : '表达式不完整'}</small><strong>{validFormula ? formatPropertyValue(preview) || '—' : '检查括号、引号或运算符'}</strong></span></div></div>}
-    <footer><button onClick={onClose}>取消</button><button disabled={busy || duplicateOption || !validFormula || (property.type === 'relation' && !relationDatabaseId) || (property.type === 'rollup' && (!rollupRelationId || !rollupTargetPropertyId))} onClick={() => void save()}>{busy ? '保存中…' : '保存配置'}</button></footer>
+    {!derived && <div className="constraint-config"><p>约束会同时应用于编辑、批量操作、模板和 CSV 导入。</p><div className="constraint-switches"><button className={required ? 'is-active' : ''} onClick={() => { setRequired((value) => !value); setUnique(false) }}><span>必填</span><small>不允许留空</small></button><button disabled={!uniqueSupported} className={unique ? 'is-active' : ''} onClick={() => { setUnique((value) => !value); setRequired(false); setDefaultValue(null) }}><span>唯一值</span><small>{uniqueSupported ? '数据库内不可重复' : '此类型不支持'}</small></button></div><label><span>新记录默认值</span><ConstraintDefaultInput property={property} value={defaultValue} onChange={setDefaultValue} disabled={unique} /></label>{required && isEmptyConstraintValue(defaultValue) && <small className="property-config-error">必填属性需要设置默认值，确保新记录可以安全创建。</small>}{saveError && <small className="property-config-error">{saveError}</small>}</div>}
+    <footer><button onClick={onClose}>取消</button><button disabled={busy || duplicateOption || !validFormula || (required && isEmptyConstraintValue(defaultValue)) || (property.type === 'relation' && !relationDatabaseId) || (property.type === 'rollup' && (!rollupRelationId || !rollupTargetPropertyId))} onClick={() => void save()}>{busy ? '保存中…' : '保存配置'}</button></footer>
   </aside>
+}
+
+function ConstraintDefaultInput({ property, value, onChange, disabled = false }: { property: DatabaseProperty; value: PropertyValue; onChange: (value: PropertyValue) => void; disabled?: boolean }) {
+  if (property.type === 'checkbox') return <button disabled={disabled} type="button" className={`constraint-checkbox ${value ? 'is-active' : ''}`} onClick={() => onChange(!value)}>{value ? '默认勾选' : '默认不勾选'}</button>
+  if (property.type === 'select') return <select disabled={disabled} aria-label="属性默认值" value={String(value ?? '')} onChange={(event) => onChange(event.target.value || null)}><option value="">无默认值</option>{property.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+  if (property.type === 'multiSelect') return <input disabled={disabled} aria-label="属性默认值" placeholder="多个值用逗号分隔" value={Array.isArray(value) ? value.join(', ') : ''} onChange={(event) => onChange(event.target.value.split(/[,，]/u).map((item) => item.trim()).filter(Boolean))} />
+  return <input disabled={disabled} aria-label="属性默认值" type={property.type === 'number' ? 'number' : property.type === 'date' ? 'date' : property.type === 'url' ? 'url' : 'text'} placeholder={disabled ? '唯一值不使用默认值' : '无默认值'} value={String(value ?? '')} onChange={(event) => onChange(property.type === 'number' ? (event.target.value === '' ? null : Number(event.target.value)) : event.target.value || null)} />
+}
+
+function isEmptyConstraintValue(value: PropertyValue) {
+  return value === null || value === '' || (Array.isArray(value) && value.length === 0)
 }
 
 function previewRollup(record: DatabaseRecord | undefined, relation: DatabaseProperty | undefined, target: RelationTargets[string] | undefined, targetPropertyId: string, aggregation: NonNullable<DatabaseProperty['rollup']>['aggregation']): PropertyValue {
@@ -959,6 +981,7 @@ function parseAutomationValue(property: DatabaseProperty | undefined, value: str
 }
 
 function defaultPropertyValue(property: DatabaseProperty): PropertyValue {
+  if (property.constraints && Object.hasOwn(property.constraints, 'defaultValue')) return property.constraints.defaultValue ?? null
   if (property.type === 'title') return '新记录'
   if (property.type === 'select') return property.options?.[0]?.id ?? null
   if (property.type === 'date') return new Date().toISOString().slice(0, 10)

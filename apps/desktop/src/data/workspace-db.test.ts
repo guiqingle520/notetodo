@@ -244,6 +244,24 @@ describe('WorkspaceDatabase', () => {
     expect(() => database?.importDatabaseRecords('roadmap-db', [{ id: 'csv-1', values: {} }])).toThrow()
   })
 
+  it('enforces property defaults, required values and uniqueness in SQLite transactions', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.addDatabaseProperty('roadmap-db', 'task-code', '编号', 'text')
+    const configured = database.updateDatabasePropertyConfig('roadmap-db', 'task-code', { constraints: { unique: true } })
+    expect(configured.schema.properties.find((property) => property.id === 'task-code')).toMatchObject({ constraints: { unique: true } })
+    database.updateDatabaseCell('task-1', 'task-code', 'NT-001')
+    expect(() => database?.updateDatabaseCell('task-2', 'task-code', 'NT-001')).toThrow(/唯一/)
+
+    const ids = database.loadDatabaseByPage('projects')!.records.map((record) => record.id)
+    database.bulkUpdateDatabaseRecords('roadmap-db', ids, 'task-code', null)
+    expect(() => database?.updateDatabasePropertyConfig('roadmap-db', 'task-code', { constraints: { required: true, defaultValue: '待编号' } })).toThrow(/补全/)
+    ids.forEach((id, index) => database?.updateDatabaseCell(id, 'task-code', `NT-${index + 1}`))
+    database.updateDatabasePropertyConfig('roadmap-db', 'task-code', { constraints: { required: true, defaultValue: '待编号' } })
+    expect(() => database?.updateDatabaseCell('task-1', 'task-code', null)).toThrow(/必填/)
+    const imported = database.importDatabaseRecords('roadmap-db', [{ id: 'constrained-import', values: { 'task-title': '约束导入' } }])
+    expect(imported.records.find((record) => record.id === 'constrained-import')?.values['task-code']).toBe('待编号')
+  })
+
   it('persists validated relations while keeping derived properties read-only', () => {
     database = new WorkspaceDatabase(':memory:')
     database.updateDatabaseCell('task-1', 'task-dependencies', ['task-2', 'task-2', 'task-4'])

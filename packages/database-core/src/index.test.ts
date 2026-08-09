@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, moveRecordInOrder, normalizePropertyValue, normalizeViewConfig, orderRecordsByView, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validateFormulaExpression, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
+import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, configuredDefaultValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, moveRecordInOrder, normalizePropertyValue, normalizeViewConfig, orderRecordsByView, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecords, resolveDerivedRecordsIncremental, runDatabaseAutomations, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validateFormulaExpression, validatePropertyConstraints, virtualWindow, type DatabaseRecord, type DatabaseSchema } from './index'
 
 const records: DatabaseRecord[] = [
   { id: 'a', values: { title: '设计', score: 3, status: 'doing' }, createdAt: '', updatedAt: '' },
@@ -174,6 +174,14 @@ describe('database query engine', () => {
   it('deduplicates relation identifiers and rejects writes to derived fields', () => {
     expect(normalizePropertyValue({ id: 'rel', name: 'Rel', type: 'relation', relation: { databaseId: 'tasks' } }, ['a', 'a', 3])).toEqual(['a'])
     expect(normalizePropertyValue({ id: 'calc', name: 'Calc', type: 'formula', formula: { expression: '1' } }, 99)).toBeNull()
+  })
+
+  it('validates required, unique and canonical default property rules', () => {
+    const property = { id: 'code', name: '编号', type: 'number' as const, constraints: { required: true, unique: true, defaultValue: 7 } }
+    expect(configuredDefaultValue(property)).toBe(7)
+    expect(validatePropertyConstraints(property, null)).toBe('编号 为必填属性。')
+    expect(validatePropertyConstraints(property, 7, [{ id: 'existing', values: { code: 7 }, createdAt: '', updatedAt: '' }], 'editing')).toBe('编号 的值必须唯一。')
+    expect(validatePropertyConstraints(property, 8, records, 'editing')).toBeNull()
   })
 
   it('runs bounded automations only when trigger and condition match', () => {
