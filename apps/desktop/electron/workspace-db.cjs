@@ -142,7 +142,7 @@ class WorkspaceDatabase {
 
   loadImportJobs() {
     return this.statements.importJobs.all()
-      .map((job) => ({ ...job, report: JSON.parse(job.reportJson), reportJson: undefined }))
+      .map(({ reportJson, ...job }) => ({ ...job, report: JSON.parse(reportJson) }))
   }
 
   getAttachment(hash) {

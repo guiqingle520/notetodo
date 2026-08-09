@@ -7,7 +7,6 @@ const { WebhookWorker } = require('./webhook-worker.cjs')
 const { ModelService } = require('./model-service.cjs')
 const { collectUnusedAssets, isRenderableImage, safeDisplayName, storeLocalAsset } = require('./asset-store.cjs')
 const { signRoomTicket } = require('@notetodo/auth-core')
-const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomUUID } = require('node:crypto')
 const { createTrustedIpcHandler, createTrustedIpcListener } = require('./ipc-security.cjs')
 const { appInfoIpcContract } = require('./ipc-contracts.cjs')
@@ -25,6 +24,7 @@ const { createWebhookEndpoint } = require('./ipc-webhook-service.cjs')
 const { registerAutomationIpc } = require('./ipc-automation-register.cjs')
 const { registerHistoryIpc } = require('./ipc-history-register.cjs')
 const { registerRetrievalIpc } = require('./ipc-retrieval-register.cjs')
+const { registerImportIpc } = require('./ipc-import-register.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -39,9 +39,6 @@ const onTrusted = createTrustedIpcListener(ipcMain, {
 let workspaceDatabase
 const modelService = new ModelService()
 const activeModelRuns = new Map()
-// Renderer receives opaque IDs only; local archive paths never cross preload.
-const importSources = new Map()
-const activeImports = new Map()
 let assetGcTimer
 let webhookWorker
 
@@ -128,53 +125,7 @@ function registerWorkspaceIpc(database) {
   registerAutomationIpc(handleTrusted, database)
   registerHistoryIpc(handleTrusted, database)
   registerRetrievalIpc(handleTrusted, database)
-  handleTrusted('import:pick-and-inspect', async () => {
-    const selected = await dialog.showOpenDialog({
-      title: '导入 Notion 工作区',
-      buttonLabel: '检查档案',
-      properties: ['openFile'],
-      filters: [{ name: 'Notion 导出档案', extensions: ['zip'] }],
-    })
-    if (selected.canceled || !selected.filePaths[0]) return null
-    const inspection = await inspectZipArchive(selected.filePaths[0])
-    const importId = randomUUID()
-    importSources.set(importId, { filePath: selected.filePaths[0], expiresAt: Date.now() + 30 * 60_000 })
-    return { ...inspection, importId }
-  })
-  handleTrusted('import:start', async (event, importId, requestId) => {
-    assertId(importId); assertId(requestId)
-    const source = importSources.get(importId)
-    if (!source || source.expiresAt < Date.now()) throw new Error('导入预检已过期，请重新选择档案。')
-    if (activeImports.has(requestId)) throw new Error('导入任务已存在。')
-    const controller = new AbortController()
-    activeImports.set(requestId, controller)
-    const channel = `import:progress:${requestId}`
-    database.createImportJob(importId, path.basename(source.filePath))
-    try {
-      const bundle = await convertZipArchive(source.filePath, {
-        importId,
-        assetStoreDir: path.join(app.getPath('userData'), 'attachments'),
-        signal: controller.signal,
-        onProgress: (progress) => { if (!event.sender.isDestroyed()) event.sender.send(channel, progress) },
-      })
-      if (controller.signal.aborted) throw new Error('IMPORT_CANCELLED')
-      if (!event.sender.isDestroyed()) event.sender.send(channel, { phase: 'commit', completed: 0, total: 1 })
-      database.updateImportJob(importId, 'committing')
-      const result = database.importWorkspaceBundle(bundle)
-      if (!event.sender.isDestroyed()) event.sender.send(channel, { phase: 'done', completed: 1, total: 1 })
-      importSources.delete(importId)
-      return result
-    } catch (error) {
-      database.updateImportJob(importId, controller.signal.aborted || error?.message === 'IMPORT_CANCELLED' ? 'cancelled' : 'failed', error?.message ?? String(error))
-      throw error
-    } finally {
-      activeImports.delete(requestId)
-    }
-  })
-  handleTrusted('import:list-jobs', () => database.loadImportJobs())
-  onTrusted('import:cancel', (_event, requestId) => {
-    if (typeof requestId === 'string') activeImports.get(requestId)?.abort()
-  })
+  registerImportIpc({ handleTrusted, onTrusted, database, dialogApi: dialog, assetStoreDir: path.join(app.getPath('userData'), 'attachments') })
   handleTrusted('attachments:pick-and-store', attachmentIpcContracts.pickAndStore, async (event, pageId, kind, requestId) => {
     const selected = await dialog.showOpenDialog({
       title: kind === 'image' ? '插入本地图片' : '插入本地文件',

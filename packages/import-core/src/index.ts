@@ -116,7 +116,7 @@ export function planImportArchive(
 /** Returns null when an entry is absolute, contains traversal, or has no file name. */
 export function normalizeArchivePath(input: string): string | null {
   const path = input.replaceAll('\\', '/').replace(/^\.\//, '')
-  if (!path || path.includes('\0') || path.startsWith('/') || /^[a-z]:\//i.test(path)) return null
+  if (!path || path.length > 16_384 || /\p{Cc}/u.test(path) || path.startsWith('/') || /^[a-z]:\//i.test(path)) return null
   const segments = path.split('/')
   if (segments.some((segment) => segment === '..' || segment === '')) return null
   const normalized = segments.filter((segment) => segment !== '.').join('/')

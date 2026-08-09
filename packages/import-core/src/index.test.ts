@@ -21,28 +21,46 @@ describe('Notion archive import planning', () => {
     })
   })
 
-  it.each(['../secret.md', '/root.md', 'C:\\secret.md', 'safe/../../secret.md', 'folder//page.md'])('rejects unsafe path %s', (path) => {
+  it.each([
+    '../secret.md',
+    '/root.md',
+    'C:\\secret.md',
+    'safe/../../secret.md',
+    'folder//page.md',
+    'folder/line\nbreak.md',
+    `${'x'.repeat(16_385)}.md`,
+  ])('rejects unsafe path %s', (path) => {
     expect(normalizeArchivePath(path)).toBeNull()
   })
 
   it('rejects traversal, duplicates and decompression limit violations atomically', () => {
-    const plan = planImportArchive([
-      { path: '../secret.md', uncompressedSize: 1 },
-      { path: 'Page.md', uncompressedSize: 6 },
-      { path: 'page.md', uncompressedSize: 1 },
-      { path: 'Large.md', uncompressedSize: 11 },
-    ], { maxEntries: 10, maxEntryBytes: 10, maxArchiveBytes: 10 })
+    const plan = planImportArchive(
+      [
+        { path: '../secret.md', uncompressedSize: 1 },
+        { path: 'Page.md', uncompressedSize: 6 },
+        { path: 'page.md', uncompressedSize: 1 },
+        { path: 'Large.md', uncompressedSize: 11 },
+      ],
+      { maxEntries: 10, maxEntryBytes: 10, maxArchiveBytes: 10 },
+    )
 
     expect(plan.rejected).toBe(true)
-    expect(plan.issues.map((issue) => issue.code)).toEqual(['UNSAFE_PATH', 'DUPLICATE_PATH', 'ENTRY_TOO_LARGE'])
+    expect(plan.issues.map((issue) => issue.code)).toEqual([
+      'UNSAFE_PATH',
+      'DUPLICATE_PATH',
+      'ENTRY_TOO_LARGE',
+    ])
     expect(plan.entries).toHaveLength(1)
   })
 
   it('caps processing when an archive contains too many entries', () => {
-    const plan = planImportArchive([
-      { path: 'a.md', uncompressedSize: 1 },
-      { path: 'b.md', uncompressedSize: 1 },
-    ], { maxEntries: 1, maxEntryBytes: 10, maxArchiveBytes: 10 })
+    const plan = planImportArchive(
+      [
+        { path: 'a.md', uncompressedSize: 1 },
+        { path: 'b.md', uncompressedSize: 1 },
+      ],
+      { maxEntries: 1, maxEntryBytes: 10, maxArchiveBytes: 10 },
+    )
 
     expect(plan.rejected).toBe(true)
     expect(plan.issues[0]?.code).toBe('TOO_MANY_ENTRIES')
@@ -50,10 +68,22 @@ describe('Notion archive import planning', () => {
   })
 
   it('parses quoted CSV cells, BOM, embedded lines and duplicate headers', () => {
-    const table = parseCsvTable('\uFEFFName,Score,Name,Done\r\n"Alpha, Inc",42,"line 1\nline 2",true')
+    const table = parseCsvTable(
+      '\uFEFFName,Score,Name,Done\r\n"Alpha, Inc",42,"line 1\nline 2",true',
+    )
     expect(table.headers).toEqual(['Name', 'Score', 'Name (2)', 'Done'])
-    expect(table.rows[0]).toEqual({ Name: 'Alpha, Inc', Score: '42', 'Name (2)': 'line 1\nline 2', Done: 'true' })
-    expect(table.inferredTypes).toEqual({ Name: 'text', Score: 'number', 'Name (2)': 'text', Done: 'checkbox' })
+    expect(table.rows[0]).toEqual({
+      Name: 'Alpha, Inc',
+      Score: '42',
+      'Name (2)': 'line 1\nline 2',
+      Done: 'true',
+    })
+    expect(table.inferredTypes).toEqual({
+      Name: 'text',
+      Score: 'number',
+      'Name (2)': 'text',
+      Done: 'checkbox',
+    })
   })
 
   it('fails closed for malformed quoted CSV', () => {
@@ -66,7 +96,10 @@ describe('Notion archive import planning', () => {
       'Projects/Parent.md',
     )
     expect(links).toEqual([
-      { rawTarget: 'Child%200123456789abcdef0123456789abcdef.md', resolvedPath: 'Projects/Child 0123456789abcdef0123456789abcdef.md' },
+      {
+        rawTarget: 'Child%200123456789abcdef0123456789abcdef.md',
+        resolvedPath: 'Projects/Child 0123456789abcdef0123456789abcdef.md',
+      },
       { rawTarget: 'assets/cover.png', resolvedPath: 'Projects/assets/cover.png' },
       { rawTarget: 'https://example.com', resolvedPath: null },
     ])

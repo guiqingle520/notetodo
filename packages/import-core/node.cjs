@@ -341,7 +341,7 @@ function buildPlan(sourceEntries, limits, fileName, compressedBytes) {
 
 function normalizePath(input) {
   const value = input.replaceAll('\\', '/').replace(/^\.\//, '')
-  if (!value || value.includes('\0') || value.startsWith('/') || /^[a-z]:\//i.test(value)) return null
+  if (!value || value.length > 16_384 || /\p{Cc}/u.test(value) || value.startsWith('/') || /^[a-z]:\//i.test(value)) return null
   const segments = value.split('/')
   if (segments.some((segment) => segment === '..' || segment === '')) return null
   return segments.filter((segment) => segment !== '.').join('/') || null
