@@ -36,6 +36,11 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     createDatabaseRecordComment(comment: { id: string; recordId: string; propertyId: string | null; authorName: string; body: string }): unknown
     resolveDatabaseRecordComment(id: string, resolved: boolean): void
     deleteDatabaseRecordComment(id: string): void
+    listDatabaseRecordReminders(recordId: string): Array<{ id: string; propertyId: string; dueAt: string; completedAt: string | null; overdue: boolean }>
+    listDueDatabaseRecordReminders(): Array<{ id: string }>
+    saveDatabaseRecordReminder(reminder: { id: string; recordId: string; propertyId: string; dueAt: string; note: string }): unknown
+    completeDatabaseRecordReminder(id: string, completed: boolean): void
+    deleteDatabaseRecordReminder(id: string): void
     setActiveDatabaseView(databaseId: string, viewId: string): void
     updateDatabaseViewConfig(databaseId: string, viewId: string, config: object): void
     createDatabaseView(databaseId: string, viewId: string, name: string, type: string, config: object): DatabaseSnapshot
@@ -184,6 +189,19 @@ describe('WorkspaceDatabase', () => {
     expect(database.listDatabaseRecordComments('task-1', true).map((comment) => comment.id)).toEqual(['comment-2'])
     database.deleteDatabaseRecordComment('comment-2')
     expect(database.listDatabaseRecordComments('task-1')).toHaveLength(1)
+  })
+
+  it('manages date reminders and exposes overdue active reminders', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.saveDatabaseRecordReminder({ id: 'reminder-1', recordId: 'task-1', propertyId: 'task-due', dueAt: '2020-01-01T09:00:00.000Z', note: '已经到期' })
+    expect(database.listDatabaseRecordReminders('task-1')).toContainEqual(expect.objectContaining({ id: 'reminder-1', propertyId: 'task-due', overdue: true }))
+    expect(database.listDueDatabaseRecordReminders()).toContainEqual(expect.objectContaining({ id: 'reminder-1' }))
+    database.completeDatabaseRecordReminder('reminder-1', true)
+    expect(database.listDueDatabaseRecordReminders()).toEqual([])
+    database.completeDatabaseRecordReminder('reminder-1', false)
+    database.deleteDatabaseRecordReminder('reminder-1')
+    expect(database.listDatabaseRecordReminders('task-1')).toEqual([])
+    expect(() => database?.saveDatabaseRecordReminder({ id: 'bad-reminder', recordId: 'task-1', propertyId: 'task-owner', dueAt: new Date().toISOString(), note: '' })).toThrow(/date property/)
   })
 
   it('duplicates, trashes, restores and permanently deletes records transactionally', () => {

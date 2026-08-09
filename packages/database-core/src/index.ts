@@ -63,6 +63,19 @@ export interface DatabaseRecordComment {
   createdAt: string
 }
 
+export interface DatabaseRecordReminder {
+  id: string
+  recordId: string
+  propertyId: string
+  propertyName: string
+  dueAt: string
+  note: string
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+  overdue: boolean
+}
+
 export interface DatabaseSchema {
   id: string
   name: string

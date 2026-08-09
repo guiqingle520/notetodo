@@ -61,6 +61,11 @@ interface Window {
       createRecordComment: (comment: { id: string; recordId: string; propertyId: string | null; authorName: string; body: string }) => Promise<import('@notetodo/database-core').DatabaseRecordComment[]>
       resolveRecordComment: (id: string, resolved: boolean) => Promise<void>
       deleteRecordComment: (id: string) => Promise<void>
+      listRecordReminders: (recordId: string) => Promise<import('@notetodo/database-core').DatabaseRecordReminder[]>
+      listDueRecordReminders: () => Promise<import('@notetodo/database-core').DatabaseRecordReminder[]>
+      saveRecordReminder: (reminder: { id: string; recordId: string; propertyId: string; dueAt: string; note: string }) => Promise<import('@notetodo/database-core').DatabaseRecordReminder[]>
+      completeRecordReminder: (id: string, completed: boolean) => Promise<void>
+      deleteRecordReminder: (id: string) => Promise<void>
       setActiveView: (databaseId: string, viewId: string) => Promise<void>
       updateViewConfig: (databaseId: string, viewId: string, config: import('@notetodo/database-core').DatabaseViewConfig) => Promise<void>
       createView: (databaseId: string, viewId: string, name: string, type: import('@notetodo/database-core').DatabaseView['type'], config: import('@notetodo/database-core').DatabaseViewConfig) => Promise<import('@notetodo/database-core').DatabaseSnapshot>

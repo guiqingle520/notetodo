@@ -1,4 +1,4 @@
-const LATEST_SCHEMA_VERSION = 17
+const LATEST_SCHEMA_VERSION = 18
 
 module.exports = {
   migrate() {
@@ -484,6 +484,27 @@ module.exports = {
         );
         CREATE INDEX database_record_comments_thread ON database_record_comments(record_id, resolved_at, created_at DESC);
         INSERT INTO app_meta(key, value) VALUES ('schema_version', '17')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+        COMMIT;
+      `)
+    }
+
+    if (currentVersion < 18) {
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE database_record_reminders (
+          id TEXT PRIMARY KEY,
+          record_id TEXT NOT NULL REFERENCES database_records(id) ON DELETE CASCADE,
+          property_id TEXT NOT NULL REFERENCES database_properties(id) ON DELETE CASCADE,
+          due_at TEXT NOT NULL,
+          note TEXT NOT NULL DEFAULT '' CHECK(length(note) <= 500),
+          completed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX database_record_reminders_due ON database_record_reminders(completed_at, due_at);
+        CREATE INDEX database_record_reminders_record ON database_record_reminders(record_id, completed_at, due_at);
+        INSERT INTO app_meta(key, value) VALUES ('schema_version', '18')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value;
         COMMIT;
       `)

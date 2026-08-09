@@ -1,4 +1,4 @@
-import { configuredDefaultValue, validatePropertyConstraints, type DatabaseProperty, type DatabaseRecord, type DatabaseRecordComment, type DatabaseRecordHistory, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type PropertyType, type PropertyValue } from '@notetodo/database-core'
+import { configuredDefaultValue, validatePropertyConstraints, type DatabaseProperty, type DatabaseRecord, type DatabaseRecordComment, type DatabaseRecordHistory, type DatabaseRecordReminder, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type PropertyType, type PropertyValue } from '@notetodo/database-core'
 
 type BrowserTrashRecord = DatabaseTrashRecord & { record: DatabaseRecord }
 
@@ -52,6 +52,7 @@ class DatabaseRepository {
   private readonly trashKey = 'notetodo-browser-database-trash-v1'
   private readonly historyKey = 'notetodo-browser-database-history-v1'
   private readonly commentKey = 'notetodo-browser-database-comments-v1'
+  private readonly reminderKey = 'notetodo-browser-database-reminders-v1'
   private readonly pageByDatabase = new Map<string, string>()
 
   async loadByPage(pageId: string) {
@@ -261,6 +262,44 @@ class DatabaseRepository {
 
   private readComments(): Record<string, DatabaseRecordComment[]> {
     try { return JSON.parse(localStorage.getItem(this.commentKey) ?? '{}') as Record<string, DatabaseRecordComment[]> } catch { return {} }
+  }
+
+  async listRecordReminders(recordId: string): Promise<DatabaseRecordReminder[]> {
+    if (window.notetodo?.database) return window.notetodo.database.listRecordReminders(recordId)
+    return this.decorateReminders(this.readReminders()[recordId] ?? [])
+  }
+
+  async listDueRecordReminders(): Promise<DatabaseRecordReminder[]> {
+    if (window.notetodo?.database) return window.notetodo.database.listDueRecordReminders()
+    return this.decorateReminders(Object.values(this.readReminders()).flat()).filter((reminder) => reminder.overdue)
+  }
+
+  async saveRecordReminder(recordId: string, propertyId: string, propertyName: string, dueAt: string, note: string) {
+    const reminders = this.readReminders(); const now = new Date().toISOString()
+    const reminder: DatabaseRecordReminder = { id: crypto.randomUUID(), recordId, propertyId, propertyName, dueAt: new Date(dueAt).toISOString(), note: note.trim(), completedAt: null, createdAt: now, updatedAt: now, overdue: false }
+    if (window.notetodo?.database) return window.notetodo.database.saveRecordReminder(reminder)
+    reminders[recordId] = [...(reminders[recordId] ?? []), reminder].slice(-500); localStorage.setItem(this.reminderKey, JSON.stringify(reminders))
+    return this.decorateReminders(reminders[recordId]!)
+  }
+
+  async completeRecordReminder(recordId: string, id: string, completed: boolean) {
+    if (window.notetodo?.database) { await window.notetodo.database.completeRecordReminder(id, completed); return this.listRecordReminders(recordId) }
+    const reminders = this.readReminders(); const now = new Date().toISOString(); reminders[recordId] = (reminders[recordId] ?? []).map((reminder) => reminder.id === id ? { ...reminder, completedAt: completed ? now : null, updatedAt: now } : reminder)
+    localStorage.setItem(this.reminderKey, JSON.stringify(reminders)); return this.decorateReminders(reminders[recordId]!)
+  }
+
+  async deleteRecordReminder(recordId: string, id: string) {
+    if (window.notetodo?.database) { await window.notetodo.database.deleteRecordReminder(id); return this.listRecordReminders(recordId) }
+    const reminders = this.readReminders(); reminders[recordId] = (reminders[recordId] ?? []).filter((reminder) => reminder.id !== id); localStorage.setItem(this.reminderKey, JSON.stringify(reminders))
+    return this.decorateReminders(reminders[recordId]!)
+  }
+
+  private decorateReminders(reminders: DatabaseRecordReminder[]) {
+    const now = new Date().toISOString(); return reminders.map((reminder) => ({ ...reminder, overdue: !reminder.completedAt && reminder.dueAt <= now })).sort((a, b) => Number(Boolean(a.completedAt)) - Number(Boolean(b.completedAt)) || a.dueAt.localeCompare(b.dueAt))
+  }
+
+  private readReminders(): Record<string, DatabaseRecordReminder[]> {
+    try { return JSON.parse(localStorage.getItem(this.reminderKey) ?? '{}') as Record<string, DatabaseRecordReminder[]> } catch { return {} }
   }
 
   async setActiveView(snapshot: DatabaseSnapshot, viewId: string) {

@@ -337,6 +337,55 @@ module.exports = {
     if (this.database.prepare('DELETE FROM database_record_comments WHERE id = ?').run(id).changes !== 1) throw new Error('Database record comment does not exist.')
   },
 
+  listDatabaseRecordReminders(recordId) {
+    const now = new Date().toISOString()
+    return this.database.prepare(`
+      SELECT reminder.id, reminder.record_id AS recordId, reminder.property_id AS propertyId, property.name AS propertyName,
+        reminder.due_at AS dueAt, reminder.note, reminder.completed_at AS completedAt,
+        reminder.created_at AS createdAt, reminder.updated_at AS updatedAt
+      FROM database_record_reminders reminder JOIN database_properties property ON property.id = reminder.property_id
+      WHERE reminder.record_id = ? ORDER BY reminder.completed_at IS NOT NULL, reminder.due_at, reminder.id
+    `).all(recordId).map((reminder) => ({ ...reminder, overdue: !reminder.completedAt && reminder.dueAt <= now }))
+  },
+
+  listDueDatabaseRecordReminders(limit = 100) {
+    const now = new Date().toISOString()
+    return this.database.prepare(`
+      SELECT reminder.id, reminder.record_id AS recordId, reminder.property_id AS propertyId, property.name AS propertyName,
+        reminder.due_at AS dueAt, reminder.note, reminder.completed_at AS completedAt,
+        reminder.created_at AS createdAt, reminder.updated_at AS updatedAt
+      FROM database_record_reminders reminder JOIN database_properties property ON property.id = reminder.property_id
+      JOIN database_records record ON record.id = reminder.record_id
+      WHERE reminder.completed_at IS NULL AND reminder.due_at <= ? AND record.archived_at IS NULL
+      ORDER BY reminder.due_at, reminder.id LIMIT ?
+    `).all(now, Math.max(1, Math.min(500, Math.trunc(limit)))).map((reminder) => ({ ...reminder, overdue: true }))
+  },
+
+  saveDatabaseRecordReminder(reminder) {
+    const dueAt = new Date(reminder.dueAt)
+    if (Number.isNaN(dueAt.getTime()) || String(reminder.note ?? '').length > 500) throw new TypeError('Record reminder is invalid.')
+    const property = this.database.prepare(`SELECT property.type FROM database_properties property
+      JOIN database_records record ON record.id = ? AND record.database_id = property.database_id
+      WHERE property.id = ?`).get(reminder.recordId, reminder.propertyId)
+    if (!property || property.type !== 'date') throw new Error('Reminder property must be a date property on this record.')
+    const now = new Date().toISOString()
+    this.database.prepare(`INSERT INTO database_record_reminders(id, record_id, property_id, due_at, note, completed_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT(id) DO UPDATE SET property_id=excluded.property_id,
+      due_at=excluded.due_at, note=excluded.note, completed_at=NULL, updated_at=excluded.updated_at`)
+      .run(reminder.id, reminder.recordId, reminder.propertyId, dueAt.toISOString(), String(reminder.note ?? '').trim(), now, now)
+    return this.listDatabaseRecordReminders(reminder.recordId)
+  },
+
+  completeDatabaseRecordReminder(id, completed) {
+    const result = this.database.prepare('UPDATE database_record_reminders SET completed_at = ?, updated_at = ? WHERE id = ?')
+      .run(completed ? new Date().toISOString() : null, new Date().toISOString(), id)
+    if (result.changes !== 1) throw new Error('Database record reminder does not exist.')
+  },
+
+  deleteDatabaseRecordReminder(id) {
+    if (this.database.prepare('DELETE FROM database_record_reminders WHERE id = ?').run(id).changes !== 1) throw new Error('Database record reminder does not exist.')
+  },
+
   createDatabaseRecord(databaseId, recordId) {
     const now = new Date().toISOString()
     this.database.exec('BEGIN IMMEDIATE')
