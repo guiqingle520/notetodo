@@ -1,4 +1,4 @@
-import { configuredDefaultValue, validatePropertyConstraints, type DatabaseProperty, type DatabaseRecord, type DatabaseRecordHistory, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type PropertyType, type PropertyValue } from '@notetodo/database-core'
+import { configuredDefaultValue, validatePropertyConstraints, type DatabaseProperty, type DatabaseRecord, type DatabaseRecordComment, type DatabaseRecordHistory, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type PropertyType, type PropertyValue } from '@notetodo/database-core'
 
 type BrowserTrashRecord = DatabaseTrashRecord & { record: DatabaseRecord }
 
@@ -51,6 +51,7 @@ class DatabaseRepository {
   private readonly collectionKey = 'notetodo-browser-databases-v2'
   private readonly trashKey = 'notetodo-browser-database-trash-v1'
   private readonly historyKey = 'notetodo-browser-database-history-v1'
+  private readonly commentKey = 'notetodo-browser-database-comments-v1'
   private readonly pageByDatabase = new Map<string, string>()
 
   async loadByPage(pageId: string) {
@@ -231,6 +232,35 @@ class DatabaseRepository {
 
   private readHistory(): Record<string, DatabaseRecordHistory[]> {
     try { return JSON.parse(localStorage.getItem(this.historyKey) ?? '{}') as Record<string, DatabaseRecordHistory[]> } catch { return {} }
+  }
+
+  async listRecordComments(recordId: string, unresolvedOnly = false): Promise<DatabaseRecordComment[]> {
+    if (window.notetodo?.database) return window.notetodo.database.listRecordComments(recordId, unresolvedOnly)
+    const comments = this.readComments()[recordId] ?? []
+    return unresolvedOnly ? comments.filter((comment) => !comment.resolvedAt) : comments
+  }
+
+  async createRecordComment(recordId: string, propertyId: string | null, propertyName: string, body: string) {
+    const comment = { id: crypto.randomUUID(), recordId, propertyId, propertyName, authorName: '本机用户', body: body.trim(), resolvedAt: null, createdAt: new Date().toISOString() }
+    if (window.notetodo?.database) return window.notetodo.database.createRecordComment(comment)
+    const comments = this.readComments(); comments[recordId] = [comment, ...(comments[recordId] ?? [])].slice(0, 500)
+    localStorage.setItem(this.commentKey, JSON.stringify(comments)); return comments[recordId]!
+  }
+
+  async resolveRecordComment(recordId: string, id: string, resolved: boolean) {
+    if (window.notetodo?.database) { await window.notetodo.database.resolveRecordComment(id, resolved); return this.listRecordComments(recordId) }
+    const comments = this.readComments(); comments[recordId] = (comments[recordId] ?? []).map((comment) => comment.id === id ? { ...comment, resolvedAt: resolved ? new Date().toISOString() : null } : comment)
+    localStorage.setItem(this.commentKey, JSON.stringify(comments)); return comments[recordId]!
+  }
+
+  async deleteRecordComment(recordId: string, id: string) {
+    if (window.notetodo?.database) { await window.notetodo.database.deleteRecordComment(id); return this.listRecordComments(recordId) }
+    const comments = this.readComments(); comments[recordId] = (comments[recordId] ?? []).filter((comment) => comment.id !== id)
+    localStorage.setItem(this.commentKey, JSON.stringify(comments)); return comments[recordId]!
+  }
+
+  private readComments(): Record<string, DatabaseRecordComment[]> {
+    try { return JSON.parse(localStorage.getItem(this.commentKey) ?? '{}') as Record<string, DatabaseRecordComment[]> } catch { return {} }
   }
 
   async setActiveView(snapshot: DatabaseSnapshot, viewId: string) {

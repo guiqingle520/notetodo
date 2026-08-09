@@ -32,6 +32,10 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     updateDatabaseRecordContent(recordId: string, content: string): void
     listDatabaseRecordHistory(recordId: string): Array<{ id: string; propertyId: string | null; propertyName: string; previous: unknown; next: unknown; kind: string }>
     restoreDatabaseRecordHistory(historyId: string): DatabaseSnapshot
+    listDatabaseRecordComments(recordId: string, unresolvedOnly?: boolean): Array<{ id: string; propertyId: string | null; propertyName: string; body: string; resolvedAt: string | null }>
+    createDatabaseRecordComment(comment: { id: string; recordId: string; propertyId: string | null; authorName: string; body: string }): unknown
+    resolveDatabaseRecordComment(id: string, resolved: boolean): void
+    deleteDatabaseRecordComment(id: string): void
     setActiveDatabaseView(databaseId: string, viewId: string): void
     updateDatabaseViewConfig(databaseId: string, viewId: string, config: object): void
     createDatabaseView(databaseId: string, viewId: string, name: string, type: string, config: object): DatabaseSnapshot
@@ -169,6 +173,17 @@ describe('WorkspaceDatabase', () => {
     const restored = database.restoreDatabaseRecordHistory(ownerChange.id)
     expect(restored.records.find((record) => record.id === 'task-1')?.values['task-owner']).toBe('Lin')
     expect(database.listDatabaseRecordHistory('task-1')).toEqual(expect.arrayContaining([expect.objectContaining({ propertyId: 'task-owner', previous: '历史测试', next: 'Lin' })]))
+  })
+
+  it('persists record and property discussions with unresolved filtering', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.createDatabaseRecordComment({ id: 'comment-1', recordId: 'task-1', propertyId: 'task-owner', authorName: 'Lin', body: '请确认负责人。' })
+    database.createDatabaseRecordComment({ id: 'comment-2', recordId: 'task-1', propertyId: null, authorName: 'Ming', body: '整条记录需要复核。' })
+    expect(database.listDatabaseRecordComments('task-1')).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'comment-1', propertyName: '负责人' }), expect.objectContaining({ id: 'comment-2', propertyName: '整条记录' })]))
+    database.resolveDatabaseRecordComment('comment-1', true)
+    expect(database.listDatabaseRecordComments('task-1', true).map((comment) => comment.id)).toEqual(['comment-2'])
+    database.deleteDatabaseRecordComment('comment-2')
+    expect(database.listDatabaseRecordComments('task-1')).toHaveLength(1)
   })
 
   it('duplicates, trashes, restores and permanently deletes records transactionally', () => {

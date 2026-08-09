@@ -52,6 +52,17 @@ export interface DatabaseRecordHistory {
   createdAt: string
 }
 
+export interface DatabaseRecordComment {
+  id: string
+  recordId: string
+  propertyId: string | null
+  propertyName: string
+  authorName: string
+  body: string
+  resolvedAt: string | null
+  createdAt: string
+}
+
 export interface DatabaseSchema {
   id: string
   name: string

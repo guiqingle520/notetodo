@@ -28,6 +28,17 @@
 .record-history article del { background: rgba(235,87,87,.08); color: #a85454; }.record-history article ins { background: rgba(15,123,108,.08); color: #39786e; }
 .record-history article > button { justify-self: end; height: 27px; padding: 0 8px; border: 1px solid rgba(55,53,47,.14); border-radius: 4px; background: #fff; color: #37352f; font-size: 9px; cursor: pointer; }.record-history article > button:hover { background: rgba(55,53,47,.06); }
 .record-history-empty { display: grid; justify-items: center; gap: 8px; padding: 54px 8px; color: #9b9a97; font-size: 10px; }
+.record-comments { padding-top: 14px; }
+.record-comments > header { display: flex; align-items: center; justify-content: space-between; min-height: 34px; color: #37352f; font-size: 11px; font-weight: 600; }
+.record-comments > header label { display: flex; align-items: center; gap: 5px; color: #787774; font-size: 9px; font-weight: 400; }
+.record-comment-composer { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin: 7px 0 10px; }
+.record-comment-composer select { grid-column: 1 / -1; height: 29px; padding: 0 7px; border: 1px solid rgba(55,53,47,.14); border-radius: 4px; background: #fff; font-size: 9px; }
+.record-comment-composer textarea { min-height: 62px; resize: vertical; padding: 8px; border: 1px solid rgba(55,53,47,.14); border-radius: 4px; outline: none; font: 10px/1.5 inherit; }
+.record-comment-composer textarea:focus { border-color: rgba(35,131,226,.48); }.record-comment-composer > button { align-self: end; height: 28px; padding: 0 9px; border: 0; border-radius: 4px; background: #2383e2; color: #fff; font-size: 9px; cursor: pointer; }
+.record-comments article { display: grid; gap: 6px; padding: 11px 2px; border-bottom: 1px solid rgba(55,53,47,.09); }.record-comments article.is-resolved { opacity: .55; }
+.record-comments article > div { display: flex; justify-content: space-between; gap: 8px; }.record-comments article strong { font-size: 10px; }.record-comments article time, .record-comments article small { color: #9b9a97; font-size: 8px; }
+.record-comments article p { margin: 0; color: #37352f; font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
+.record-comments article footer { display: flex; justify-content: flex-end; gap: 4px; }.record-comments article footer button { display: flex; align-items: center; gap: 3px; height: 25px; padding: 0 6px; border: 0; border-radius: 3px; background: transparent; color: #787774; font-size: 8px; cursor: pointer; }.record-comments article footer button:hover { background: rgba(55,53,47,.07); }
 
 .settings-shell { position: fixed; z-index: 50; inset: 44px 0 0; display: grid; grid-template-columns: 210px 1fr; background: #f5f1e8; animation: veil-in .16s ease both; }
 .settings-shell > aside { display: flex; flex-direction: column; padding: 18px 10px 12px; color: #bfc2b9; background: #1c1f1c; border-right: 1px solid #080908; }

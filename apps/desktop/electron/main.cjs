@@ -361,6 +361,21 @@ function registerWorkspaceIpc(database) {
     assertId(historyId)
     return database.restoreDatabaseRecordHistory(historyId)
   })
+  ipcMain.handle('database:list-record-comments', (_event, recordId, unresolvedOnly) => {
+    assertId(recordId)
+    return database.listDatabaseRecordComments(recordId, Boolean(unresolvedOnly))
+  })
+  ipcMain.handle('database:create-record-comment', (_event, comment) => {
+    assertId(comment?.id); assertId(comment?.recordId)
+    if (comment.propertyId) assertId(comment.propertyId)
+    return database.createDatabaseRecordComment(comment)
+  })
+  ipcMain.handle('database:resolve-record-comment', (_event, id, resolved) => {
+    assertId(id); database.resolveDatabaseRecordComment(id, Boolean(resolved))
+  })
+  ipcMain.handle('database:delete-record-comment', (_event, id) => {
+    assertId(id); database.deleteDatabaseRecordComment(id)
+  })
   ipcMain.handle('database:set-active-view', (_event, databaseId, viewId) => {
     assertId(databaseId)
     assertId(viewId)

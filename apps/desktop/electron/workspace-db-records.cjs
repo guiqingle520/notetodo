@@ -306,6 +306,37 @@ module.exports = {
     return this.loadDatabaseById(databaseId)
   },
 
+  listDatabaseRecordComments(recordId, unresolvedOnly = false) {
+    return this.database.prepare(`
+      SELECT comment.id, comment.record_id AS recordId, comment.property_id AS propertyId,
+        COALESCE(property.name, '整条记录') AS propertyName, comment.author_name AS authorName,
+        comment.body, comment.resolved_at AS resolvedAt, comment.created_at AS createdAt
+      FROM database_record_comments comment LEFT JOIN database_properties property ON property.id = comment.property_id
+      WHERE comment.record_id = ? AND (? = 0 OR comment.resolved_at IS NULL)
+      ORDER BY comment.resolved_at IS NOT NULL, comment.created_at DESC, comment.id DESC LIMIT 500
+    `).all(recordId, unresolvedOnly ? 1 : 0)
+  },
+
+  createDatabaseRecordComment(comment) {
+    const body = String(comment.body ?? '').trim(); const authorName = String(comment.authorName ?? '').trim()
+    if (!body || body.length > 10_000 || !authorName || authorName.length > 100) throw new TypeError('Record comment is invalid.')
+    const record = this.database.prepare('SELECT database_id FROM database_records WHERE id = ? AND archived_at IS NULL').get(comment.recordId)
+    if (!record) throw new Error('Database record does not exist.')
+    if (comment.propertyId && !this.database.prepare('SELECT 1 FROM database_properties WHERE id = ? AND database_id = ?').get(comment.propertyId, record.database_id)) throw new Error('Comment property does not exist.')
+    this.database.prepare('INSERT INTO database_record_comments(id, record_id, property_id, author_name, body, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(comment.id, comment.recordId, comment.propertyId || null, authorName, body, new Date().toISOString())
+    return this.listDatabaseRecordComments(comment.recordId)
+  },
+
+  resolveDatabaseRecordComment(id, resolved) {
+    const result = this.database.prepare('UPDATE database_record_comments SET resolved_at = ? WHERE id = ?').run(resolved ? new Date().toISOString() : null, id)
+    if (result.changes !== 1) throw new Error('Database record comment does not exist.')
+  },
+
+  deleteDatabaseRecordComment(id) {
+    if (this.database.prepare('DELETE FROM database_record_comments WHERE id = ?').run(id).changes !== 1) throw new Error('Database record comment does not exist.')
+  },
+
   createDatabaseRecord(databaseId, recordId) {
     const now = new Date().toISOString()
     this.database.exec('BEGIN IMMEDIATE')
