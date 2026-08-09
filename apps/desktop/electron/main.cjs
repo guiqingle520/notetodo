@@ -24,6 +24,7 @@ const { webhookIpcContracts } = require('./ipc-webhook-contracts.cjs')
 const { createWebhookEndpoint } = require('./ipc-webhook-service.cjs')
 const { registerAutomationIpc } = require('./ipc-automation-register.cjs')
 const { registerHistoryIpc } = require('./ipc-history-register.cjs')
+const { registerRetrievalIpc } = require('./ipc-retrieval-register.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -126,11 +127,7 @@ function registerWorkspaceIpc(database) {
   handleTrusted('webhooks:list-deliveries', webhookIpcContracts.listDeliveries, (_event, endpointId) => database.listWebhookDeliveries(endpointId))
   registerAutomationIpc(handleTrusted, database)
   registerHistoryIpc(handleTrusted, database)
-  handleTrusted('retrieval:search', (_event, query, limit = 8) => {
-    if (typeof query !== 'string' || query.length > 500 || !Number.isSafeInteger(limit)) throw new TypeError('Invalid retrieval query.')
-    const userId = database.getSetting('collaboration_user_id')
-    return database.hybridSearch(query, userId, limit)
-  })
+  registerRetrievalIpc(handleTrusted, database)
   handleTrusted('import:pick-and-inspect', async () => {
     const selected = await dialog.showOpenDialog({
       title: '导入 Notion 工作区',
