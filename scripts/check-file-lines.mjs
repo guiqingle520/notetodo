@@ -24,7 +24,7 @@ const legacyLargeFileBudgets = Object.freeze({
   'apps/desktop/electron/workspace-db-migrations.cjs': 518,
   'apps/desktop/electron/workspace-db-records.cjs': 590,
   'apps/desktop/src/App.tsx': 895,
-  'apps/desktop/src/DatabaseBlock.tsx': 936,
+  'apps/desktop/src/DatabaseBlock.tsx': 898,
   'apps/desktop/src/data/workspace-db.test.ts': 579,
   'apps/desktop/src/editor/rich-blocks.ts': 530,
   'apps/desktop/src/styles-base.css': 788,
