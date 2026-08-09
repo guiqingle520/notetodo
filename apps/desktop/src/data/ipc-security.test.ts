@@ -26,7 +26,14 @@ const { createTrustedIpcHandler, createTrustedIpcListener } =
         on: (channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) => void
       },
       options: { isDevelopment: boolean; developmentUrl: string; packagedRendererPath: string },
-    ) => (channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) => void
+    ) => {
+      (channel: string, listener: (event: unknown, ...args: unknown[]) => unknown): void
+      (
+        channel: string,
+        contract: { assertRequest: (args: unknown[]) => void },
+        listener: (event: unknown, ...args: unknown[]) => unknown,
+      ): void
+    }
   }
 
 describe('trusted IPC registration', () => {
@@ -123,5 +130,34 @@ describe('trusted IPC registration', () => {
 
     handleTrusted('app:async-info', contract, async () => 'invalid')
     await expect(registered!(trustedEvent)).rejects.toThrow(/Invalid channel response/)
+  })
+
+  it('applies channel-specific request contracts to one-way listeners', () => {
+    let registered: ((event: unknown, ...args: unknown[]) => unknown) | undefined
+    const ipcMain = {
+      on: vi.fn((_channel, listener) => {
+        registered = listener
+      }),
+    }
+    const onTrusted = createTrustedIpcListener(ipcMain, {
+      isDevelopment: true,
+      developmentUrl: 'http://127.0.0.1:5173',
+      packagedRendererPath: 'D:/app/dist/index.html',
+    })
+    const listener = vi.fn()
+    onTrusted(
+      'model:cancel-chat',
+      {
+        assertRequest: (args) => {
+          if (args[0] !== 'valid-id') throw new TypeError('Invalid listener request.')
+        },
+      },
+      listener,
+    )
+    const trustedEvent = { senderFrame: { url: 'http://127.0.0.1:5173/' } }
+
+    expect(() => registered!(trustedEvent, 'invalid-id')).toThrow(/Invalid listener request/)
+    registered!(trustedEvent, 'valid-id')
+    expect(listener).toHaveBeenCalledOnce()
   })
 })

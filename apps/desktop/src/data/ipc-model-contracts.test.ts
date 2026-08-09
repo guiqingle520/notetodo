@@ -8,9 +8,16 @@ interface IpcContract {
 }
 
 const require = createRequire(import.meta.url)
-const { modelIpcContracts, normalizeModelConfig } =
+const { assertModelStreamEvent, modelIpcContracts, normalizeModelConfig } =
   require('../../electron/ipc-model-contracts.cjs') as {
-    modelIpcContracts: Record<'getConfig' | 'saveConfig' | 'testConnection', IpcContract>
+    assertModelStreamEvent: (value: unknown) => void
+    modelIpcContracts: {
+      getConfig: IpcContract
+      saveConfig: IpcContract
+      testConnection: IpcContract
+      streamChat: Pick<IpcContract, 'assertRequest'>
+      cancelChat: Pick<IpcContract, 'assertRequest'>
+    }
     normalizeModelConfig: (value: unknown) => {
       provider: string
       baseUrl: string
@@ -66,5 +73,36 @@ describe('model IPC contracts', () => {
         endpoint: 'https://models.example.test/v1/models',
       }),
     ).toThrow(/latency/)
+  })
+
+  it('validates stream requests, request ids, and bounded generation parameters', () => {
+    expect(() =>
+      modelIpcContracts.streamChat.assertRequest([
+        'request-1',
+        { messages: [{ role: 'user', content: '你好' }], temperature: 0.4 },
+      ]),
+    ).not.toThrow()
+    expect(() =>
+      modelIpcContracts.streamChat.assertRequest([
+        'request:unsafe',
+        { messages: [{ role: 'user', content: '你好' }] },
+      ]),
+    ).toThrow(/request id/)
+    expect(() =>
+      modelIpcContracts.streamChat.assertRequest([
+        'request-1',
+        { messages: [{ role: 'user', content: '你好' }], temperature: 3 },
+      ]),
+    ).toThrow(/temperature/)
+  })
+
+  it('accepts normalized stream events and rejects provider-shaped payloads', () => {
+    expect(() => assertModelStreamEvent({ type: 'text-delta', text: '你好' })).not.toThrow()
+    expect(() =>
+      assertModelStreamEvent({ type: 'usage', inputTokens: 10, outputTokens: 4 }),
+    ).not.toThrow()
+    expect(() => assertModelStreamEvent({ choices: [{ delta: { content: 'raw' } }] })).toThrow(
+      /terminal event/,
+    )
   })
 })

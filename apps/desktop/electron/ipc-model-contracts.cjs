@@ -80,6 +80,98 @@ function assertConnectionResponse(value) {
   parseModelBaseUrl(value.endpoint)
 }
 
+function assertRequestId(value) {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9-]{1,128}$/u.test(value)) {
+    throw new TypeError('Invalid model request id.')
+  }
+}
+
+function assertModelRequest(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Invalid model request.')
+  }
+  const allowedFields = new Set(['messages', 'temperature'])
+  if (Object.keys(value).some((field) => !allowedFields.has(field))) {
+    throw new TypeError('Model request contains unexpected fields.')
+  }
+  if (!Array.isArray(value.messages) || value.messages.length < 1 || value.messages.length > 100) {
+    throw new TypeError('Invalid model messages.')
+  }
+
+  let totalLength = 0
+  for (const message of value.messages) {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      throw new TypeError('Invalid model message.')
+    }
+    const messageFields = Object.keys(message)
+    if (
+      messageFields.length !== 2 ||
+      !messageFields.includes('role') ||
+      !messageFields.includes('content') ||
+      !['system', 'user', 'assistant', 'tool'].includes(message.role) ||
+      typeof message.content !== 'string'
+    ) {
+      throw new TypeError('Invalid model message.')
+    }
+    totalLength += message.content.length
+  }
+  if (totalLength > 1_000_000) throw new TypeError('Model context is too large.')
+  if (
+    value.temperature !== undefined &&
+    (typeof value.temperature !== 'number' ||
+      !Number.isFinite(value.temperature) ||
+      value.temperature < 0 ||
+      value.temperature > 2)
+  ) {
+    throw new TypeError('Invalid model temperature.')
+  }
+}
+
+function assertStreamChatRequest(args) {
+  if (args.length !== 2) throw new TypeError('Model stream request requires an id and payload.')
+  assertRequestId(args[0])
+  assertModelRequest(args[1])
+}
+
+function assertCancelChatRequest(args) {
+  if (args.length !== 1) throw new TypeError('Model cancellation requires one request id.')
+  assertRequestId(args[0])
+}
+
+function assertModelStreamEvent(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Invalid model stream event.')
+  }
+  const keys = Object.keys(value)
+  if (value.type === 'text-delta') {
+    if (keys.length !== 2 || typeof value.text !== 'string' || value.text.length > 100_000) {
+      throw new TypeError('Invalid model text event.')
+    }
+    return
+  }
+  if (value.type === 'usage') {
+    if (
+      keys.length !== 3 ||
+      !Number.isSafeInteger(value.inputTokens) ||
+      value.inputTokens < 0 ||
+      !Number.isSafeInteger(value.outputTokens) ||
+      value.outputTokens < 0
+    ) {
+      throw new TypeError('Invalid model usage event.')
+    }
+    return
+  }
+  if (value.type === 'error') {
+    if (keys.length !== 2 || typeof value.message !== 'string' || value.message.length > 2_000) {
+      throw new TypeError('Invalid model error event.')
+    }
+    return
+  }
+  if (!['done', 'cancelled'].includes(value.type) || keys.length !== 1) {
+    throw new TypeError('Invalid model terminal event.')
+  }
+}
+
 const modelIpcContracts = Object.freeze({
   getConfig: Object.freeze({
     assertRequest: assertNoArguments,
@@ -93,6 +185,8 @@ const modelIpcContracts = Object.freeze({
     assertRequest: assertNoArguments,
     assertResponse: assertConnectionResponse,
   }),
+  streamChat: Object.freeze({ assertRequest: assertStreamChatRequest }),
+  cancelChat: Object.freeze({ assertRequest: assertCancelChatRequest }),
 })
 
-module.exports = { modelIpcContracts, normalizeModelConfig }
+module.exports = { assertModelStreamEvent, modelIpcContracts, normalizeModelConfig }

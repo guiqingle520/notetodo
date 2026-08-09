@@ -12,7 +12,7 @@ const { randomBytes, randomUUID } = require('node:crypto')
 const { createTrustedIpcHandler, createTrustedIpcListener } = require('./ipc-security.cjs')
 const { appInfoIpcContract } = require('./ipc-contracts.cjs')
 const { workspaceIpcContracts } = require('./ipc-workspace-contracts.cjs')
-const { modelIpcContracts, normalizeModelConfig } = require('./ipc-model-contracts.cjs')
+const { assertModelStreamEvent, modelIpcContracts, normalizeModelConfig } = require('./ipc-model-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -558,13 +558,15 @@ function registerWorkspaceIpc(database) {
       clearTimeout(timeout)
     }
   })
-  onTrusted('model:stream-chat', async (event, requestId, request) => {
-    if (typeof requestId !== 'string' || requestId.length > 128) return
+  onTrusted('model:stream-chat', modelIpcContracts.streamChat, async (event, requestId, request) => {
     const channel = `model:stream-event:${requestId}`
     let controller
     let cancelOnDestroyed
+    const sendEvent = (payload) => {
+      assertModelStreamEvent(payload)
+      if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
+    }
     try {
-      validateModelRequest(request)
       const stored = database.getSetting('model_config')
       if (!stored) throw new Error('请先在设置中保存模型配置。')
       const config = normalizeModelConfig(JSON.parse(stored))
@@ -575,11 +577,9 @@ function registerWorkspaceIpc(database) {
       cancelOnDestroyed = () => controller.abort()
       event.sender.once('destroyed', cancelOnDestroyed)
       activeModelRuns.set(requestId, controller)
-      await modelService.stream(config, apiKey, request, controller.signal, (payload) => {
-        if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
-      })
+      await modelService.stream(config, apiKey, request, controller.signal, sendEvent)
     } catch (error) {
-      if (!event.sender.isDestroyed()) event.sender.send(channel, controller?.signal.aborted
+      if (!event.sender.isDestroyed()) sendEvent(controller?.signal.aborted
         ? { type: 'cancelled' }
         : { type: 'error', message: error instanceof Error ? error.message : '模型执行失败。' })
     } finally {
@@ -587,17 +587,7 @@ function registerWorkspaceIpc(database) {
       activeModelRuns.delete(requestId)
     }
   })
-  onTrusted('model:cancel-chat', (_event, requestId) => activeModelRuns.get(requestId)?.abort())
-}
-
-function validateModelRequest(value) {
-  if (!value || !Array.isArray(value.messages) || value.messages.length < 1 || value.messages.length > 100) throw new TypeError('Invalid model messages.')
-  let totalLength = 0
-  for (const message of value.messages) {
-    if (!['system', 'user', 'assistant', 'tool'].includes(message.role) || typeof message.content !== 'string') throw new TypeError('Invalid model message.')
-    totalLength += message.content.length
-  }
-  if (totalLength > 1_000_000) throw new TypeError('Model context is too large.')
+  onTrusted('model:cancel-chat', modelIpcContracts.cancelChat, (_event, requestId) => activeModelRuns.get(requestId)?.abort())
 }
 
 async function createAssetThumbnail(assetRoot, attachment) {

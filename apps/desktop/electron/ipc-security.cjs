@@ -61,10 +61,18 @@ function createTrustedIpcHandler(ipcMain, options) {
 
 function createTrustedIpcListener(ipcMain, options) {
   const isTrustedFrame = createTrustedFrameValidator(options)
-  return function onTrusted(channel, listener) {
+  return function onTrusted(channel, contractOrListener, optionalListener) {
+    const contract = typeof contractOrListener === 'function' ? null : contractOrListener
+    const listener = optionalListener ?? contractOrListener
+    if (typeof listener !== 'function') throw new TypeError('IPC listener is required.')
+    if (contract && typeof contract.assertRequest !== 'function') {
+      throw new TypeError('IPC listener contract must validate requests.')
+    }
+
     ipcMain.on(channel, (event, ...args) => {
       if (!isTrustedFrame(event.senderFrame?.url)) return
       assertIpcRequest(channel, args)
+      contract?.assertRequest(args)
       listener(event, ...args)
     })
   }
