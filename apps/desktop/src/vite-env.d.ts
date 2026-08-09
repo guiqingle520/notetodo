@@ -136,7 +136,12 @@ interface Window {
       save: (
         databaseId: string,
         rule: import('@notetodo/automation-core').AutomationRule,
-      ) => Promise<import('@notetodo/automation-core').AutomationRule>
+      ) => Promise<
+        import('@notetodo/automation-core').AutomationRule & {
+          createdAt: string
+          updatedAt: string
+        }
+      >
       setEnabled: (id: string, enabled: boolean) => Promise<boolean>
       listRuns: (databaseId: string) => Promise<
         Array<{
