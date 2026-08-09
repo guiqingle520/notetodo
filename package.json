@@ -18,7 +18,8 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "check:lines": "node scripts/check-file-lines.mjs",
-    "check": "npm run check:lines && npm run typecheck && npm run test && npm run build"
+    "check:sql": "node scripts/check-sql-boundaries.mjs",
+    "check": "npm run check:lines && npm run check:sql && npm run typecheck && npm run test && npm run build"
   },
   "engines": {
     "node": ">=22"
