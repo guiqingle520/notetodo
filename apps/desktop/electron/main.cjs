@@ -12,6 +12,7 @@ const { randomBytes, randomUUID } = require('node:crypto')
 const { createTrustedIpcHandler, createTrustedIpcListener } = require('./ipc-security.cjs')
 const { appInfoIpcContract } = require('./ipc-contracts.cjs')
 const { workspaceIpcContracts } = require('./ipc-workspace-contracts.cjs')
+const { modelIpcContracts, normalizeModelConfig } = require('./ipc-model-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -521,15 +522,15 @@ function registerWorkspaceIpc(database) {
     if (!['applied', 'undone', 'rejected'].includes(status)) throw new TypeError('Invalid AI patch status.')
     database.updateAIPatchAudit(id, status)
   })
-  handleTrusted('model:get-config', () => {
+  handleTrusted('model:get-config', modelIpcContracts.getConfig, () => {
     const stored = database.getSetting('model_config')
     return {
-      ...(stored ? JSON.parse(stored) : { provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b' }),
+      ...normalizeModelConfig(stored ? JSON.parse(stored) : { provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b' }),
       hasApiKey: Boolean(database.getSetting('model_api_key')),
     }
   })
-  handleTrusted('model:save-config', (_event, config) => {
-    const normalized = validateModelConfig(config)
+  handleTrusted('model:save-config', modelIpcContracts.saveConfig, (_event, config) => {
+    const normalized = normalizeModelConfig(config)
     database.setSetting('model_config', JSON.stringify(normalized))
     if (typeof config.apiKey === 'string' && config.apiKey) {
       if (!safeStorage.isEncryptionAvailable()) throw new Error('OS key encryption is unavailable.')
@@ -537,10 +538,10 @@ function registerWorkspaceIpc(database) {
     }
     return { ...normalized, hasApiKey: Boolean(database.getSetting('model_api_key')) }
   })
-  handleTrusted('model:test-connection', async () => {
+  handleTrusted('model:test-connection', modelIpcContracts.testConnection, async () => {
     const stored = database.getSetting('model_config')
     if (!stored) throw new Error('Please save a model configuration first.')
-    const config = validateModelConfig(JSON.parse(stored))
+    const config = normalizeModelConfig(JSON.parse(stored))
     const encryptedKey = database.getSetting('model_api_key')
     const apiKey = encryptedKey && safeStorage.isEncryptionAvailable()
       ? safeStorage.decryptString(Buffer.from(encryptedKey, 'base64'))
@@ -566,7 +567,7 @@ function registerWorkspaceIpc(database) {
       validateModelRequest(request)
       const stored = database.getSetting('model_config')
       if (!stored) throw new Error('请先在设置中保存模型配置。')
-      const config = validateModelConfig(JSON.parse(stored))
+      const config = normalizeModelConfig(JSON.parse(stored))
       const encryptedKey = database.getSetting('model_api_key')
       const apiKey = encryptedKey && safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(encryptedKey, 'base64')) : ''
       activeModelRuns.get(requestId)?.abort()
@@ -587,15 +588,6 @@ function registerWorkspaceIpc(database) {
     }
   })
   onTrusted('model:cancel-chat', (_event, requestId) => activeModelRuns.get(requestId)?.abort())
-}
-
-function validateModelConfig(value) {
-  if (!value || typeof value !== 'object') throw new TypeError('Model configuration is required.')
-  const url = new URL(value.baseUrl)
-  if (!['http:', 'https:'].includes(url.protocol)) throw new TypeError('Model URL must use HTTP or HTTPS.')
-  if (typeof value.model !== 'string' || value.model.length < 1 || value.model.length > 200) throw new TypeError('Invalid model name.')
-  if (!['openai-compatible', 'ollama', 'lm-studio'].includes(value.provider)) throw new TypeError('Unsupported provider type.')
-  return { provider: value.provider, baseUrl: url.toString().replace(/\/$/u, ''), model: value.model }
 }
 
 function validateModelRequest(value) {

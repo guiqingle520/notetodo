@@ -18,7 +18,7 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write apps packages scripts *.json *.mjs",
-    "format:check": "prettier --check apps/desktop/electron/sql apps/desktop/electron/repositories apps/desktop/electron/ipc-*.cjs apps/desktop/src/data/ipc-*.test.ts apps/desktop/src/DatabaseMount.tsx apps/desktop/src/DatabaseBlockHelpers.tsx apps/desktop/src/DatabaseQuickFilter.tsx apps/desktop/src/DatabaseViewLayoutMenu.tsx apps/desktop/src/DatabaseViewManagementMenu.tsx scripts *.json *.mjs apps/*/tsconfig*.json packages/*/tsconfig*.json",
+    "format:check": "prettier --check apps/desktop/electron/sql apps/desktop/electron/repositories apps/desktop/electron/ipc-*.cjs apps/desktop/src/data/ipc-*.test.ts apps/desktop/src/*.d.ts apps/desktop/src/DatabaseMount.tsx apps/desktop/src/DatabaseBlockHelpers.tsx apps/desktop/src/DatabaseQuickFilter.tsx apps/desktop/src/DatabaseViewLayoutMenu.tsx apps/desktop/src/DatabaseViewManagementMenu.tsx scripts *.json *.mjs apps/*/tsconfig*.json packages/*/tsconfig*.json",
     "lint": "eslint apps packages scripts",
     "check:lines": "node scripts/check-file-lines.mjs",
     "check:sql": "node scripts/check-sql-boundaries.mjs",
