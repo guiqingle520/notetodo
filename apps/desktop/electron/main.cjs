@@ -17,6 +17,7 @@ const { syncIpcContracts } = require('./ipc-sync-contracts.cjs')
 const { collaborationIpcContracts } = require('./ipc-collaboration-contracts.cjs')
 const { removePagePermission, resolveLocalCollaborationIdentity, upsertPagePermission } = require('./ipc-collaboration-authorization.cjs')
 const { commentsIpcContracts } = require('./ipc-comments-contracts.cjs')
+const { aiIpcContracts } = require('./ipc-ai-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -489,16 +490,8 @@ function registerWorkspaceIpc(database) {
     const userId = database.getSetting('collaboration_user_id')
     if (userId) database.markNotificationRead(id, userId)
   })
-  handleTrusted('ai:create-patch-audit', (_event, pageId, operation, preview) => {
-    assertId(pageId)
-    if (!['insert-paragraphs', 'replace-selection'].includes(operation) || typeof preview !== 'string' || preview.length > 200_000) throw new TypeError('Invalid AI patch proposal.')
-    return database.createAIPatchAudit(randomUUID(), pageId, operation, preview)
-  })
-  handleTrusted('ai:update-patch-audit', (_event, id, status) => {
-    assertId(id)
-    if (!['applied', 'undone', 'rejected'].includes(status)) throw new TypeError('Invalid AI patch status.')
-    database.updateAIPatchAudit(id, status)
-  })
+  handleTrusted('ai:create-patch-audit', aiIpcContracts.createPatchAudit, (_event, pageId, operation, preview) => database.createAIPatchAudit(randomUUID(), pageId, operation, preview))
+  handleTrusted('ai:update-patch-audit', aiIpcContracts.updatePatchAudit, (_event, id, status) => database.updateAIPatchAudit(id, status))
   handleTrusted('model:get-config', modelIpcContracts.getConfig, () => {
     const stored = database.getSetting('model_config')
     return {

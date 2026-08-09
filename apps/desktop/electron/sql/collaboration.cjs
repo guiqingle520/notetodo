@@ -13,6 +13,7 @@ module.exports = Object.freeze({
   createPatchAudit:
     'INSERT INTO ai_patch_audit(id, page_id, operation, preview, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
   updatePatchAudit: 'UPDATE ai_patch_audit SET status = ?, updated_at = ? WHERE id = ?',
+  patchAuditById: 'SELECT status FROM ai_patch_audit WHERE id = ?',
   patchAuditByPage:
     'SELECT id, operation, preview, status FROM ai_patch_audit WHERE page_id = ? ORDER BY created_at DESC',
   upsertPermission: `INSERT INTO page_permissions(page_id, subject_id, display_name, role, created_at) VALUES (?, ?, ?, ?, ?)

@@ -35,6 +35,18 @@ module.exports = {
   },
 
   updateAIPatchAudit(id, status) {
+    const current = this.collaborationRepository.patchAuditById.get(id)
+    if (!current) throw new Error('AI Patch 审计记录不存在。')
+    if (current.status === status) return
+    const allowedNextStatuses = {
+      proposed: new Set(['applied', 'rejected']),
+      applied: new Set(['undone']),
+      undone: new Set(),
+      rejected: new Set(),
+    }
+    if (!allowedNextStatuses[current.status]?.has(status)) {
+      throw new Error(`AI Patch 状态不能从 ${current.status} 变更为 ${status}。`)
+    }
     this.collaborationRepository.updatePatchAudit.run(status, new Date().toISOString(), id)
   },
 
