@@ -55,6 +55,8 @@ interface Window {
       restoreRecords: (databaseId: string, recordIds: string[]) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       deleteRecordsPermanently: (databaseId: string, recordIds: string[]) => Promise<void>
       updateRecordContent: (recordId: string, content: string) => Promise<void>
+      listRecordHistory: (recordId: string) => Promise<import('@notetodo/database-core').DatabaseRecordHistory[]>
+      restoreRecordHistory: (historyId: string) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
       setActiveView: (databaseId: string, viewId: string) => Promise<void>
       updateViewConfig: (databaseId: string, viewId: string, config: import('@notetodo/database-core').DatabaseViewConfig) => Promise<void>
       createView: (databaseId: string, viewId: string, name: string, type: import('@notetodo/database-core').DatabaseView['type'], config: import('@notetodo/database-core').DatabaseViewConfig) => Promise<import('@notetodo/database-core').DatabaseSnapshot>

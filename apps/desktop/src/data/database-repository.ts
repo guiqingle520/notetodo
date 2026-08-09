@@ -1,4 +1,4 @@
-import { configuredDefaultValue, validatePropertyConstraints, type DatabaseProperty, type DatabaseRecord, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type PropertyType, type PropertyValue } from '@notetodo/database-core'
+import { configuredDefaultValue, validatePropertyConstraints, type DatabaseProperty, type DatabaseRecord, type DatabaseRecordHistory, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type PropertyType, type PropertyValue } from '@notetodo/database-core'
 
 type BrowserTrashRecord = DatabaseTrashRecord & { record: DatabaseRecord }
 
@@ -50,6 +50,7 @@ class DatabaseRepository {
   private readonly key = 'notetodo-browser-database-v1'
   private readonly collectionKey = 'notetodo-browser-databases-v2'
   private readonly trashKey = 'notetodo-browser-database-trash-v1'
+  private readonly historyKey = 'notetodo-browser-database-history-v1'
   private readonly pageByDatabase = new Map<string, string>()
 
   async loadByPage(pageId: string) {
@@ -138,10 +139,11 @@ class DatabaseRepository {
     this.write(next); return structuredClone(next)
   }
 
-  async updateCell(snapshot: DatabaseSnapshot, recordId: string, propertyId: string, value: PropertyValue) {
+  async updateCell(snapshot: DatabaseSnapshot, recordId: string, propertyId: string, value: PropertyValue, previous: PropertyValue = null) {
     if (window.notetodo?.database) return window.notetodo.database.updateCell(recordId, propertyId, value)
     const property = snapshot.schema.properties.find((candidate) => candidate.id === propertyId)
     if (property) { const issue = validatePropertyConstraints(property, value, snapshot.records, recordId); if (issue) throw new Error(issue) }
+    this.appendBrowserHistory({ recordId, propertyId, propertyName: property?.name ?? '属性', kind: 'property', previous, next: value })
     this.write(snapshot)
     return undefined
   }
@@ -201,9 +203,34 @@ class DatabaseRepository {
     localStorage.setItem(this.trashKey, JSON.stringify(trash))
   }
 
-  async updateRecordContent(snapshot: DatabaseSnapshot, recordId: string, content: string) {
+  async updateRecordContent(snapshot: DatabaseSnapshot, recordId: string, content: string, previous = '') {
     if (window.notetodo?.database) return window.notetodo.database.updateRecordContent(recordId, content)
+    this.appendBrowserHistory({ recordId, propertyId: null, propertyName: '正文', kind: 'content', previous, next: content })
     this.write(snapshot)
+  }
+
+  async listRecordHistory(recordId: string): Promise<DatabaseRecordHistory[]> {
+    if (window.notetodo?.database) return window.notetodo.database.listRecordHistory(recordId)
+    return this.readHistory()[recordId] ?? []
+  }
+
+  async restoreRecordHistory(snapshot: DatabaseSnapshot, historyId: string) {
+    if (window.notetodo?.database) return window.notetodo.database.restoreRecordHistory(historyId)
+    const history = Object.values(this.readHistory()).flat().find((item) => item.id === historyId)
+    if (!history) throw new Error('历史记录不存在。')
+    const next = { ...snapshot, records: snapshot.records.map((record) => record.id !== history.recordId ? record : history.kind === 'content' ? { ...record, content: String(history.previous ?? ''), updatedAt: new Date().toISOString() } : { ...record, values: { ...record.values, [history.propertyId!]: history.previous as PropertyValue }, updatedAt: new Date().toISOString() }) }
+    this.write(next); return structuredClone(next)
+  }
+
+  private appendBrowserHistory(change: Omit<DatabaseRecordHistory, 'id' | 'createdAt'>) {
+    if (JSON.stringify(change.previous) === JSON.stringify(change.next)) return
+    const history = this.readHistory(); const entry = { ...change, id: crypto.randomUUID(), createdAt: new Date().toISOString() }
+    history[change.recordId] = [entry, ...(history[change.recordId] ?? [])].slice(0, 200)
+    localStorage.setItem(this.historyKey, JSON.stringify(history))
+  }
+
+  private readHistory(): Record<string, DatabaseRecordHistory[]> {
+    try { return JSON.parse(localStorage.getItem(this.historyKey) ?? '{}') as Record<string, DatabaseRecordHistory[]> } catch { return {} }
   }
 
   async setActiveView(snapshot: DatabaseSnapshot, viewId: string) {

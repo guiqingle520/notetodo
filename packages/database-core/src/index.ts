@@ -41,6 +41,17 @@ export interface DatabaseTrashRecord {
   trashedAt: string
 }
 
+export interface DatabaseRecordHistory {
+  id: string
+  recordId: string
+  propertyId: string | null
+  propertyName: string
+  kind: 'property' | 'content'
+  previous: PropertyValue | string
+  next: PropertyValue | string
+  createdAt: string
+}
+
 export interface DatabaseSchema {
   id: string
   name: string

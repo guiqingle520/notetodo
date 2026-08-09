@@ -63,6 +63,8 @@ contextBridge.exposeInMainWorld('notetodo', {
     restoreRecords: (databaseId, recordIds) => ipcRenderer.invoke('database:restore-records', databaseId, recordIds),
     deleteRecordsPermanently: (databaseId, recordIds) => ipcRenderer.invoke('database:delete-records-permanently', databaseId, recordIds),
     updateRecordContent: (recordId, content) => ipcRenderer.invoke('database:update-record-content', recordId, content),
+    listRecordHistory: (recordId) => ipcRenderer.invoke('database:list-record-history', recordId),
+    restoreRecordHistory: (historyId) => ipcRenderer.invoke('database:restore-record-history', historyId),
     setActiveView: (databaseId, viewId) => ipcRenderer.invoke('database:set-active-view', databaseId, viewId),
     updateViewConfig: (databaseId, viewId, config) => ipcRenderer.invoke('database:update-view-config', databaseId, viewId, config),
     createView: (databaseId, viewId, name, type, config) => ipcRenderer.invoke('database:create-view', databaseId, viewId, name, type, config),

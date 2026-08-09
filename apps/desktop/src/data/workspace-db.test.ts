@@ -30,6 +30,8 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     restoreDatabaseRecords(databaseId: string, recordIds: string[]): DatabaseSnapshot
     deleteDatabaseRecordsPermanently(databaseId: string, recordIds: string[]): void
     updateDatabaseRecordContent(recordId: string, content: string): void
+    listDatabaseRecordHistory(recordId: string): Array<{ id: string; propertyId: string | null; propertyName: string; previous: unknown; next: unknown; kind: string }>
+    restoreDatabaseRecordHistory(historyId: string): DatabaseSnapshot
     setActiveDatabaseView(databaseId: string, viewId: string): void
     updateDatabaseViewConfig(databaseId: string, viewId: string, config: object): void
     createDatabaseView(databaseId: string, viewId: string, name: string, type: string, config: object): DatabaseSnapshot
@@ -152,6 +154,21 @@ describe('WorkspaceDatabase', () => {
     expect(updated?.activeViewId).toBe('roadmap-board')
     expect(updated?.views.find((view) => view.id === 'roadmap-board')?.config.filters).toHaveLength(1)
     expect(() => database?.updateDatabaseViewConfig('roadmap-db', 'missing-view', {})).toThrow(/does not exist/)
+  })
+
+  it('records bounded property and content history and restores one change', () => {
+    database = new WorkspaceDatabase(':memory:')
+    database.updateDatabaseCell('task-1', 'task-owner', '历史测试')
+    database.updateDatabaseRecordContent('task-1', '<p>新版正文</p>')
+    const history = database.listDatabaseRecordHistory('task-1')
+    expect(history).toEqual(expect.arrayContaining([
+      expect.objectContaining({ propertyId: 'task-owner', propertyName: '负责人', previous: 'Lin', next: '历史测试', kind: 'property' }),
+      expect.objectContaining({ propertyId: null, propertyName: '正文', previous: '', next: '<p>新版正文</p>', kind: 'content' }),
+    ]))
+    const ownerChange = history.find((entry) => entry.propertyId === 'task-owner')!
+    const restored = database.restoreDatabaseRecordHistory(ownerChange.id)
+    expect(restored.records.find((record) => record.id === 'task-1')?.values['task-owner']).toBe('Lin')
+    expect(database.listDatabaseRecordHistory('task-1')).toEqual(expect.arrayContaining([expect.objectContaining({ propertyId: 'task-owner', previous: '历史测试', next: 'Lin' })]))
   })
 
   it('duplicates, trashes, restores and permanently deletes records transactionally', () => {

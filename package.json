@@ -17,7 +17,8 @@
     "package:win": "npm run package:win --workspace @notetodo/desktop",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "check": "npm run typecheck && npm run test && npm run build"
+    "check:lines": "node scripts/check-file-lines.mjs",
+    "check": "npm run check:lines && npm run typecheck && npm run test && npm run build"
   },
   "engines": {
     "node": ">=22"

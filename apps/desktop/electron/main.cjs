@@ -353,6 +353,14 @@ function registerWorkspaceIpc(database) {
     if (typeof content !== 'string' || content.length > 2_000_000) throw new TypeError('Database record content is invalid or too large.')
     database.updateDatabaseRecordContent(recordId, content)
   })
+  ipcMain.handle('database:list-record-history', (_event, recordId) => {
+    assertId(recordId)
+    return database.listDatabaseRecordHistory(recordId)
+  })
+  ipcMain.handle('database:restore-record-history', (_event, historyId) => {
+    assertId(historyId)
+    return database.restoreDatabaseRecordHistory(historyId)
+  })
   ipcMain.handle('database:set-active-view', (_event, databaseId, viewId) => {
     assertId(databaseId)
     assertId(viewId)
