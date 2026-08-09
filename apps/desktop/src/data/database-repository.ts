@@ -141,6 +141,13 @@ class DatabaseRepository {
     const property = snapshot.schema.properties.find((candidate) => candidate.id === propertyId)
     if (!property || property.type === 'title') throw new Error('标题属性不能删除。')
     if (window.notetodo?.database) return window.notetodo.database.deleteProperty(snapshot.schema.id, propertyId)
+    const collections = this.readCollections()
+    const blockers = Object.values(collections).flatMap((candidate) => candidate.schema.properties.filter((dependent) => dependent.type === 'rollup' ? dependent.rollup?.relationPropertyId === propertyId || dependent.rollup?.targetPropertyId === propertyId : dependent.type === 'formula' && candidate.schema.id === snapshot.schema.id && (dependent.formula?.expression.includes(`[${propertyId}]`) || dependent.formula?.expression.includes(`[${property.name}]`))))
+    if (blockers.length) throw new Error(`属性正在被 ${blockers.map((candidate) => candidate.name).join('、')} 使用，请先修改依赖配置。`)
+    for (const [pageId, candidate] of Object.entries(collections)) {
+      const properties = candidate.schema.properties.map((dependent) => dependent.type === 'relation' && dependent.relation?.reciprocalPropertyId === propertyId ? { ...dependent, relation: { databaseId: dependent.relation.databaseId } } : dependent)
+      if (properties.some((dependent, index) => dependent !== candidate.schema.properties[index])) this.write({ ...candidate, schema: { ...candidate.schema, properties } }, pageId)
+    }
     const records = snapshot.records.map((record) => { const values = { ...record.values }; delete values[propertyId]; return { ...record, values } })
     const next = { ...snapshot, schema: { ...snapshot.schema, properties: snapshot.schema.properties.filter((candidate) => candidate.id !== propertyId) }, records }
     this.write(next); return structuredClone(next)

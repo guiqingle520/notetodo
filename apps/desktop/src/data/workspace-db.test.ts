@@ -342,6 +342,21 @@ describe('WorkspaceDatabase', () => {
     expect(() => database?.updateDatabasePropertyConfig('roadmap-db', 'task-research', { relation: { databaseId: 'research-db', reciprocalPropertyId: 'research-db-title' } })).toThrow(/反向关联/)
   })
 
+  it('blocks destructive property deletion and safely unbinds reciprocal relations', () => {
+    database = new WorkspaceDatabase(':memory:')
+    expect(() => database?.deleteDatabaseProperty('roadmap-db', 'task-dependencies')).toThrow(/依赖总优先级/)
+    expect(() => database?.deleteDatabaseProperty('roadmap-db', 'task-dependency-score')).toThrow(/风险标签/)
+    const now = new Date().toISOString()
+    database.upsertPage({ id: 'research', title: '研究台账', icon: 'grid', parentId: null, favorite: false, content: '<p></p>', updatedAt: now, lastVisitedAt: now, archivedAt: null })
+    database.createDatabaseForPage('research', 'research-db', '研究台账')
+    database.addDatabaseProperty('research-db', 'research-tasks', '相关任务', 'relation')
+    database.updateDatabasePropertyConfig('research-db', 'research-tasks', { relation: { databaseId: 'roadmap-db' } })
+    database.addDatabaseProperty('roadmap-db', 'task-research', '研究资料', 'relation')
+    database.updateDatabasePropertyConfig('roadmap-db', 'task-research', { relation: { databaseId: 'research-db', reciprocalPropertyId: 'research-tasks' } })
+    database.deleteDatabaseProperty('research-db', 'research-tasks')
+    expect(database.loadDatabaseByPage('projects')?.schema.properties.find((property) => property.id === 'task-research')?.relation).toEqual({ databaseId: 'research-db' })
+  })
+
   it('executes persisted automations transactionally and records successful runs', () => {
     database = new WorkspaceDatabase(':memory:')
     expect(database.listDatabaseAutomations('roadmap-db')).toEqual([expect.objectContaining({ id: 'completed-task-priority', enabled: true })])

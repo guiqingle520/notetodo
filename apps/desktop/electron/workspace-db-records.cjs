@@ -184,10 +184,29 @@ module.exports = {
   },
 
   deleteDatabaseProperty(databaseId, propertyId) {
-    const property = this.database.prepare('SELECT type FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
+    const property = this.database.prepare('SELECT name, type FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
     if (!property) throw new Error('Database property does not exist.')
     if (property.type === 'title') throw new Error('The title property cannot be deleted.')
-    this.database.prepare('DELETE FROM database_properties WHERE id = ? AND database_id = ?').run(propertyId, databaseId)
+    const allProperties = this.database.prepare('SELECT id, name, type, database_id AS databaseId, config_json AS configJson FROM database_properties').all()
+    const blockers = allProperties.filter((candidate) => {
+      const config = JSON.parse(candidate.configJson || '{}')
+      if (candidate.type === 'rollup') return config.rollup?.relationPropertyId === propertyId || config.rollup?.targetPropertyId === propertyId
+      if (candidate.type === 'formula' && candidate.databaseId === databaseId) return config.formula?.expression?.includes(`[${propertyId}]`) || config.formula?.expression?.includes(`[${property.name}]`)
+      return false
+    })
+    if (blockers.length) throw new Error(`属性正在被 ${blockers.map((candidate) => candidate.name).join('、')} 使用，请先修改依赖配置。`)
+    this.database.exec('BEGIN IMMEDIATE')
+    try {
+      const updateConfig = this.database.prepare('UPDATE database_properties SET config_json = ? WHERE id = ?')
+      for (const candidate of allProperties) {
+        const config = JSON.parse(candidate.configJson || '{}')
+        if (candidate.type !== 'relation' || config.relation?.reciprocalPropertyId !== propertyId) continue
+        delete config.relation.reciprocalPropertyId
+        updateConfig.run(JSON.stringify(config), candidate.id)
+      }
+      this.database.prepare('DELETE FROM database_properties WHERE id = ? AND database_id = ?').run(propertyId, databaseId)
+      this.database.exec('COMMIT')
+    } catch (error) { this.database.exec('ROLLBACK'); throw error }
     return this.loadDatabaseById(databaseId)
   },
 
