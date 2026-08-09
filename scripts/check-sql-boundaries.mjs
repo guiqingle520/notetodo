@@ -7,7 +7,7 @@ const legacyBudgets = Object.freeze({
   'workspace-db-records.cjs': 89,
   'workspace-db.cjs': 37,
   'workspace-db-platform.cjs': 37,
-  'workspace-db-collaboration.cjs': 18,
+  'workspace-db-collaboration.cjs': 0,
   'workspace-db-seed.cjs': 17,
   'workspace-db-migrations.cjs': 1,
 })

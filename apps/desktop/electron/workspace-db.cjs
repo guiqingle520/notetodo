@@ -7,6 +7,7 @@ const { planAutomationRuns, validateAutomationRule } = require('@notetodo/automa
 const { WEBHOOK_EVENTS, createWebhookEnvelope, nextWebhookAttempt, stableJson, validateWebhookUrl } = require('@notetodo/webhook-core')
 const { createWorkspaceRepository } = require('./repositories/workspace-repository.cjs')
 const { createDatabaseRecordRepository } = require('./repositories/database-record-repository.cjs')
+const { createCollaborationRepository } = require('./repositories/collaboration-repository.cjs')
 
 const LATEST_SCHEMA_VERSION = 16
 
@@ -22,6 +23,7 @@ class WorkspaceDatabase {
     this.configure()
     this.migrate()
     this.recordRepository = createDatabaseRecordRepository(this.database)
+    this.collaborationRepository = createCollaborationRepository(this.database)
     this.recoverInterruptedImports()
     this.seedIfEmpty()
     this.seedDatabaseIfEmpty()
