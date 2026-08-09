@@ -35,4 +35,31 @@ module.exports = Object.freeze({
   allProperties: 'SELECT id, name, type, database_id AS databaseId, config_json AS configJson FROM database_properties',
   updatePropertyConfigById: 'UPDATE database_properties SET config_json = ? WHERE id = ?',
   deleteProperty: 'DELETE FROM database_properties WHERE id = ? AND database_id = ?',
+  cellProperty: `SELECT property.type, property.config_json, property.database_id AS databaseId
+    FROM database_properties property
+    JOIN database_records record ON record.id = ? AND record.database_id = property.database_id
+    WHERE property.id = ?`,
+  reciprocalRelationProperty: "SELECT id, type, config_json, database_id AS databaseId FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'",
+  touchRecord: 'UPDATE database_records SET updated_at = ? WHERE id = ?',
+  recordExists: 'SELECT 1 FROM database_records WHERE id = ? AND database_id = ?',
+  duplicatePropertyValue: `SELECT 1 FROM property_values value
+    JOIN database_records record ON record.id = value.record_id
+    WHERE value.property_id = ? AND value.record_id <> ? AND record.archived_at IS NULL
+      AND value.text_value IS ? AND value.number_value IS ? AND value.boolean_value IS ? AND value.json_value IS ? LIMIT 1`,
+  upsertPropertyValue: `INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(record_id, property_id) DO UPDATE SET text_value=excluded.text_value, number_value=excluded.number_value,
+      boolean_value=excluded.boolean_value, json_value=excluded.json_value, updated_at=excluded.updated_at`,
+  propertyValue: 'SELECT text_value, number_value, boolean_value, json_value FROM property_values WHERE record_id = ? AND property_id = ?',
+  insertRecordHistory: 'INSERT INTO database_record_history(id, record_id, property_id, kind, previous_json, next_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  trimRecordHistory: `DELETE FROM database_record_history WHERE record_id = ? AND id NOT IN (
+    SELECT id FROM database_record_history WHERE record_id = ? ORDER BY created_at DESC, id DESC LIMIT 200
+  )`,
+  recordHistory: `SELECT history.id, history.record_id AS recordId, history.property_id AS propertyId, history.kind,
+      history.previous_json AS previousJson, history.next_json AS nextJson, history.created_at AS createdAt,
+      COALESCE(property.name, '正文') AS propertyName
+    FROM database_record_history history LEFT JOIN database_properties property ON property.id = history.property_id
+    WHERE history.record_id = ? ORDER BY history.created_at DESC, history.id DESC LIMIT ?`,
+  recordHistoryById: 'SELECT record_id, property_id, kind, previous_json FROM database_record_history WHERE id = ?',
+  recordDatabaseId: 'SELECT database_id FROM database_records WHERE id = ?',
 })

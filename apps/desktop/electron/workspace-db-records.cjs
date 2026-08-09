@@ -203,33 +203,26 @@ module.exports = {
   },
 
   updateDatabaseCell(recordId, propertyId, value) {
-    const property = this.database.prepare(`
-      SELECT property.type, property.config_json, property.database_id AS databaseId
-      FROM database_properties property
-      JOIN database_records record ON record.id = ? AND record.database_id = property.database_id
-      WHERE property.id = ?
-    `).get(recordId, propertyId)
+    const property = this.recordRepository.cellProperty.get(recordId, propertyId)
     if (!property) throw new Error('Database property does not exist.')
     if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
     const now = new Date().toISOString()
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
+    return this.recordRepository.transaction(() => {
       const previous = this.readDatabasePropertyValue(recordId, propertyId)
       this.writeDatabasePropertyValue(recordId, { id: propertyId, ...property }, value, now)
       if (property.type === 'relation') this.syncReciprocalRelation(recordId, property, previous, value, now)
       this.appendDatabaseRecordHistory(recordId, propertyId, 'property', previous, this.normalizeDatabasePropertyValue(property, value), now)
-      this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, recordId)
+      this.recordRepository.touchRecord.run(now, recordId)
       const automationRuns = this.executeDatabaseAutomations(property.databaseId, recordId, propertyId, now)
       this.enqueueWebhookEvent('database.record.updated', recordId, { record: { id: recordId, propertyId, value, updatedAt: now } }, now)
-      this.database.exec('COMMIT')
       return { automationRuns }
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
   },
 
   syncReciprocalRelation(recordId, property, previous, next, now) {
     const relation = JSON.parse(property.config_json || '{}').relation
     if (!relation?.reciprocalPropertyId) return
-    const reciprocal = this.database.prepare("SELECT id, type, config_json, database_id AS databaseId FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'").get(relation.reciprocalPropertyId, relation.databaseId)
+    const reciprocal = this.recordRepository.reciprocalRelationProperty.get(relation.reciprocalPropertyId, relation.databaseId)
     if (!reciprocal || JSON.parse(reciprocal.config_json || '{}').relation?.databaseId !== property.databaseId) throw new Error('反向关联配置已失效，请重新配置关联属性。')
     const before = new Set(Array.isArray(previous) ? previous : [])
     const after = new Set(this.normalizeDatabasePropertyValue(property, next) || [])
@@ -240,7 +233,7 @@ module.exports = {
       const updated = [...values]
       this.writeDatabasePropertyValue(targetRecordId, reciprocal, updated, now)
       this.appendDatabaseRecordHistory(targetRecordId, reciprocal.id, 'property', current, updated, now)
-      this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, targetRecordId)
+      this.recordRepository.touchRecord.run(now, targetRecordId)
     }
   },
 
@@ -259,26 +252,16 @@ module.exports = {
         const uniqueIds = [...new Set(value)]
         const relationDatabaseId = JSON.parse(property.config_json).relation?.databaseId
         if (typeof relationDatabaseId !== 'string') throw new Error('Relation property has no target database.')
-        const recordExists = this.database.prepare('SELECT 1 FROM database_records WHERE id = ? AND database_id = ?')
+        const recordExists = this.recordRepository.recordExists
         if (uniqueIds.some((id) => !recordExists.get(id, relationDatabaseId))) throw new Error('Relation target does not exist in the configured database.')
         jsonValue = JSON.stringify(uniqueIds)
       } else textValue = String(value)
     }
     if (constraints.unique && !this.isEmptyDatabasePropertyValue(value)) {
-      const duplicate = this.database.prepare(`
-        SELECT 1 FROM property_values value
-        JOIN database_records record ON record.id = value.record_id
-        WHERE value.property_id = ? AND value.record_id <> ? AND record.archived_at IS NULL
-          AND value.text_value IS ? AND value.number_value IS ? AND value.boolean_value IS ? AND value.json_value IS ? LIMIT 1
-      `).get(property.id, recordId, textValue, numberValue, booleanValue, jsonValue)
+      const duplicate = this.recordRepository.duplicatePropertyValue.get(property.id, recordId, textValue, numberValue, booleanValue, jsonValue)
       if (duplicate) throw new TypeError('属性值必须唯一。')
     }
-    this.database.prepare(`
-      INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(record_id, property_id) DO UPDATE SET text_value=excluded.text_value, number_value=excluded.number_value,
-        boolean_value=excluded.boolean_value, json_value=excluded.json_value, updated_at=excluded.updated_at
-    `).run(recordId, property.id, textValue, numberValue, booleanValue, jsonValue, now)
+    this.recordRepository.upsertPropertyValue.run(recordId, property.id, textValue, numberValue, booleanValue, jsonValue, now)
   },
 
   normalizeDatabasePropertyValue(property, value) {
@@ -297,7 +280,7 @@ module.exports = {
   },
 
   readDatabasePropertyValue(recordId, propertyId) {
-    const row = this.database.prepare('SELECT text_value, number_value, boolean_value, json_value FROM property_values WHERE record_id = ? AND property_id = ?').get(recordId, propertyId)
+    const row = this.recordRepository.propertyValue.get(recordId, propertyId)
     if (!row) return null
     if (row.json_value !== null) return JSON.parse(row.json_value)
     if (row.text_value !== null) return row.text_value
@@ -307,31 +290,23 @@ module.exports = {
 
   appendDatabaseRecordHistory(recordId, propertyId, kind, previous, next, now) {
     if (JSON.stringify(previous) === JSON.stringify(next)) return
-    this.database.prepare('INSERT INTO database_record_history(id, record_id, property_id, kind, previous_json, next_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    this.recordRepository.insertRecordHistory
       .run(randomUUID(), recordId, propertyId, kind, JSON.stringify(previous), JSON.stringify(next), now)
-    this.database.prepare(`DELETE FROM database_record_history WHERE record_id = ? AND id NOT IN (
-      SELECT id FROM database_record_history WHERE record_id = ? ORDER BY created_at DESC, id DESC LIMIT 200
-    )`).run(recordId, recordId)
+    this.recordRepository.trimRecordHistory.run(recordId, recordId)
   },
 
   listDatabaseRecordHistory(recordId, limit = 100) {
-    return this.database.prepare(`
-      SELECT history.id, history.record_id AS recordId, history.property_id AS propertyId, history.kind,
-        history.previous_json AS previousJson, history.next_json AS nextJson, history.created_at AS createdAt,
-        COALESCE(property.name, '正文') AS propertyName
-      FROM database_record_history history LEFT JOIN database_properties property ON property.id = history.property_id
-      WHERE history.record_id = ? ORDER BY history.created_at DESC, history.id DESC LIMIT ?
-    `).all(recordId, Math.max(1, Math.min(200, Math.trunc(limit)))).map((row) => ({ ...row, previous: JSON.parse(row.previousJson), next: JSON.parse(row.nextJson) }))
+    return this.recordRepository.recordHistory.all(recordId, Math.max(1, Math.min(200, Math.trunc(limit)))).map((row) => ({ ...row, previous: JSON.parse(row.previousJson), next: JSON.parse(row.nextJson) }))
       .map(({ previousJson, nextJson, ...row }) => row)
   },
 
   restoreDatabaseRecordHistory(historyId) {
-    const history = this.database.prepare('SELECT record_id, property_id, kind, previous_json FROM database_record_history WHERE id = ?').get(historyId)
+    const history = this.recordRepository.recordHistoryById.get(historyId)
     if (!history) throw new Error('Database record history does not exist.')
     const previous = JSON.parse(history.previous_json)
     if (history.kind === 'content') this.updateDatabaseRecordContent(history.record_id, previous)
     else this.updateDatabaseCell(history.record_id, history.property_id, previous)
-    const databaseId = this.database.prepare('SELECT database_id FROM database_records WHERE id = ?').get(history.record_id)?.database_id
+    const databaseId = this.recordRepository.recordDatabaseId.get(history.record_id)?.database_id
     return this.loadDatabaseById(databaseId)
   },
 
