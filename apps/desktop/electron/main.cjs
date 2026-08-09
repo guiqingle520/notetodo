@@ -16,6 +16,7 @@ const { assertModelStreamEvent, modelIpcContracts, normalizeModelConfig } = requ
 const { syncIpcContracts } = require('./ipc-sync-contracts.cjs')
 const { collaborationIpcContracts } = require('./ipc-collaboration-contracts.cjs')
 const { removePagePermission, resolveLocalCollaborationIdentity, upsertPagePermission } = require('./ipc-collaboration-authorization.cjs')
+const { commentsIpcContracts } = require('./ipc-comments-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -469,27 +470,22 @@ function registerWorkspaceIpc(database) {
   handleTrusted('sharing:list', collaborationIpcContracts.listPermissions, (_event, pageId) => database.loadPagePermissions(pageId))
   handleTrusted('sharing:upsert', collaborationIpcContracts.upsertPermission, (_event, pageId, subjectId, displayName, role) => upsertPagePermission(database, pageId, subjectId, displayName, role))
   handleTrusted('sharing:remove', collaborationIpcContracts.removePermission, (_event, pageId, subjectId) => removePagePermission(database, pageId, subjectId))
-  handleTrusted('comments:list', (_event, pageId) => { assertId(pageId); return database.loadComments(pageId) })
-  handleTrusted('comments:create', (_event, pageId, body, anchor, mentions = []) => {
-    assertId(pageId)
-    if (typeof body !== 'string' || body.trim().length < 1 || body.length > 10_000) throw new TypeError('Invalid comment body.')
+  handleTrusted('comments:list', commentsIpcContracts.list, (_event, pageId) => database.loadComments(pageId))
+  handleTrusted('comments:create', commentsIpcContracts.create, (_event, pageId, body, anchor, mentions = []) => {
     let userId = database.getSetting('collaboration_user_id')
     if (!userId) { userId = randomUUID(); database.setSetting('collaboration_user_id', userId) }
-    if (anchor !== null && anchor !== undefined && (!Number.isSafeInteger(anchor.from) || !Number.isSafeInteger(anchor.to) || anchor.from < 0 || anchor.to < anchor.from || typeof anchor.quote !== 'string' || anchor.quote.length > 1000)) throw new TypeError('Invalid comment anchor.')
-    if (!Array.isArray(mentions) || mentions.length > 20 || mentions.some((id) => typeof id !== 'string' || id.length > 128)) throw new TypeError('Invalid comment mentions.')
     const allowedSubjects = new Set(database.loadPagePermissions(pageId).map((permission) => permission.subjectId))
     const validatedMentions = [...new Set(mentions)].filter((id) => allowedSubjects.has(id))
     const comment = { id: randomUUID(), pageId, authorId: userId, authorName: '本机用户', body: body.trim(), anchor: anchor ?? null, mentions: validatedMentions }
     database.createComment(comment)
     return comment.id
   })
-  handleTrusted('comments:resolve', (_event, id) => { assertId(id); database.resolveComment(id) })
-  handleTrusted('notifications:list', () => {
+  handleTrusted('comments:resolve', commentsIpcContracts.resolve, (_event, id) => database.resolveComment(id))
+  handleTrusted('notifications:list', commentsIpcContracts.listNotifications, () => {
     const userId = database.getSetting('collaboration_user_id')
     return userId ? database.loadNotifications(userId) : []
   })
-  handleTrusted('notifications:mark-read', (_event, id) => {
-    assertId(id)
+  handleTrusted('notifications:mark-read', commentsIpcContracts.markNotificationRead, (_event, id) => {
     const userId = database.getSetting('collaboration_user_id')
     if (userId) database.markNotificationRead(id, userId)
   })

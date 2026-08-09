@@ -205,6 +205,7 @@ interface Window {
           authorName: string
           body: string
           anchor: null | { from: number; to: number; quote: string }
+          mentions: string[]
           resolvedAt: string | null
           createdAt: string
         }>
