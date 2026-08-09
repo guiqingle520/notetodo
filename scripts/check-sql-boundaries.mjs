@@ -4,7 +4,7 @@ import { join } from 'node:path'
 // 迁移期间锁定旧模块的 prepare() 上限：任何新 SQL 都必须进入 sql/ 与
 // repositories/。每完成一个领域迁移就下调对应预算，最终收敛为零。
 const legacyBudgets = Object.freeze({
-  'workspace-db-records.cjs': 53,
+  'workspace-db-records.cjs': 41,
   'workspace-db.cjs': 37,
   'workspace-db-platform.cjs': 0,
   'workspace-db-collaboration.cjs': 0,

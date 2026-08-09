@@ -62,4 +62,35 @@ module.exports = Object.freeze({
     WHERE history.record_id = ? ORDER BY history.created_at DESC, history.id DESC LIMIT ?`,
   recordHistoryById: 'SELECT record_id, property_id, kind, previous_json FROM database_record_history WHERE id = ?',
   recordDatabaseId: 'SELECT database_id FROM database_records WHERE id = ?',
+  recordComments: `SELECT comment.id, comment.record_id AS recordId, comment.property_id AS propertyId,
+      COALESCE(property.name, '整条记录') AS propertyName, comment.author_name AS authorName,
+      comment.body, comment.resolved_at AS resolvedAt, comment.created_at AS createdAt
+    FROM database_record_comments comment LEFT JOIN database_properties property ON property.id = comment.property_id
+    WHERE comment.record_id = ? AND (? = 0 OR comment.resolved_at IS NULL)
+    ORDER BY comment.resolved_at IS NOT NULL, comment.created_at DESC, comment.id DESC LIMIT 500`,
+  activeRecordDatabase: 'SELECT database_id FROM database_records WHERE id = ? AND archived_at IS NULL',
+  propertyExists: 'SELECT 1 FROM database_properties WHERE id = ? AND database_id = ?',
+  insertRecordComment: 'INSERT INTO database_record_comments(id, record_id, property_id, author_name, body, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+  resolveRecordComment: 'UPDATE database_record_comments SET resolved_at = ? WHERE id = ?',
+  deleteRecordComment: 'DELETE FROM database_record_comments WHERE id = ?',
+  recordReminders: `SELECT reminder.id, reminder.record_id AS recordId, reminder.property_id AS propertyId, property.name AS propertyName,
+      reminder.due_at AS dueAt, reminder.note, reminder.completed_at AS completedAt,
+      reminder.created_at AS createdAt, reminder.updated_at AS updatedAt
+    FROM database_record_reminders reminder JOIN database_properties property ON property.id = reminder.property_id
+    WHERE reminder.record_id = ? ORDER BY reminder.completed_at IS NOT NULL, reminder.due_at, reminder.id`,
+  dueRecordReminders: `SELECT reminder.id, reminder.record_id AS recordId, reminder.property_id AS propertyId, property.name AS propertyName,
+      reminder.due_at AS dueAt, reminder.note, reminder.completed_at AS completedAt,
+      reminder.created_at AS createdAt, reminder.updated_at AS updatedAt
+    FROM database_record_reminders reminder JOIN database_properties property ON property.id = reminder.property_id
+    JOIN database_records record ON record.id = reminder.record_id
+    WHERE reminder.completed_at IS NULL AND reminder.due_at <= ? AND record.archived_at IS NULL
+    ORDER BY reminder.due_at, reminder.id LIMIT ?`,
+  reminderDateProperty: `SELECT property.type FROM database_properties property
+    JOIN database_records record ON record.id = ? AND record.database_id = property.database_id
+    WHERE property.id = ?`,
+  upsertRecordReminder: `INSERT INTO database_record_reminders(id, record_id, property_id, due_at, note, completed_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT(id) DO UPDATE SET property_id=excluded.property_id,
+    due_at=excluded.due_at, note=excluded.note, completed_at=NULL, updated_at=excluded.updated_at`,
+  completeRecordReminder: 'UPDATE database_record_reminders SET completed_at = ?, updated_at = ? WHERE id = ?',
+  deleteRecordReminder: 'DELETE FROM database_record_reminders WHERE id = ?',
 })
