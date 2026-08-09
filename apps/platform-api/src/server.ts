@@ -46,7 +46,8 @@ export class ApiRateLimiter {
 
 export function createPlatformApiServer(repository: PlatformRepository, options: { rateLimit?: number } = {}): Server {
   const limiter = new ApiRateLimiter(options.rateLimit)
-  return createServer(async (request, response) => {
+  return createServer((request, response) => {
+    void (async () => {
     const startedAt = performance.now()
     const requestId = normalizeRequestId(request.headers['x-request-id'])
     let tokenId: string | null = null
@@ -78,6 +79,7 @@ export function createPlatformApiServer(repository: PlatformRepository, options:
       // sent; production observability can alert on the repository error.
       try { repository.recordApiAudit({ requestId, tokenId, method: request.method ?? 'GET', path: (request.url ?? '/').slice(0, 2048), status, durationMs: performance.now() - startedAt }) } catch { /* response is authoritative */ }
     }
+    })()
   })
 }
 

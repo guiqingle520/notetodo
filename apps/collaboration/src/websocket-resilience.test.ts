@@ -37,8 +37,6 @@ describe('WebSocket collaboration resilience', () => {
     const firstRefresh = vi.fn(async () => 'first-refreshed-ticket')
     const secondRefresh = vi.fn(async () => 'second-refreshed-ticket')
     const remoteOrigin = Symbol('remote')
-    let firstClient!: CollaborationClient
-    let secondClient!: CollaborationClient
     const createClient = (clientId: string, document: Y.Doc, refreshToken: () => Promise<string>, seed: boolean) => new CollaborationClient({
       pageId: 'resilience-page', clientId, token: `${clientId}-initial`, refreshToken,
       name: clientId, color: clientId === 'first' ? '#c45134' : '#247a68',
@@ -52,8 +50,8 @@ describe('WebSocket collaboration resilience', () => {
         queueMicrotask(() => client.sendUpdate(Buffer.from(Y.encodeStateAsUpdate(document)).toString('base64')))
       },
     })
-    firstClient = createClient('first', firstDocument, firstRefresh, true)
-    secondClient = createClient('second', secondDocument, secondRefresh, false)
+    const firstClient = createClient('first', firstDocument, firstRefresh, true)
+    const secondClient = createClient('second', secondDocument, secondRefresh, false)
     firstDocument.on('update', (update, origin) => { if (origin !== remoteOrigin) firstClient.sendUpdate(Buffer.from(update).toString('base64')) })
     secondDocument.on('update', (update, origin) => { if (origin !== remoteOrigin) secondClient.sendUpdate(Buffer.from(update).toString('base64')) })
     firstClient.start(); secondClient.start()

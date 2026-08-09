@@ -113,8 +113,8 @@ function runTool(repository: WorkspaceToolRepository, name: WorkspaceToolName, i
     const now = new Date().toISOString()
     const page: Page = { id: randomUUID(), title: input.title as string, icon: 'note', parentId: (input.parentId as string | null | undefined) ?? null, favorite: false, content: input.content as string, updatedAt: now, lastVisitedAt: now, archivedAt: null }
     if (page.parentId) activePage(repository, page.parentId)
-    const saved = repository.upsertPage(page); const { content: _content, ...metadata } = saved
-    return { page: metadata }
+    const saved = repository.upsertPage(page)
+    return { page: { id: saved.id, title: saved.title, icon: saved.icon, parentId: saved.parentId, favorite: saved.favorite, updatedAt: saved.updatedAt, lastVisitedAt: saved.lastVisitedAt, archivedAt: saved.archivedAt } }
   }
   if (name === 'notetodo_update_page') {
     const existing = activePage(repository, input.pageId as string); const now = new Date().toISOString()

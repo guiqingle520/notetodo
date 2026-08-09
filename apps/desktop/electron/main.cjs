@@ -9,8 +9,19 @@ const { collectUnusedAssets, isRenderableImage, safeDisplayName, storeLocalAsset
 const { API_SCOPES, signRoomTicket } = require('@notetodo/auth-core')
 const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/node')
 const { randomBytes, randomUUID } = require('node:crypto')
+const { createTrustedIpcHandler, createTrustedIpcListener } = require('./ipc-security.cjs')
 
 const isDev = !app.isPackaged
+const handleTrusted = createTrustedIpcHandler(ipcMain, {
+  isDevelopment: isDev,
+  developmentUrl: 'http://127.0.0.1:5173',
+  packagedRendererPath: path.join(__dirname, '../dist/index.html'),
+})
+const onTrusted = createTrustedIpcListener(ipcMain, {
+  isDevelopment: isDev,
+  developmentUrl: 'http://127.0.0.1:5173',
+  packagedRendererPath: path.join(__dirname, '../dist/index.html'),
+})
 let workspaceDatabase
 const modelService = new ModelService()
 const activeModelRuns = new Map()
@@ -98,54 +109,54 @@ function registerWorkspaceIpc(database) {
     }))
   }
 
-  ipcMain.handle('workspace:load', () => database.loadWorkspace())
-  ipcMain.handle('workspace:upsert-page', (_event, page) => {
+  handleTrusted('workspace:load', () => database.loadWorkspace())
+  handleTrusted('workspace:upsert-page', (_event, page) => {
     assertPage(page)
     return database.upsertPage(page)
   })
-  ipcMain.handle('workspace:set-active-page', (_event, id) => {
+  handleTrusted('workspace:set-active-page', (_event, id) => {
     assertId(id)
     database.setActivePage(id)
   })
-  ipcMain.handle('workspace:archive-page', (_event, id) => {
+  handleTrusted('workspace:archive-page', (_event, id) => {
     assertId(id)
     database.archivePage(id)
   })
-  ipcMain.handle('workspace:restore-page', (_event, id) => {
+  handleTrusted('workspace:restore-page', (_event, id) => {
     assertId(id)
     database.restorePage(id)
   })
-  ipcMain.handle('workspace:search', (_event, query) => {
+  handleTrusted('workspace:search', (_event, query) => {
     if (typeof query !== 'string' || query.length > 500) throw new TypeError('Invalid search query.')
     return database.searchPages(query)
   })
-  ipcMain.handle('platform:list-tokens', () => database.listApiTokens())
-  ipcMain.handle('platform:issue-token', (_event, name, scopes) => {
+  handleTrusted('platform:list-tokens', () => database.listApiTokens())
+  handleTrusted('platform:issue-token', (_event, name, scopes) => {
     if (!Array.isArray(scopes) || scopes.some((scope) => !API_SCOPES.includes(scope))) throw new TypeError('Invalid API token scopes.')
     return database.issueApiToken(name, scopes)
   })
-  ipcMain.handle('platform:revoke-token', (_event, id) => { assertId(id); return database.revokeApiToken(id) })
-  ipcMain.handle('webhooks:list', () => database.listWebhookEndpoints())
-  ipcMain.handle('webhooks:create', (_event, name, url, events) => {
+  handleTrusted('platform:revoke-token', (_event, id) => { assertId(id); return database.revokeApiToken(id) })
+  handleTrusted('webhooks:list', () => database.listWebhookEndpoints())
+  handleTrusted('webhooks:create', (_event, name, url, events) => {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('系统密钥库不可用，无法安全保存 Webhook 签名密钥。')
     const secret = randomBytes(32).toString('base64url')
     const endpoint = database.createWebhookEndpoint(name, url, events, safeStorage.encryptString(secret))
     return { ...endpoint, secret }
   })
-  ipcMain.handle('webhooks:set-active', (_event, id, active) => { assertId(id); if (typeof active !== 'boolean') throw new TypeError('Invalid webhook state.'); return database.setWebhookEndpointActive(id, active) })
-  ipcMain.handle('webhooks:list-deliveries', (_event, endpointId) => { assertId(endpointId); return database.listWebhookDeliveries(endpointId) })
-  ipcMain.handle('automations:list', (_event, databaseId) => { assertId(databaseId); return database.listDatabaseAutomations(databaseId) })
-  ipcMain.handle('automations:save', (_event, databaseId, rule) => { assertId(databaseId); if (!rule || typeof rule !== 'object') throw new TypeError('Invalid automation rule.'); return database.saveDatabaseAutomation(databaseId, rule) })
-  ipcMain.handle('automations:set-enabled', (_event, id, enabled) => { assertId(id); if (typeof enabled !== 'boolean') throw new TypeError('Invalid automation state.'); return database.setDatabaseAutomationEnabled(id, enabled) })
-  ipcMain.handle('automations:list-runs', (_event, databaseId) => { assertId(databaseId); return database.listAutomationRuns(databaseId) })
-  ipcMain.handle('automations:replay', (_event, runId) => { assertId(runId); return database.replayAutomationRun(runId) })
-  ipcMain.handle('history:list', (_event, pageId) => { assertId(pageId); return database.listPageVersions(pageId) })
-  ipcMain.handle('history:get', (_event, pageId, versionId) => {
+  handleTrusted('webhooks:set-active', (_event, id, active) => { assertId(id); if (typeof active !== 'boolean') throw new TypeError('Invalid webhook state.'); return database.setWebhookEndpointActive(id, active) })
+  handleTrusted('webhooks:list-deliveries', (_event, endpointId) => { assertId(endpointId); return database.listWebhookDeliveries(endpointId) })
+  handleTrusted('automations:list', (_event, databaseId) => { assertId(databaseId); return database.listDatabaseAutomations(databaseId) })
+  handleTrusted('automations:save', (_event, databaseId, rule) => { assertId(databaseId); if (!rule || typeof rule !== 'object') throw new TypeError('Invalid automation rule.'); return database.saveDatabaseAutomation(databaseId, rule) })
+  handleTrusted('automations:set-enabled', (_event, id, enabled) => { assertId(id); if (typeof enabled !== 'boolean') throw new TypeError('Invalid automation state.'); return database.setDatabaseAutomationEnabled(id, enabled) })
+  handleTrusted('automations:list-runs', (_event, databaseId) => { assertId(databaseId); return database.listAutomationRuns(databaseId) })
+  handleTrusted('automations:replay', (_event, runId) => { assertId(runId); return database.replayAutomationRun(runId) })
+  handleTrusted('history:list', (_event, pageId) => { assertId(pageId); return database.listPageVersions(pageId) })
+  handleTrusted('history:get', (_event, pageId, versionId) => {
     assertId(pageId)
     if (!Number.isSafeInteger(versionId) || versionId < 1) throw new TypeError('Invalid page version.')
     return database.getPageVersion(pageId, versionId)
   })
-  ipcMain.handle('history:restore', (_event, pageId, versionId) => {
+  handleTrusted('history:restore', (_event, pageId, versionId) => {
     assertId(pageId)
     if (!Number.isSafeInteger(versionId) || versionId < 1) throw new TypeError('Invalid page version.')
     const userId = database.getSetting('collaboration_user_id')
@@ -153,12 +164,12 @@ function registerWorkspaceIpc(database) {
     if (role && !['editor', 'owner'].includes(role)) throw new Error('当前角色无权恢复页面历史。')
     return database.restorePageVersion(pageId, versionId)
   })
-  ipcMain.handle('retrieval:search', (_event, query, limit = 8) => {
+  handleTrusted('retrieval:search', (_event, query, limit = 8) => {
     if (typeof query !== 'string' || query.length > 500 || !Number.isSafeInteger(limit)) throw new TypeError('Invalid retrieval query.')
     const userId = database.getSetting('collaboration_user_id')
     return database.hybridSearch(query, userId, limit)
   })
-  ipcMain.handle('import:pick-and-inspect', async () => {
+  handleTrusted('import:pick-and-inspect', async () => {
     const selected = await dialog.showOpenDialog({
       title: '导入 Notion 工作区',
       buttonLabel: '检查档案',
@@ -171,7 +182,7 @@ function registerWorkspaceIpc(database) {
     importSources.set(importId, { filePath: selected.filePaths[0], expiresAt: Date.now() + 30 * 60_000 })
     return { ...inspection, importId }
   })
-  ipcMain.handle('import:start', async (event, importId, requestId) => {
+  handleTrusted('import:start', async (event, importId, requestId) => {
     assertId(importId); assertId(requestId)
     const source = importSources.get(importId)
     if (!source || source.expiresAt < Date.now()) throw new Error('导入预检已过期，请重新选择档案。')
@@ -201,11 +212,11 @@ function registerWorkspaceIpc(database) {
       activeImports.delete(requestId)
     }
   })
-  ipcMain.handle('import:list-jobs', () => database.loadImportJobs())
-  ipcMain.on('import:cancel', (_event, requestId) => {
+  handleTrusted('import:list-jobs', () => database.loadImportJobs())
+  onTrusted('import:cancel', (_event, requestId) => {
     if (typeof requestId === 'string') activeImports.get(requestId)?.abort()
   })
-  ipcMain.handle('attachments:pick-and-store', async (event, pageId, kind, requestId) => {
+  handleTrusted('attachments:pick-and-store', async (event, pageId, kind, requestId) => {
     assertId(pageId); assertId(requestId)
     if (!['image', 'file'].includes(kind)) throw new TypeError('Invalid attachment kind.')
     const selected = await dialog.showOpenDialog({
@@ -219,8 +230,8 @@ function registerWorkspaceIpc(database) {
     if (selected.canceled || !selected.filePaths.length) return []
     return storeAttachmentPaths(event, pageId, selected.filePaths, requestId, kind === 'image')
   })
-  ipcMain.handle('attachments:store-dropped', (event, pageId, filePaths, requestId) => storeAttachmentPaths(event, pageId, filePaths, requestId))
-  ipcMain.handle('attachments:store-memory', async (event, pageId, items, requestId) => {
+  handleTrusted('attachments:store-dropped', (event, pageId, filePaths, requestId) => storeAttachmentPaths(event, pageId, filePaths, requestId))
+  handleTrusted('attachments:store-memory', async (event, pageId, items, requestId) => {
     assertId(pageId); assertId(requestId)
     if (!Array.isArray(items) || items.length > 20) throw new TypeError('Invalid clipboard attachment selection.')
     const normalized = items.map((item) => {
@@ -245,7 +256,7 @@ function registerWorkspaceIpc(database) {
       await fs.promises.rm(temporaryDir, { recursive: true, force: true })
     }
   })
-  ipcMain.handle('attachments:open', async (_event, hash, requestedName) => {
+  handleTrusted('attachments:open', async (_event, hash, requestedName) => {
     const { sourcePath } = resolveAttachment(hash)
     if (typeof requestedName !== 'string') throw new TypeError('Invalid attachment name.')
     const displayName = safeDisplayName(requestedName)
@@ -260,7 +271,7 @@ function registerWorkspaceIpc(database) {
     const errorMessage = await shell.openPath(openPath)
     if (errorMessage) throw new Error(errorMessage)
   })
-  ipcMain.handle('attachments:export', async (_event, hash, requestedName) => {
+  handleTrusted('attachments:export', async (_event, hash, requestedName) => {
     const { sourcePath } = resolveAttachment(hash)
     if (typeof requestedName !== 'string') throw new TypeError('Invalid attachment name.')
     const displayName = safeDisplayName(requestedName)
@@ -269,133 +280,133 @@ function registerWorkspaceIpc(database) {
     await fs.promises.copyFile(sourcePath, selected.filePath)
     return true
   })
-  ipcMain.handle('database:load-by-page', (_event, pageId) => {
+  handleTrusted('database:load-by-page', (_event, pageId) => {
     assertId(pageId)
     return database.loadDatabaseByPage(pageId)
   })
-  ipcMain.handle('database:create', (_event, pageId, databaseId, name) => {
+  handleTrusted('database:create', (_event, pageId, databaseId, name) => {
     assertId(pageId); assertId(databaseId)
     if (typeof name !== 'string' || name.trim().length < 1 || name.length > 200) throw new TypeError('Invalid database name.')
     return database.createDatabaseForPage(pageId, databaseId, name.trim())
   })
-  ipcMain.handle('database:add-property', (_event, databaseId, propertyId, name, type) => {
+  handleTrusted('database:add-property', (_event, databaseId, propertyId, name, type) => {
     assertId(databaseId); assertId(propertyId)
     if (typeof name !== 'string' || name.trim().length < 1 || name.length > 100) throw new TypeError('Invalid property name.')
     if (!['text', 'number', 'checkbox', 'select', 'multiSelect', 'date', 'url', 'relation', 'rollup', 'formula'].includes(type)) throw new TypeError('Invalid property type.')
     return database.addDatabaseProperty(databaseId, propertyId, name.trim(), type)
   })
-  ipcMain.handle('database:list-sources', () => database.listDatabaseSources())
-  ipcMain.handle('database:update-property-config', (_event, databaseId, propertyId, config) => {
+  handleTrusted('database:list-sources', () => database.listDatabaseSources())
+  handleTrusted('database:update-property-config', (_event, databaseId, propertyId, config) => {
     assertId(databaseId); assertId(propertyId)
     if (!config || typeof config !== 'object' || Array.isArray(config) || JSON.stringify(config).length > 50_000) throw new TypeError('Invalid property configuration.')
     return database.updateDatabasePropertyConfig(databaseId, propertyId, config)
   })
-  ipcMain.handle('database:rename-property', (_event, databaseId, propertyId, name) => {
+  handleTrusted('database:rename-property', (_event, databaseId, propertyId, name) => {
     assertId(databaseId); assertId(propertyId)
     if (typeof name !== 'string' || name.trim().length < 1 || name.length > 100) throw new TypeError('Invalid property name.')
     return database.renameDatabaseProperty(databaseId, propertyId, name.trim())
   })
-  ipcMain.handle('database:rename', (_event, databaseId, name) => {
+  handleTrusted('database:rename', (_event, databaseId, name) => {
     assertId(databaseId)
     if (typeof name !== 'string' || name.trim().length < 1 || name.length > 200) throw new TypeError('Invalid database name.')
     return database.renameDatabase(databaseId, name.trim())
   })
-  ipcMain.handle('database:reorder-properties', (_event, databaseId, propertyIds) => {
+  handleTrusted('database:reorder-properties', (_event, databaseId, propertyIds) => {
     assertId(databaseId)
     if (!Array.isArray(propertyIds) || propertyIds.length > 50) throw new TypeError('Invalid property order.')
     propertyIds.forEach(assertId)
     return database.reorderDatabaseProperties(databaseId, propertyIds)
   })
-  ipcMain.handle('database:delete-property', (_event, databaseId, propertyId) => {
+  handleTrusted('database:delete-property', (_event, databaseId, propertyId) => {
     assertId(databaseId); assertId(propertyId)
     return database.deleteDatabaseProperty(databaseId, propertyId)
   })
-  ipcMain.handle('database:update-cell', (_event, recordId, propertyId, value) => {
+  handleTrusted('database:update-cell', (_event, recordId, propertyId, value) => {
     assertId(recordId)
     assertId(propertyId)
     const serialized = JSON.stringify(value)
     if (serialized === undefined || serialized.length > 100_000) throw new TypeError('Database cell value is invalid or too large.')
     database.updateDatabaseCell(recordId, propertyId, value)
   })
-  ipcMain.handle('database:create-record', (_event, databaseId, recordId) => {
+  handleTrusted('database:create-record', (_event, databaseId, recordId) => {
     assertId(databaseId)
     assertId(recordId)
     database.createDatabaseRecord(databaseId, recordId)
   })
-  ipcMain.handle('database:duplicate-record', (_event, databaseId, sourceRecordId, recordId) => {
+  handleTrusted('database:duplicate-record', (_event, databaseId, sourceRecordId, recordId) => {
     assertId(databaseId); assertId(sourceRecordId); assertId(recordId)
     return database.duplicateDatabaseRecord(databaseId, sourceRecordId, recordId)
   })
-  ipcMain.handle('database:trash-records', (_event, databaseId, recordIds) => {
+  handleTrusted('database:trash-records', (_event, databaseId, recordIds) => {
     assertId(databaseId)
     if (!Array.isArray(recordIds) || recordIds.length < 1 || recordIds.length > 1000) throw new TypeError('Select between 1 and 1000 database records.')
     const uniqueIds = [...new Set(recordIds)]; uniqueIds.forEach(assertId)
     return database.trashDatabaseRecords(databaseId, uniqueIds)
   })
-  ipcMain.handle('database:list-trashed-records', (_event, databaseId) => {
+  handleTrusted('database:list-trashed-records', (_event, databaseId) => {
     assertId(databaseId)
     return database.listTrashedDatabaseRecords(databaseId)
   })
-  ipcMain.handle('database:restore-records', (_event, databaseId, recordIds) => {
+  handleTrusted('database:restore-records', (_event, databaseId, recordIds) => {
     assertId(databaseId)
     if (!Array.isArray(recordIds) || recordIds.length < 1 || recordIds.length > 1000) throw new TypeError('Select between 1 and 1000 database records.')
     const uniqueIds = [...new Set(recordIds)]; uniqueIds.forEach(assertId)
     return database.restoreDatabaseRecords(databaseId, uniqueIds)
   })
-  ipcMain.handle('database:delete-records-permanently', (_event, databaseId, recordIds) => {
+  handleTrusted('database:delete-records-permanently', (_event, databaseId, recordIds) => {
     assertId(databaseId)
     if (!Array.isArray(recordIds) || recordIds.length < 1 || recordIds.length > 1000) throw new TypeError('Select between 1 and 1000 database records.')
     const uniqueIds = [...new Set(recordIds)]; uniqueIds.forEach(assertId)
     database.deleteDatabaseRecordsPermanently(databaseId, uniqueIds)
   })
-  ipcMain.handle('database:update-record-content', (_event, recordId, content) => {
+  handleTrusted('database:update-record-content', (_event, recordId, content) => {
     assertId(recordId)
     if (typeof content !== 'string' || content.length > 2_000_000) throw new TypeError('Database record content is invalid or too large.')
     database.updateDatabaseRecordContent(recordId, content)
   })
-  ipcMain.handle('database:list-record-history', (_event, recordId) => {
+  handleTrusted('database:list-record-history', (_event, recordId) => {
     assertId(recordId)
     return database.listDatabaseRecordHistory(recordId)
   })
-  ipcMain.handle('database:restore-record-history', (_event, historyId) => {
+  handleTrusted('database:restore-record-history', (_event, historyId) => {
     assertId(historyId)
     return database.restoreDatabaseRecordHistory(historyId)
   })
-  ipcMain.handle('database:list-record-comments', (_event, recordId, unresolvedOnly) => {
+  handleTrusted('database:list-record-comments', (_event, recordId, unresolvedOnly) => {
     assertId(recordId)
     return database.listDatabaseRecordComments(recordId, Boolean(unresolvedOnly))
   })
-  ipcMain.handle('database:create-record-comment', (_event, comment) => {
+  handleTrusted('database:create-record-comment', (_event, comment) => {
     assertId(comment?.id); assertId(comment?.recordId)
     if (comment.propertyId) assertId(comment.propertyId)
     return database.createDatabaseRecordComment(comment)
   })
-  ipcMain.handle('database:resolve-record-comment', (_event, id, resolved) => {
+  handleTrusted('database:resolve-record-comment', (_event, id, resolved) => {
     assertId(id); database.resolveDatabaseRecordComment(id, Boolean(resolved))
   })
-  ipcMain.handle('database:delete-record-comment', (_event, id) => {
+  handleTrusted('database:delete-record-comment', (_event, id) => {
     assertId(id); database.deleteDatabaseRecordComment(id)
   })
-  ipcMain.handle('database:list-record-reminders', (_event, recordId) => {
+  handleTrusted('database:list-record-reminders', (_event, recordId) => {
     assertId(recordId); return database.listDatabaseRecordReminders(recordId)
   })
-  ipcMain.handle('database:list-due-record-reminders', () => database.listDueDatabaseRecordReminders())
-  ipcMain.handle('database:save-record-reminder', (_event, reminder) => {
+  handleTrusted('database:list-due-record-reminders', () => database.listDueDatabaseRecordReminders())
+  handleTrusted('database:save-record-reminder', (_event, reminder) => {
     assertId(reminder?.id); assertId(reminder?.recordId); assertId(reminder?.propertyId)
     return database.saveDatabaseRecordReminder(reminder)
   })
-  ipcMain.handle('database:complete-record-reminder', (_event, id, completed) => {
+  handleTrusted('database:complete-record-reminder', (_event, id, completed) => {
     assertId(id); database.completeDatabaseRecordReminder(id, Boolean(completed))
   })
-  ipcMain.handle('database:delete-record-reminder', (_event, id) => {
+  handleTrusted('database:delete-record-reminder', (_event, id) => {
     assertId(id); database.deleteDatabaseRecordReminder(id)
   })
-  ipcMain.handle('database:set-active-view', (_event, databaseId, viewId) => {
+  handleTrusted('database:set-active-view', (_event, databaseId, viewId) => {
     assertId(databaseId)
     assertId(viewId)
     database.setActiveDatabaseView(databaseId, viewId)
   })
-  ipcMain.handle('database:update-view-config', (_event, databaseId, viewId, config) => {
+  handleTrusted('database:update-view-config', (_event, databaseId, viewId, config) => {
     assertId(databaseId)
     assertId(viewId)
     if (!config || typeof config !== 'object' || Array.isArray(config)) throw new TypeError('Invalid database view configuration.')
@@ -406,27 +417,27 @@ function registerWorkspaceIpc(database) {
     if (serialized.length > 500_000 || (config.filters?.length ?? 0) > 20 || (config.quickFilters?.length ?? 0) > 5 || (config.sorts?.length ?? 0) > 10 || (config.visiblePropertyIds?.length ?? 0) > 50 || (config.propertyOrder?.length ?? 0) > 50 || (config.collapsedGroupKeys?.length ?? 0) > 100 || (config.recordOrder?.length ?? 0) > 10_000 || Object.keys(config.propertyWidths ?? {}).length > 50 || Object.keys(config.calculations ?? {}).length > 50) throw new TypeError('Database view configuration is too large.')
     database.updateDatabaseViewConfig(databaseId, viewId, config)
   })
-  ipcMain.handle('database:create-view', (_event, databaseId, viewId, name, type, config) => {
+  handleTrusted('database:create-view', (_event, databaseId, viewId, name, type, config) => {
     assertId(databaseId); assertId(viewId)
     if (typeof name !== 'string' || !name.trim() || name.length > 200) throw new TypeError('Invalid database view name.')
     if (!['table', 'board', 'list', 'calendar', 'timeline', 'gallery'].includes(type)) throw new TypeError('Invalid database view type.')
     if (!config || typeof config !== 'object' || Array.isArray(config) || JSON.stringify(config).length > 50_000) throw new TypeError('Invalid database view configuration.')
     return database.createDatabaseView(databaseId, viewId, name.trim(), type, config)
   })
-  ipcMain.handle('database:rename-view', (_event, databaseId, viewId, name) => {
+  handleTrusted('database:rename-view', (_event, databaseId, viewId, name) => {
     assertId(databaseId); assertId(viewId)
     if (typeof name !== 'string' || !name.trim() || name.length > 200) throw new TypeError('Invalid database view name.')
     return database.renameDatabaseView(databaseId, viewId, name.trim())
   })
-  ipcMain.handle('database:delete-view', (_event, databaseId, viewId) => {
+  handleTrusted('database:delete-view', (_event, databaseId, viewId) => {
     assertId(databaseId); assertId(viewId)
     return database.deleteDatabaseView(databaseId, viewId)
   })
-  ipcMain.handle('database:set-default-view', (_event, databaseId, viewId) => {
+  handleTrusted('database:set-default-view', (_event, databaseId, viewId) => {
     assertId(databaseId); assertId(viewId)
     return database.setDefaultDatabaseView(databaseId, viewId)
   })
-  ipcMain.handle('database:bulk-update', (_event, databaseId, recordIds, propertyId, value) => {
+  handleTrusted('database:bulk-update', (_event, databaseId, recordIds, propertyId, value) => {
     assertId(databaseId); assertId(propertyId)
     if (!Array.isArray(recordIds) || recordIds.length < 1 || recordIds.length > 1000) throw new TypeError('Select between 1 and 1000 database records.')
     const uniqueIds = [...new Set(recordIds)]
@@ -435,50 +446,50 @@ function registerWorkspaceIpc(database) {
     if (serialized === undefined || serialized.length > 100_000) throw new TypeError('Database cell value is invalid or too large.')
     return database.bulkUpdateDatabaseRecords(databaseId, uniqueIds, propertyId, value)
   })
-  ipcMain.handle('database:import-records', (_event, databaseId, records) => {
-    validateIdentifier(databaseId, 'Database ID')
-    return workspace.importDatabaseRecords(databaseId, records)
+  handleTrusted('database:import-records', (_event, databaseId, records) => {
+    assertId(databaseId)
+    return database.importDatabaseRecords(databaseId, records)
   })
-  ipcMain.handle('database:save-template', (_event, databaseId, template) => {
+  handleTrusted('database:save-template', (_event, databaseId, template) => {
     assertId(databaseId); assertId(template?.id)
     if (typeof template.name !== 'string' || !template.name.trim() || template.name.length > 200) throw new TypeError('Invalid database template name.')
     if (!template.values || typeof template.values !== 'object' || Array.isArray(template.values)) throw new TypeError('Invalid database template values.')
     if (typeof template.content !== 'string' || template.content.length > 2_000_000 || JSON.stringify(template.values).length > 500_000) throw new TypeError('Database template is too large.')
     return database.saveDatabaseTemplate(databaseId, { ...template, name: template.name.trim() })
   })
-  ipcMain.handle('database:delete-template', (_event, databaseId, templateId) => {
+  handleTrusted('database:delete-template', (_event, databaseId, templateId) => {
     assertId(databaseId); assertId(templateId)
     return database.deleteDatabaseTemplate(databaseId, templateId)
   })
-  ipcMain.handle('database:create-from-template', (_event, databaseId, templateId, recordId) => {
+  handleTrusted('database:create-from-template', (_event, databaseId, templateId, recordId) => {
     assertId(databaseId); assertId(templateId); assertId(recordId)
     return database.createDatabaseRecordFromTemplate(databaseId, templateId, recordId)
   })
-  ipcMain.handle('database:export-csv', async (_event, suggestedName, csv) => {
+  handleTrusted('database:export-csv', async (_event, suggestedName, csv) => {
     if (typeof suggestedName !== 'string' || suggestedName.length > 200 || typeof csv !== 'string' || csv.length > 20_000_000) throw new TypeError('CSV export is invalid or too large.')
-    const safeName = suggestedName.replace(/[<>:"/\\|?*\x00-\x1f]/gu, '_').trim() || 'database'
+    const safeName = suggestedName.replace(/[<>:"/\\|?*\p{Cc}]/gu, '_').trim() || 'database'
     const selected = await dialog.showSaveDialog({ title: '导出 CSV', defaultPath: `${safeName}.csv`, buttonLabel: '导出', filters: [{ name: 'CSV 文件', extensions: ['csv'] }] })
     if (selected.canceled || !selected.filePath) return false
     // UTF-8 BOM keeps Chinese text readable when the file is opened directly in Excel.
     await fs.promises.writeFile(selected.filePath, `\uFEFF${csv}`, 'utf8')
     return true
   })
-  ipcMain.handle('sync:load-document', (_event, pageId) => {
+  handleTrusted('sync:load-document', (_event, pageId) => {
     assertId(pageId)
     return database.loadSyncDocument(pageId)
   })
-  ipcMain.handle('sync:append-update', (_event, pageId, clientId, data) => {
+  handleTrusted('sync:append-update', (_event, pageId, clientId, data) => {
     assertId(pageId)
     assertId(clientId)
     if (typeof data !== 'string' || data.length > 2_000_000) throw new TypeError('Invalid sync update.')
     return database.appendSyncUpdate(pageId, clientId, data)
   })
-  ipcMain.handle('sync:compact-document', (_event, pageId, snapshot, throughId) => {
+  handleTrusted('sync:compact-document', (_event, pageId, snapshot, throughId) => {
     assertId(pageId)
     if (typeof snapshot !== 'string' || snapshot.length > 20_000_000 || !Number.isSafeInteger(throughId)) throw new TypeError('Invalid sync snapshot.')
     database.compactSyncDocument(pageId, snapshot, throughId)
   })
-  ipcMain.handle('collaboration:get-ticket', (_event, pageId) => {
+  handleTrusted('collaboration:get-ticket', (_event, pageId) => {
     assertId(pageId)
     const secret = process.env.NOTETODO_COLLAB_TOKEN
     if (!secret) return null
@@ -494,15 +505,15 @@ function registerWorkspaceIpc(database) {
       token: signRoomTicket({ pageId, ...identity, ttlSeconds: 300 }, secret),
     }
   })
-  ipcMain.handle('sharing:list', (_event, pageId) => { assertId(pageId); return database.loadPagePermissions(pageId) })
-  ipcMain.handle('sharing:upsert', (_event, pageId, subjectId, displayName, role) => {
+  handleTrusted('sharing:list', (_event, pageId) => { assertId(pageId); return database.loadPagePermissions(pageId) })
+  handleTrusted('sharing:upsert', (_event, pageId, subjectId, displayName, role) => {
     assertId(pageId); assertId(subjectId)
     if (typeof displayName !== 'string' || displayName.length < 1 || displayName.length > 80 || !['viewer', 'commenter', 'editor'].includes(role)) throw new TypeError('Invalid page permission.')
     database.upsertPagePermission(pageId, subjectId, displayName, role)
   })
-  ipcMain.handle('sharing:remove', (_event, pageId, subjectId) => { assertId(pageId); assertId(subjectId); database.removePagePermission(pageId, subjectId) })
-  ipcMain.handle('comments:list', (_event, pageId) => { assertId(pageId); return database.loadComments(pageId) })
-  ipcMain.handle('comments:create', (_event, pageId, body, anchor, mentions = []) => {
+  handleTrusted('sharing:remove', (_event, pageId, subjectId) => { assertId(pageId); assertId(subjectId); database.removePagePermission(pageId, subjectId) })
+  handleTrusted('comments:list', (_event, pageId) => { assertId(pageId); return database.loadComments(pageId) })
+  handleTrusted('comments:create', (_event, pageId, body, anchor, mentions = []) => {
     assertId(pageId)
     if (typeof body !== 'string' || body.trim().length < 1 || body.length > 10_000) throw new TypeError('Invalid comment body.')
     let userId = database.getSetting('collaboration_user_id')
@@ -515,34 +526,34 @@ function registerWorkspaceIpc(database) {
     database.createComment(comment)
     return comment.id
   })
-  ipcMain.handle('comments:resolve', (_event, id) => { assertId(id); database.resolveComment(id) })
-  ipcMain.handle('notifications:list', () => {
+  handleTrusted('comments:resolve', (_event, id) => { assertId(id); database.resolveComment(id) })
+  handleTrusted('notifications:list', () => {
     const userId = database.getSetting('collaboration_user_id')
     return userId ? database.loadNotifications(userId) : []
   })
-  ipcMain.handle('notifications:mark-read', (_event, id) => {
+  handleTrusted('notifications:mark-read', (_event, id) => {
     assertId(id)
     const userId = database.getSetting('collaboration_user_id')
     if (userId) database.markNotificationRead(id, userId)
   })
-  ipcMain.handle('ai:create-patch-audit', (_event, pageId, operation, preview) => {
+  handleTrusted('ai:create-patch-audit', (_event, pageId, operation, preview) => {
     assertId(pageId)
     if (!['insert-paragraphs', 'replace-selection'].includes(operation) || typeof preview !== 'string' || preview.length > 200_000) throw new TypeError('Invalid AI patch proposal.')
     return database.createAIPatchAudit(randomUUID(), pageId, operation, preview)
   })
-  ipcMain.handle('ai:update-patch-audit', (_event, id, status) => {
+  handleTrusted('ai:update-patch-audit', (_event, id, status) => {
     assertId(id)
     if (!['applied', 'undone', 'rejected'].includes(status)) throw new TypeError('Invalid AI patch status.')
     database.updateAIPatchAudit(id, status)
   })
-  ipcMain.handle('model:get-config', () => {
+  handleTrusted('model:get-config', () => {
     const stored = database.getSetting('model_config')
     return {
       ...(stored ? JSON.parse(stored) : { provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b' }),
       hasApiKey: Boolean(database.getSetting('model_api_key')),
     }
   })
-  ipcMain.handle('model:save-config', (_event, config) => {
+  handleTrusted('model:save-config', (_event, config) => {
     const normalized = validateModelConfig(config)
     database.setSetting('model_config', JSON.stringify(normalized))
     if (typeof config.apiKey === 'string' && config.apiKey) {
@@ -551,7 +562,7 @@ function registerWorkspaceIpc(database) {
     }
     return { ...normalized, hasApiKey: Boolean(database.getSetting('model_api_key')) }
   })
-  ipcMain.handle('model:test-connection', async () => {
+  handleTrusted('model:test-connection', async () => {
     const stored = database.getSetting('model_config')
     if (!stored) throw new Error('Please save a model configuration first.')
     const config = validateModelConfig(JSON.parse(stored))
@@ -571,7 +582,7 @@ function registerWorkspaceIpc(database) {
       clearTimeout(timeout)
     }
   })
-  ipcMain.on('model:stream-chat', async (event, requestId, request) => {
+  onTrusted('model:stream-chat', async (event, requestId, request) => {
     if (typeof requestId !== 'string' || requestId.length > 128) return
     const channel = `model:stream-event:${requestId}`
     let controller
@@ -600,7 +611,7 @@ function registerWorkspaceIpc(database) {
       activeModelRuns.delete(requestId)
     }
   })
-  ipcMain.on('model:cancel-chat', (_event, requestId) => activeModelRuns.get(requestId)?.abort())
+  onTrusted('model:cancel-chat', (_event, requestId) => activeModelRuns.get(requestId)?.abort())
 }
 
 function validateModelConfig(value) {
@@ -718,7 +729,7 @@ function createWindow() {
             collaborationLabel,
           }))
         `)
-        console.log(`NOTETODO_SMOKE_OK ${JSON.stringify(result)}`)
+        console.warn(`NOTETODO_SMOKE_OK ${JSON.stringify(result)}`)
         app.exit(0)
       } catch (error) {
         console.error('NOTETODO_SMOKE_FAILED', error)
@@ -730,7 +741,7 @@ function createWindow() {
   return window
 }
 
-ipcMain.handle('app:info', () => ({
+handleTrusted('app:info', () => ({
   version: app.getVersion(),
   platform: process.platform,
 }))

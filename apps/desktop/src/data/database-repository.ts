@@ -43,7 +43,8 @@ const seedSnapshot: DatabaseSnapshot = {
 }
 
 function record(id: string, values: [string, string, string, string, number, string[], string]): DatabaseRecord {
-  return { id, values: Object.fromEntries(['task-title', 'task-status', 'task-owner', 'task-due', 'task-score', 'task-dependencies', 'task-start'].map((key, index) => [key, values[index]])), createdAt: now, updatedAt: now }
+  const keys = ['task-title', 'task-status', 'task-owner', 'task-due', 'task-score', 'task-dependencies', 'task-start'] as const
+  return { id, values: Object.fromEntries(keys.map((key, index) => [key, values[index] ?? null])), createdAt: now, updatedAt: now }
 }
 
 class DatabaseRepository {
@@ -383,7 +384,7 @@ class DatabaseRepository {
 
   async importRecords(snapshot: DatabaseSnapshot, records: DatabaseRecord[]) {
     if (window.notetodo?.database) return window.notetodo.database.importRecords(snapshot.schema.id, records.map(({ id, values }) => ({ id, values })))
-    const hydrated = records.map((record) => ({ ...record, values: Object.fromEntries(snapshot.schema.properties.filter((property) => !['formula', 'rollup'].includes(property.type)).map((property) => [property.id, Object.hasOwn(record.values, property.id) ? record.values[property.id] : configuredDefaultValue(property)])) }))
+    const hydrated: DatabaseRecord[] = records.map((record) => ({ ...record, values: Object.fromEntries(snapshot.schema.properties.filter((property) => !['formula', 'rollup'].includes(property.type)).map((property) => [property.id, Object.hasOwn(record.values, property.id) ? record.values[property.id] ?? null : configuredDefaultValue(property)])) }))
     const nextRecords = [...snapshot.records, ...hydrated]
     for (const record of hydrated) for (const property of snapshot.schema.properties) { const issue = validatePropertyConstraints(property, record.values[property.id] ?? null, nextRecords, record.id); if (issue) throw new Error(issue) }
     const next = { ...snapshot, records: nextRecords }

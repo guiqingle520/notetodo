@@ -19,7 +19,12 @@ export function applyBlockAction(editor: Editor, index: number, action: BlockAct
     return true
   }
   if (action === 'delete') {
-    const replacement = doc.childCount === 1 ? editor.schema.nodes.paragraph.create() : Fragment.empty
+    let replacement = Fragment.empty
+    if (doc.childCount === 1) {
+      const paragraph = editor.schema.nodes.paragraph
+      if (!paragraph) return false
+      replacement = Fragment.from(paragraph.create())
+    }
     editor.view.dispatch(tr.replaceWith(from, from + node.nodeSize, replacement).scrollIntoView())
     return true
   }

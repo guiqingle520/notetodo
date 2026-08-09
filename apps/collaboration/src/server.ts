@@ -29,5 +29,5 @@ sockets.on('connection', (socket) => {
 })
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`NoteTodo collaboration service listening on ws://127.0.0.1:${port}`)
+  process.stdout.write(`${JSON.stringify({ level: 'info', event: 'server.listening', service: 'collaboration', host: '127.0.0.1', port })}\n`)
 })

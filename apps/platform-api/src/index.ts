@@ -14,5 +14,7 @@ const { WorkspaceDatabase } = require(modulePath) as { WorkspaceDatabase: new (p
 const repository = new WorkspaceDatabase(resolve(databasePath))
 const server = createPlatformApiServer(repository)
 
-server.listen(port, '127.0.0.1', () => console.log(`NoteTodo platform API listening on http://127.0.0.1:${port}`))
+server.listen(port, '127.0.0.1', () => {
+  process.stdout.write(`${JSON.stringify({ level: 'info', event: 'server.listening', service: 'platform-api', host: '127.0.0.1', port })}\n`)
+})
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => server.close(() => { repository.close(); process.exit(0) }))

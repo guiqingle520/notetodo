@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
-  AlertTriangle,
   ArrowDown,
   ArrowUp,
   BookOpen,
@@ -13,15 +12,12 @@ import {
   ChevronRight,
   ChevronsLeft,
   CircleHelp,
-  Clock3,
   Code2,
   Columns2,
   Columns3,
   Command,
   Copy,
-  Cpu,
   FileText,
-  FileArchive,
   Grid2X2,
   GripVertical,
   Heading1,
@@ -30,7 +26,6 @@ import {
   History as HistoryIcon,
   Inbox,
   Image as ImageIcon,
-  KeyRound,
   Menu,
   List,
   ListOrdered,
@@ -48,9 +43,7 @@ import {
   Paperclip,
   Plus,
   Quote,
-  RotateCcw,
   Search,
-  ShieldCheck,
   Settings,
   Sparkles,
   Sigma,
@@ -58,8 +51,6 @@ import {
   Trash2,
   Type,
   X,
-  Wifi,
-  Webhook as WebhookIcon,
   Users,
   Upload,
 } from 'lucide-react'
@@ -69,28 +60,18 @@ import Collaboration from '@tiptap/extension-collaboration'
 import * as Y from 'yjs'
 import { pageBreadcrumbs, type PageIcon, type WorkspacePage } from './domain'
 import { useWorkspace } from './store'
-import { PageDatabaseMount } from './DatabaseBlock'
+import { PageDatabaseMount } from './DatabaseMount'
 import { ArchivePanel, CommentsPanel, ImportPanel, ModelSettingsPanel, NotificationPanel, PageHistoryPanel, SearchPalette, SharePanel } from './AppPanels'
 import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 import { createColumnLayoutContent, normalizeEmbedUrl, safeHttpsUrl } from './editor/rich-blocks'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
-import { diffHistoryHtml, historyTextLines } from './data/page-history'
 import { pageTemplates } from './data/page-templates'
-import type { ApiScope } from '@notetodo/auth-core'
-import type { WebhookEvent } from '@notetodo/webhook-core'
 
-type PagePermission = { subjectId: string; displayName: string; role: 'viewer' | 'commenter' | 'editor' | 'owner' }
-type PageComment = { id: string; authorName: string; body: string; anchor: null | { from: number; to: number; quote: string }; resolvedAt: string | null; createdAt: string }
-type WorkspaceNotification = { id: string; type: 'mention' | 'comment'; readAt: string | null; createdAt: string; pageId: string; pageTitle: string; authorName: string; body: string }
 type SelectionContext = { from: number; to: number; text: string }
 type AIPatchProposal = { text: string; operation: 'insert-paragraphs' | 'replace-selection'; range?: { from: number; to: number } }
-type ImportInspection = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['pickAndInspect']>>>
-type ImportJob = Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['listJobs']>>[number]
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
-type PageVersionSummary = Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['list']>>[number]
-type PageVersionDetail = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['get']>>>
 type RetrievalCitation = Awaited<ReturnType<NonNullable<typeof window.notetodo>['retrieval']['search']>>[number]
 type EditorMenuState = { from: number; left: number; top: number; query: string; index: number }
 
@@ -380,9 +361,17 @@ function AIPanel({ onClose, selectionContext, onApplyPatch, onUndoPatch }: { onC
   )
 }
 
-function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: (editor: Editor | null) => void; onSelectionChange: (selection: SelectionContext | null) => void }) {
-  const { pages, activePageId, updatePage, toggleFavorite, archivePage, setActivePage } = useWorkspace()
+function WorkspaceEditor(props: { onEditorReady: (editor: Editor | null) => void; onSelectionChange: (selection: SelectionContext | null) => void }) {
+  const { pages, activePageId } = useWorkspace()
   const page = pages.find((candidate) => candidate.id === activePageId) ?? pages[0]
+  if (!page) {
+    return <main className="workspace-main"><div className="empty-state">工作区暂时没有可显示的页面。</div></main>
+  }
+  return <WorkspaceEditorContent {...props} page={page} />
+}
+
+function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { page: WorkspacePage; onEditorReady: (editor: Editor | null) => void; onSelectionChange: (selection: SelectionContext | null) => void }) {
+  const { pages, updatePage, toggleFavorite, archivePage, setActivePage } = useWorkspace()
   const breadcrumbs = useMemo(() => pageBreadcrumbs(pages, page.id), [pages, page.id])
   const isDatabasePage = page.icon === 'grid' && page.content.includes('data-notetodo-page-layout="database"')
   const [slashMenu, setSlashMenu] = useState<EditorMenuState | null>(null)
@@ -634,7 +623,8 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
           : current)
       } else if (event.key === 'Enter' && filteredSlashCommands.length) {
         event.preventDefault()
-        runSlashCommand(filteredSlashCommands[slashMenu.index] ?? filteredSlashCommands[0])
+        const command = filteredSlashCommands[slashMenu.index] ?? filteredSlashCommands[0]
+        if (command) runSlashCommand(command)
       }
     }
     window.addEventListener('keydown', handleMenuKeys, true)
@@ -652,7 +642,9 @@ function WorkspaceEditor({ onEditorReady, onSelectionChange }: { onEditorReady: 
           ? { ...current, index: (current.index + direction + mentionedPages.length) % mentionedPages.length }
           : current)
       } else if (event.key === 'Enter' && mentionedPages.length) {
-        event.preventDefault(); insertPageMention(mentionedPages[pageMentionMenu.index] ?? mentionedPages[0])
+        event.preventDefault()
+        const mentionedPage = mentionedPages[pageMentionMenu.index] ?? mentionedPages[0]
+        if (mentionedPage) insertPageMention(mentionedPage)
       }
     }
     window.addEventListener('keydown', handleMentionKeys, true)

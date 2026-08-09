@@ -296,8 +296,12 @@ module.exports = {
   },
 
   listDatabaseRecordHistory(recordId, limit = 100) {
-    return this.recordRepository.recordHistory.all(recordId, Math.max(1, Math.min(200, Math.trunc(limit)))).map((row) => ({ ...row, previous: JSON.parse(row.previousJson), next: JSON.parse(row.nextJson) }))
-      .map(({ previousJson, nextJson, ...row }) => row)
+    return this.recordRepository.recordHistory.all(recordId, Math.max(1, Math.min(200, Math.trunc(limit)))).map((row) => {
+      const result = { ...row, previous: JSON.parse(row.previousJson), next: JSON.parse(row.nextJson) }
+      delete result.previousJson
+      delete result.nextJson
+      return result
+    })
   },
 
   restoreDatabaseRecordHistory(historyId) {
@@ -449,37 +453,34 @@ module.exports = {
   },
 
   bulkUpdateDatabaseRecords(databaseId, recordIds, propertyId, value) {
-    const property = this.database.prepare('SELECT id, type, config_json FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
+    const property = this.recordRepository.propertyInDatabase.get(propertyId, databaseId)
     if (!property) throw new Error('Database property does not exist.')
     if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
     const now = new Date().toISOString()
-    const exists = this.database.prepare('SELECT 1 FROM database_records WHERE id = ? AND database_id = ?')
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
+    const exists = this.recordRepository.recordInDatabase
+    this.recordRepository.transaction(() => {
       for (const recordId of recordIds) {
         if (!exists.get(recordId, databaseId)) throw new Error('A selected database record does not exist.')
         const previous = this.readDatabasePropertyValue(recordId, propertyId)
         this.writeDatabasePropertyValue(recordId, property, value, now)
         this.appendDatabaseRecordHistory(recordId, propertyId, 'property', previous, this.normalizeDatabasePropertyValue(property, value), now)
-        this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, recordId)
+        this.recordRepository.touchRecord.run(now, recordId)
         this.executeDatabaseAutomations(databaseId, recordId, propertyId, now)
       }
       this.enqueueWebhookEvent('database.record.updated', `${databaseId}:bulk`, { databaseId, recordIds, propertyId, value, updatedAt: now }, now)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
     return this.loadDatabaseById(databaseId)
   },
 
   importDatabaseRecords(databaseId, records) {
     if (!Array.isArray(records) || records.length < 1 || records.length > 10_000) throw new TypeError('A CSV import must contain between 1 and 10,000 records.')
-    const properties = this.database.prepare('SELECT id, type, config_json FROM database_properties WHERE database_id = ? ORDER BY position').all(databaseId)
+    const properties = this.recordRepository.databaseProperties.all(databaseId)
     if (!properties.length) throw new Error('Database does not exist.')
     const writable = new Map(properties.filter((property) => !['formula', 'rollup', 'relation'].includes(property.type)).map((property) => [property.id, property]))
     const now = new Date().toISOString()
-    let position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      const insert = this.database.prepare('INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+    let position = this.recordRepository.nextRecordPosition.get(databaseId).position
+    this.recordRepository.transaction(() => {
+      const insert = this.recordRepository.insertRecordWithContent
       for (const record of records) {
         if (!record || typeof record.id !== 'string' || !record.id || typeof record.values !== 'object' || Array.isArray(record.values)) throw new TypeError('CSV import contains an invalid record.')
         insert.run(record.id, databaseId, position++, '', now, now)
@@ -490,116 +491,99 @@ module.exports = {
         }
       }
       this.enqueueWebhookEvent('database.record.created', `${databaseId}:csv`, { databaseId, recordIds: records.map((record) => record.id), source: 'csv', createdAt: now }, now)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
     return this.loadDatabaseById(databaseId)
   },
 
   saveDatabaseTemplate(databaseId, template) {
-    const existing = this.database.prepare('SELECT database_id FROM database_templates WHERE id = ?').get(template.id)
+    const existing = this.recordRepository.templateDatabase.get(template.id)
     if (existing && existing.database_id !== databaseId) throw new Error('Template belongs to another database.')
     if (!existing) {
-      const count = this.database.prepare('SELECT COUNT(*) AS count FROM database_templates WHERE database_id = ?').get(databaseId).count
+      const count = this.recordRepository.templateCount.get(databaseId).count
       if (count >= 50) throw new Error('A database cannot contain more than 50 templates.')
     }
     const now = new Date().toISOString()
-    const result = this.database.prepare(`
-      INSERT INTO database_templates(id, database_id, name, values_json, content, created_at, updated_at)
-      SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name, values_json=excluded.values_json, content=excluded.content, updated_at=excluded.updated_at
-    `).run(template.id, databaseId, template.name, JSON.stringify(template.values), template.content, template.createdAt || now, now, databaseId)
+    const result = this.recordRepository.upsertTemplate.run(template.id, databaseId, template.name, JSON.stringify(template.values), template.content, template.createdAt || now, now, databaseId)
     if (result.changes !== 1) throw new Error('Database does not exist.')
     return this.loadDatabaseById(databaseId)
   },
 
   deleteDatabaseTemplate(databaseId, templateId) {
-    const result = this.database.prepare('DELETE FROM database_templates WHERE id = ? AND database_id = ?').run(templateId, databaseId)
+    const result = this.recordRepository.deleteTemplate.run(templateId, databaseId)
     if (result.changes !== 1) throw new Error('Database template does not exist.')
     return this.loadDatabaseById(databaseId)
   },
 
   createDatabaseRecordFromTemplate(databaseId, templateId, recordId) {
-    const template = this.database.prepare('SELECT values_json, content FROM database_templates WHERE id = ? AND database_id = ?').get(templateId, databaseId)
+    const template = this.recordRepository.templateById.get(templateId, databaseId)
     if (!template) throw new Error('Database template does not exist.')
     const values = JSON.parse(template.values_json)
-    const properties = this.database.prepare('SELECT id, type, config_json FROM database_properties WHERE database_id = ? ORDER BY position').all(databaseId)
+    const properties = this.recordRepository.databaseProperties.all(databaseId)
     const now = new Date().toISOString()
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?').get(databaseId).position
-      this.database.prepare('INSERT INTO database_records(id, database_id, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(recordId, databaseId, position, template.content, now, now)
+    this.recordRepository.transaction(() => {
+      const position = this.recordRepository.nextRecordPosition.get(databaseId).position
+      this.recordRepository.insertRecordWithContent.run(recordId, databaseId, position, template.content, now, now)
       for (const property of properties) if (!['formula', 'rollup'].includes(property.type)) {
         const constraints = JSON.parse(property.config_json || '{}').constraints || {}
         const value = Object.hasOwn(values, property.id) ? values[property.id] : constraints.defaultValue
         if (Object.hasOwn(values, property.id) || Object.hasOwn(constraints, 'defaultValue') || constraints.required) this.writeDatabasePropertyValue(recordId, property, value, now)
       }
       this.enqueueWebhookEvent('database.record.created', recordId, { record: { id: recordId, databaseId, templateId, createdAt: now } }, now)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
     return this.loadDatabaseById(databaseId)
   },
 
   setActiveDatabaseView(databaseId, viewId) {
-    const result = this.database.prepare(`
-      UPDATE databases SET active_view_id = ?
-      WHERE id = ? AND EXISTS (SELECT 1 FROM database_views WHERE id = ? AND database_id = ?)
-    `).run(viewId, databaseId, viewId, databaseId)
+    const result = this.recordRepository.activateView.run(viewId, databaseId, viewId, databaseId)
     if (result.changes !== 1) throw new Error('Database view does not exist.')
   },
 
   updateDatabaseViewConfig(databaseId, viewId, config) {
-    const result = this.database.prepare('UPDATE database_views SET config_json = ? WHERE id = ? AND database_id = ?')
+    const result = this.recordRepository.updateViewConfig
       .run(JSON.stringify(config), viewId, databaseId)
     if (result.changes !== 1) throw new Error('Database view does not exist.')
   },
 
   createDatabaseView(databaseId, viewId, name, type, config) {
-    const viewCount = this.database.prepare('SELECT COUNT(*) AS count FROM database_views WHERE database_id = ?').get(databaseId).count
+    const viewCount = this.recordRepository.viewCount.get(databaseId).count
     if (viewCount >= 50) throw new Error('A database cannot contain more than 50 views.')
-    const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_views WHERE database_id = ?').get(databaseId).position
-    const result = this.database.prepare(`
-      INSERT INTO database_views(id, database_id, name, type, position, config_json)
-      SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)
-    `).run(viewId, databaseId, name, type, position, JSON.stringify(config), databaseId)
+    const position = this.recordRepository.nextViewPosition.get(databaseId).position
+    const result = this.recordRepository.insertViewIfDatabaseExists.run(viewId, databaseId, name, type, position, JSON.stringify(config), databaseId)
     if (result.changes !== 1) throw new Error('Database does not exist.')
     this.setActiveDatabaseView(databaseId, viewId)
     return this.loadDatabaseById(databaseId)
   },
 
   renameDatabaseView(databaseId, viewId, name) {
-    const result = this.database.prepare('UPDATE database_views SET name = ? WHERE id = ? AND database_id = ?').run(name, viewId, databaseId)
+    const result = this.recordRepository.renameView.run(name, viewId, databaseId)
     if (result.changes !== 1) throw new Error('Database view does not exist.')
     return this.loadDatabaseById(databaseId)
   },
 
   deleteDatabaseView(databaseId, viewId) {
-    const views = this.database.prepare('SELECT id, position FROM database_views WHERE database_id = ? ORDER BY position, id').all(databaseId)
+    const views = this.recordRepository.orderedViews.all(databaseId)
     const target = views.find((view) => view.id === viewId)
     if (!target) throw new Error('Database view does not exist.')
     if (views.length <= 1) throw new Error('The final database view cannot be deleted.')
     const fallbackId = views.find((view) => view.id !== viewId).id
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      this.database.prepare('DELETE FROM database_views WHERE id = ? AND database_id = ?').run(viewId, databaseId)
-      this.database.prepare('UPDATE databases SET active_view_id = ? WHERE id = ? AND active_view_id = ?').run(fallbackId, databaseId, viewId)
+    this.recordRepository.transaction(() => {
+      this.recordRepository.deleteView.run(viewId, databaseId)
+      this.recordRepository.replaceActiveView.run(fallbackId, databaseId, viewId)
       // Compact positions after deletion so the first row remains the default
       // view and later reordering never accumulates sparse position values.
-      this.database.prepare('UPDATE database_views SET position = position - 1 WHERE database_id = ? AND position > ?').run(databaseId, target.position)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+      this.recordRepository.compactViewPositions.run(databaseId, target.position)
+    })
     return this.loadDatabaseById(databaseId)
   },
 
   setDefaultDatabaseView(databaseId, viewId) {
-    const views = this.database.prepare('SELECT id FROM database_views WHERE database_id = ? ORDER BY position, id').all(databaseId)
+    const views = this.recordRepository.viewIds.all(databaseId)
     if (!views.some((view) => view.id === viewId)) throw new Error('Database view does not exist.')
     const ordered = [viewId, ...views.map((view) => view.id).filter((id) => id !== viewId)]
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      const update = this.database.prepare('UPDATE database_views SET position = ? WHERE id = ? AND database_id = ?')
+    this.recordRepository.transaction(() => {
+      const update = this.recordRepository.reorderView
       ordered.forEach((id, position) => update.run(position, id, databaseId))
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
     return this.loadDatabaseById(databaseId)
   }
 }

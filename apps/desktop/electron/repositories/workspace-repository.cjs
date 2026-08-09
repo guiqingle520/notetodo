@@ -1,4 +1,7 @@
 const workspaceSql = require('../sql/workspace.cjs')
+const seedSql = require('../sql/seed.cjs')
+const operationSql = require('../sql/workspace-operations.cjs')
+const transactionSql = require('../sql/transaction.cjs')
 
 /**
  * 编译工作区领域的常用语句。仓储只负责 SQLite 访问，不包含页面业务规则。
@@ -8,17 +11,30 @@ function createWorkspaceRepository(database) {
   return Object.freeze({
     configure: () => database.exec(workspaceSql.configure),
     // 新工作区必须先执行 schema migration，之后才可以预编译引用数据表的语句。
-    prepareStatements: () => Object.freeze({
-      listPages: database.prepare(workspaceSql.listPages),
-      activePage: database.prepare(workspaceSql.activePage),
-      upsertPage: database.prepare(workspaceSql.upsertPage),
-      setActivePage: database.prepare(workspaceSql.setActivePage),
-      markVisited: database.prepare(workspaceSql.markVisited),
-      archivePage: database.prepare(workspaceSql.archivePage),
-      restorePage: database.prepare(workspaceSql.restorePage),
-      searchPages: database.prepare(workspaceSql.searchPages),
-      recentPages: database.prepare(workspaceSql.recentPages),
-    }),
+    prepareStatements: () => {
+      const queries = Object.fromEntries(
+        Object.entries(workspaceSql).filter(([key]) => key !== 'configure'),
+      )
+      return Object.freeze(
+        Object.fromEntries(
+          Object.entries({ ...queries, ...seedSql, ...operationSql }).map(([key, query]) => [
+            key,
+            database.prepare(query),
+          ]),
+        ),
+      )
+    },
+    transaction(work) {
+      database.exec(transactionSql.begin)
+      try {
+        const result = work()
+        database.exec(transactionSql.commit)
+        return result
+      } catch (error) {
+        database.exec(transactionSql.rollback)
+        throw error
+      }
+    },
   })
 }
 

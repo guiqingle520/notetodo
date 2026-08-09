@@ -22,4 +22,4 @@ process.on('exit', closeRepository)
 
 // stdout is exclusively owned by MCP framing. Operational messages go to stderr.
 console.error('NoteTodo MCP Server ready on stdio.')
-await serveStdio(() => createNoteTodoMcpServer(repository, rawToken))
+serveStdio(() => createNoteTodoMcpServer(repository, rawToken))

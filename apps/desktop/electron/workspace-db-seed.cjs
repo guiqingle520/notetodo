@@ -2,19 +2,13 @@ const seedWorkspace = require('../shared/seed-workspace.json')
 
 module.exports = {
   seedIfEmpty() {
-    const count = this.database.prepare('SELECT COUNT(*) AS count FROM pages').get().count
+    const count = this.statements.pageCount.get().count
     if (count > 0) return
   
-    const insert = this.database.prepare(`
-      INSERT INTO pages (
-        id, title, icon, parent_id, favorite, content,
-        updated_at, last_visited_at, archived_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
+    const insert = this.statements.insertPage
   
     // A single transaction avoids exposing a half-created starter workspace.
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
+    this.workspaceRepository.transaction(() => {
       for (const page of seedWorkspace.pages) {
         insert.run(
           page.id,
@@ -28,18 +22,12 @@ module.exports = {
           page.archivedAt,
         )
       }
-      this.database
-        .prepare('INSERT INTO workspace_state(singleton, active_page_id) VALUES (1, ?)')
-        .run(seedWorkspace.activePageId)
-      this.database.exec('COMMIT')
-    } catch (error) {
-      this.database.exec('ROLLBACK')
-      throw error
-    }
+      this.statements.insertWorkspaceState.run(seedWorkspace.activePageId)
+    })
   },
 
   seedDatabaseIfEmpty() {
-    const count = this.database.prepare('SELECT COUNT(*) AS count FROM databases').get().count
+    const count = this.statements.databaseCount.get().count
     if (count > 0) return
   
     const now = new Date().toISOString()
@@ -67,15 +55,13 @@ module.exports = {
       ['task-5', 4, ['桌面安装包签名', 'todo', 'Ming', '2026-08-16', 1, ['task-3', 'task-4'], null, null, '2026-08-10']],
     ]
   
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      this.database.prepare('INSERT INTO databases(id, page_id, name, active_view_id) VALUES (?, ?, ?, ?)')
-        .run('roadmap-db', 'projects', '产品路线', 'roadmap-table')
-      const insertProperty = this.database.prepare('INSERT INTO database_properties(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+    this.workspaceRepository.transaction(() => {
+      this.statements.insertDatabase.run('roadmap-db', 'projects', '产品路线', 'roadmap-table')
+      const insertProperty = this.statements.insertProperty
       for (const property of properties) insertProperty.run(property[0], 'roadmap-db', property[1], property[2], property[3], property[4])
   
-      const insertRecord = this.database.prepare('INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-      const insertValue = this.database.prepare('INSERT INTO property_values(record_id, property_id, text_value, number_value, boolean_value, json_value, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      const insertRecord = this.statements.insertRecord
+      const insertValue = this.statements.insertValue
       for (const [recordId, position, values] of records) {
         insertRecord.run(recordId, 'roadmap-db', position, now, now)
         properties.forEach((property, index) => {
@@ -84,18 +70,14 @@ module.exports = {
         })
       }
   
-      const insertView = this.database.prepare('INSERT INTO database_views(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+      const insertView = this.statements.insertView
       insertView.run('roadmap-table', 'roadmap-db', '所有任务', 'table', 0, '{}')
       insertView.run('roadmap-board', 'roadmap-db', '状态看板', 'board', 1, JSON.stringify({ groupByPropertyId: 'task-status' }))
       insertView.run('roadmap-list', 'roadmap-db', '紧凑列表', 'list', 2, '{}')
       insertView.run('roadmap-calendar', 'roadmap-db', '交付日历', 'calendar', 3, JSON.stringify({ datePropertyId: 'task-due' }))
       insertView.run('roadmap-timeline', 'roadmap-db', '项目时间轴', 'timeline', 4, JSON.stringify({ startDatePropertyId: 'task-start', endDatePropertyId: 'task-due' }))
       insertView.run('roadmap-gallery', 'roadmap-db', '项目画廊', 'gallery', 5, JSON.stringify({ coverPropertyId: 'task-cover', visiblePropertyIds: ['task-status', 'task-owner', 'task-due'], cardSize: 'medium' }))
-      this.database.exec('COMMIT')
-    } catch (error) {
-      this.database.exec('ROLLBACK')
-      throw error
-    }
+    })
   },
 
   /**
@@ -104,7 +86,7 @@ module.exports = {
    * without overwriting user-edited values or property configuration.
    */
   ensureAdvancedDatabaseSeed() {
-    const roadmap = this.database.prepare('SELECT id FROM databases WHERE id = ?').get('roadmap-db')
+    const roadmap = this.statements.roadmapDatabase.get('roadmap-db')
     if (!roadmap) return
   
     const properties = [
@@ -114,52 +96,26 @@ module.exports = {
       ['task-start', '开始日期', 'date', 8, '{}'],
       ['task-cover', '卡片封面', 'url', 9, '{}'],
     ]
-    const insertProperty = this.database.prepare(`
-      INSERT OR IGNORE INTO database_properties(id, database_id, name, type, position, config_json)
-      VALUES (?, 'roadmap-db', ?, ?, ?, ?)
-    `)
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
+    const insertProperty = this.statements.insertAdvancedProperty
+    this.workspaceRepository.transaction(() => {
       for (const property of properties) insertProperty.run(...property)
-      const relationProperty = this.database.prepare(`
-        INSERT OR IGNORE INTO property_values(record_id, property_id, json_value, updated_at)
-        VALUES (?, 'task-dependencies', ?, ?)
-      `)
+      const relationProperty = this.statements.insertRelationValue
       const now = new Date().toISOString()
       for (const [recordId, relatedIds] of [
         ['task-1', ['task-2']], ['task-2', []], ['task-3', ['task-1', 'task-2']],
         ['task-4', ['task-2']], ['task-5', ['task-3', 'task-4']],
       ]) relationProperty.run(recordId, JSON.stringify(relatedIds), now)
-      const startDateProperty = this.database.prepare(`
-        INSERT OR IGNORE INTO property_values(record_id, property_id, text_value, updated_at)
-        VALUES (?, 'task-start', ?, ?)
-      `)
+      const startDateProperty = this.statements.insertStartDateValue
       for (const [recordId, startDate] of [
         ['task-1', '2026-08-03'], ['task-2', '2026-07-29'], ['task-3', '2026-08-05'],
         ['task-4', '2026-08-07'], ['task-5', '2026-08-10'],
       ]) startDateProperty.run(recordId, startDate, now)
       // Data-only view backfill: the existing table already persists arbitrary
       // view types and JSON configuration, so no structural migration is needed.
-      this.database.prepare(`
-        INSERT OR IGNORE INTO database_views(id, database_id, name, type, position, config_json)
-        VALUES ('roadmap-calendar', 'roadmap-db', '交付日历', 'calendar', 3, ?)
-      `).run(JSON.stringify({ datePropertyId: 'task-due' }))
-      this.database.prepare(`
-        INSERT OR IGNORE INTO database_views(id, database_id, name, type, position, config_json)
-        VALUES ('roadmap-timeline', 'roadmap-db', '项目时间轴', 'timeline', 4, ?)
-      `).run(JSON.stringify({ startDatePropertyId: 'task-start', endDatePropertyId: 'task-due' }))
-      this.database.prepare(`
-        INSERT OR IGNORE INTO database_views(id, database_id, name, type, position, config_json)
-        VALUES ('roadmap-gallery', 'roadmap-db', '项目画廊', 'gallery', 5, ?)
-      `).run(JSON.stringify({ coverPropertyId: 'task-cover', visiblePropertyIds: ['task-status', 'task-owner', 'task-due'], cardSize: 'medium' }))
-      this.database.prepare(`
-        INSERT OR IGNORE INTO database_automations(id, database_id, name, enabled, trigger_property_id, condition_json, actions_json, created_at, updated_at)
-        VALUES ('completed-task-priority', 'roadmap-db', '完成后归档优先级', 1, 'task-status', ?, ?, ?, ?)
-      `).run(JSON.stringify({ propertyId: 'task-status', operator: 'equals', value: 'done' }), JSON.stringify([{ type: 'setProperty', propertyId: 'task-score', value: 1 }]), now, now)
-      this.database.exec('COMMIT')
-    } catch (error) {
-      this.database.exec('ROLLBACK')
-      throw error
-    }
+      this.statements.insertCalendarView.run(JSON.stringify({ datePropertyId: 'task-due' }))
+      this.statements.insertTimelineView.run(JSON.stringify({ startDatePropertyId: 'task-start', endDatePropertyId: 'task-due' }))
+      this.statements.insertGalleryView.run(JSON.stringify({ coverPropertyId: 'task-cover', visiblePropertyIds: ['task-status', 'task-owner', 'task-due'], cardSize: 'medium' }))
+      this.statements.insertDefaultAutomation.run(JSON.stringify({ propertyId: 'task-status', operator: 'equals', value: 'done' }), JSON.stringify([{ type: 'setProperty', propertyId: 'task-score', value: 1 }]), now, now)
+    })
   }
 }

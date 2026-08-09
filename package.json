@@ -17,11 +17,24 @@
     "package:win": "npm run package:win --workspace @notetodo/desktop",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "format": "prettier --write apps packages scripts *.json *.mjs",
+    "format:check": "prettier --check apps/desktop/electron/sql apps/desktop/electron/repositories apps/desktop/src/DatabaseMount.tsx apps/desktop/src/DatabaseBlockHelpers.tsx scripts *.json *.mjs apps/*/tsconfig*.json packages/*/tsconfig*.json",
+    "lint": "eslint apps packages scripts",
     "check:lines": "node scripts/check-file-lines.mjs",
     "check:sql": "node scripts/check-sql-boundaries.mjs",
-    "check": "npm run check:lines && npm run check:sql && npm run typecheck && npm run test && npm run build"
+    "check:deps": "node scripts/check-package-boundaries.mjs",
+    "check": "npm run format:check && npm run lint && npm run check:lines && npm run check:sql && npm run check:deps && npm run typecheck && npm run test && npm run build"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^6.1.1",
+    "globals": "^16.5.0",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "^8.66.0"
   }
 }

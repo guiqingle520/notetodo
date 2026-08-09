@@ -518,8 +518,8 @@ export function queryRecords(
 ): DatabaseRecord[] {
   const filtered = filters.length
     ? records.filter((record) => filterMode === 'or'
-      ? filters.some((filter) => matchesFilter(record.values[filter.propertyId], filter))
-      : filters.every((filter) => matchesFilter(record.values[filter.propertyId], filter)))
+      ? filters.some((filter) => matchesFilter(record.values[filter.propertyId] ?? null, filter))
+      : filters.every((filter) => matchesFilter(record.values[filter.propertyId] ?? null, filter)))
     : [...records]
 
   if (!sorts.length) return filtered
@@ -527,7 +527,7 @@ export function queryRecords(
   // Modern JS sort is stable; the original index remains the final tie-breaker.
   return filtered.sort((left, right) => {
     for (const sort of sorts) {
-      const comparison = compareValues(left.values[sort.propertyId], right.values[sort.propertyId])
+      const comparison = compareValues(left.values[sort.propertyId] ?? null, right.values[sort.propertyId] ?? null)
       if (comparison !== 0) return sort.direction === 'asc' ? comparison : -comparison
     }
     return 0

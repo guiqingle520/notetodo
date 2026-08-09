@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, BookOpen, Bot, CheckCircle2, CheckSquare2, ChevronRight, CircleHelp, Clock3, Copy, Cpu, FileArchive, FileText, Grid2X2, History as HistoryIcon, Inbox, KeyRound, MessageSquare, Plus, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Trash2, Upload, Users, Webhook as WebhookIcon, Wifi, X } from 'lucide-react'
+import { AlertTriangle, Archive, BookOpen, CheckCircle2, CheckSquare2, ChevronRight, CircleHelp, Clock3, Copy, Cpu, FileArchive, FileText, Grid2X2, History as HistoryIcon, Inbox, KeyRound, MessageSquare, Plus, RotateCcw, Search, ShieldCheck, Sparkles, Trash2, Upload, Users, Webhook as WebhookIcon, Wifi, X } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 import type { PageIcon, WorkspacePage } from './domain'
 import { useWorkspace } from './store'

@@ -1,20 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Activity, ArrowRight, ArrowUpDown, BookOpen, Calculator, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, Lock, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Search, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, moveRecordInOrder, normalizeViewConfig, orderRecordsByView, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validColumnCalculations, validateFormulaExpression, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseRecordHistory, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
+import { Activity, ArrowRight, ArrowUpDown, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, Lock, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Search, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
+import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, moveRecordInOrder, normalizeViewConfig, orderRecordsByView, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validateFormulaExpression, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
-import { BoardView, GenericTable, ListView, RecordDetailPanel, VirtualTable, propertyTypeLabel, type RelationTargets } from './DatabaseViews'
+import { BoardView, GenericTable, ListView, RecordDetailPanel, propertyTypeLabel, type RelationTargets } from './DatabaseViews'
+import { DatabaseNameEditor, defaultViewConfig } from './DatabaseBlockHelpers'
 export { BoardView, GenericTable, ListView, RecordDetailPanel, VirtualTable } from './DatabaseViews'
 
-const ROW_HEIGHT = 42
-const VIEWPORT_HEIGHT = 336
-const OVERSCAN = 5
-const LIST_ROW_HEIGHT = 43
-const BOARD_CARD_HEIGHT = 122
 const statuses = [
   { id: 'todo', label: '待开始' },
   { id: 'doing', label: '进行中' },
@@ -22,38 +18,6 @@ const statuses = [
 ]
 type AutomationRun = Awaited<ReturnType<NonNullable<typeof window.notetodo>['automations']['listRuns']>>[number]
 const previewAutomation: AutomationRule = { id: 'completed-task-priority', name: '完成后归档优先级', enabled: true, trigger: { type: 'propertyChanged', propertyId: 'task-status' }, condition: { propertyId: 'task-status', operator: 'equals', value: 'done' }, actions: [{ type: 'setProperty', propertyId: 'task-score', value: 1 }] }
-
-export function PageDatabaseMount({ pageId, pageTitle, canEdit, fullPage = false }: { pageId: string; pageTitle: string; canEdit: boolean; fullPage?: boolean }) {
-  const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null | undefined>(undefined)
-  useEffect(() => {
-    let active = true
-    setSnapshot(undefined)
-    void databaseRepository.loadByPage(pageId).then((loaded) => { if (active) setSnapshot(loaded) })
-    return () => { active = false }
-  }, [pageId])
-  if (snapshot === undefined) return null
-  if (snapshot) return <div className={fullPage ? 'database-page-surface' : undefined}><DatabaseBlock pageId={pageId} initialSnapshot={snapshot} /></div>
-  return canEdit ? <div className={fullPage ? 'database-page-surface is-empty' : undefined}><DatabaseCreationPrompt pageTitle={pageTitle} fullPage={fullPage} onCreate={async (name) => setSnapshot(await databaseRepository.createOnPage(pageId, name))} /></div> : null
-}
-
-export function DatabaseCreationPrompt({ pageTitle, onCreate, fullPage = false }: { pageTitle: string; onCreate: (name: string) => Promise<void>; fullPage?: boolean }) {
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState(`${pageTitle || '未命名'} 数据库`)
-  const [busy, setBusy] = useState(false)
-  const create = async () => {
-    const normalized = name.trim()
-    if (!normalized || busy) return
-    setBusy(true)
-    try { await onCreate(normalized) } finally { setBusy(false) }
-  }
-  if (!open && !fullPage) return <button className="database-create-trigger" onClick={() => setOpen(true)}><Database size={14} /><span><strong>创建数据库</strong><small>在当前页面建立结构化集合</small></span><Plus size={13} /></button>
-  return <section className="database-create-composer">
-    <div><Database size={18} /><span><strong>{fullPage ? '创建整页数据库' : '创建数据库'}</strong><small>{fullPage ? '从表格开始，之后随时切换看板、日历或画廊' : '为此页面添加一个内联数据库'}</small></span></div>
-    <label><span>数据库名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void create(); if (event.key === 'Escape') setOpen(false) }} /></label>
-    <p>包含名称、状态和日期属性。创建后可以继续添加属性与视图。</p>
-    <footer>{!fullPage && <button onClick={() => setOpen(false)}>取消</button>}<button disabled={!name.trim() || busy} onClick={() => void create()}>{busy ? '正在创建…' : '创建数据库'}</button></footer>
-  </section>
-}
 
 export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; initialSnapshot?: DatabaseSnapshot }) {
   const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null>(initialSnapshot ?? null)
@@ -343,20 +307,6 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   )
 }
 
-function DatabaseNameEditor({ name, onRename }: { name: string; onRename: (name: string) => Promise<void> }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(name)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => setDraft(name), [name])
-  const save = async () => {
-    const normalized = draft.trim()
-    if (!normalized || normalized === name) { setDraft(name); setEditing(false); return }
-    setBusy(true); try { await onRename(normalized); setEditing(false) } finally { setBusy(false) }
-  }
-  return editing ? <span className="database-name-editor"><input aria-label="数据库名称" autoFocus maxLength={200} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => void save()} onKeyDown={(event) => { if (event.key === 'Enter') void save(); if (event.key === 'Escape') { setDraft(name); setEditing(false) } }} /><i>{busy ? '保存中' : 'Enter 保存'}</i></span>
-    : <button className="database-name-trigger" title="重命名数据库" onClick={() => setEditing(true)}><span>{name}</span><PencilLine size={10} /></button>
-}
-
 const databaseViewTypes: Array<{ type: DatabaseView['type']; label: string; description: string; icon: typeof Table2 }> = [
   { type: 'table', label: '表格', description: '按属性列查看记录', icon: Table2 },
   { type: 'board', label: '看板', description: '按状态分组卡片', icon: Columns3 },
@@ -365,17 +315,6 @@ const databaseViewTypes: Array<{ type: DatabaseView['type']; label: string; desc
   { type: 'timeline', label: '时间轴', description: '查看日期范围', icon: ChartNoAxesGantt },
   { type: 'gallery', label: '画廊', description: '以卡片展示内容', icon: Images },
 ]
-
-function defaultViewConfig(schema: DatabaseSchema, type: DatabaseView['type']): DatabaseViewConfig {
-  const dates = schema.properties.filter((property) => property.type === 'date')
-  const selectable = schema.properties.find((property) => ['select', 'multiSelect'].includes(property.type))
-  const cover = schema.properties.find((property) => property.type === 'url')
-  if (type === 'board') return selectable ? { groupByPropertyId: selectable.id } : {}
-  if (type === 'calendar') return dates[0] ? { datePropertyId: dates[0].id } : {}
-  if (type === 'timeline') return { startDatePropertyId: dates[0]?.id, endDatePropertyId: dates[1]?.id ?? dates[0]?.id }
-  if (type === 'gallery') return { coverPropertyId: cover?.id, visiblePropertyIds: schema.properties.filter((property) => property.type !== 'title').slice(0, 3).map((property) => property.id), cardSize: 'medium' }
-  return {}
-}
 
 export function QuickFilterMenu({ schema, filters, onClose, onChange }: { schema: DatabaseSchema; filters: FilterRule[]; onClose: () => void; onChange: (filters: FilterRule[]) => void }) {
   const available = schema.properties.filter((property) => !filters.some((filter) => filter.propertyId === property.id))

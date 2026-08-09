@@ -77,7 +77,8 @@ export class CollaborationClient {
     this.setState('connecting')
     const socket = this.options.createSocket()
     this.socket = socket
-    socket.onopen = async () => {
+    socket.onopen = () => {
+      void (async () => {
       this.setState('authenticating')
       let token = this.options.token
       try {
@@ -91,6 +92,7 @@ export class CollaborationClient {
         type: 'auth', token, pageId: this.options.pageId,
         clientId: this.options.clientId, name: this.options.name, color: this.options.color,
       }))
+      })()
     }
     socket.onmessage = (event) => this.receive(event.data)
     socket.onerror = () => socket.close()

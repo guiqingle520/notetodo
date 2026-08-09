@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { WorkspacePage } from '../domain'
 import type { DatabaseSnapshot } from '@notetodo/database-core'
+import type { AutomationRule } from '@notetodo/automation-core'
 
 const require = createRequire(import.meta.url)
 const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
@@ -70,7 +71,7 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     resolveComment(id: string): void
     loadNotifications(recipientId: string): Array<{ id: string; readAt: string | null; pageTitle: string; body: string }>
     markNotificationRead(id: string, recipientId: string): void
-    importWorkspaceBundle(bundle: any): { rootPageId: string; pageCount: number; databaseCount: number }
+    importWorkspaceBundle(bundle: unknown): { rootPageId: string; pageCount: number; databaseCount: number }
     createImportJob(id: string, sourceName: string): void
     recoverInterruptedImports(): void
     updateImportJob(id: string, status: string, errorMessage?: string | null): void
@@ -96,8 +97,8 @@ const { WorkspaceDatabase } = require('../../electron/workspace-db.cjs') as {
     claimWebhookDeliveries(workerId: string, limit?: number, leaseMs?: number, now?: string): Array<{ id: string; payload: string; encryptedSecret: Buffer }>
     completeWebhookDelivery(deliveryId: string, workerId: string, result: { statusCode: number | null; durationMs: number; responsePreview?: string; errorMessage?: string }): { status: string; attempt: number }
     listWebhookDeliveries(endpointId: string): Array<{ id: string; status: string; attempts: number }>
-    listDatabaseAutomations(databaseId: string): Array<{ id: string; name: string; enabled: boolean; trigger: { propertyId: string }; actions: Array<{ propertyId: string; value: unknown }> }>
-    saveDatabaseAutomation(databaseId: string, rule: any): any
+    listDatabaseAutomations(databaseId: string): AutomationRule[]
+    saveDatabaseAutomation(databaseId: string, rule: AutomationRule): AutomationRule
     setDatabaseAutomationEnabled(id: string, enabled: boolean): boolean
     listAutomationRuns(databaseId: string): Array<{ id: string; automationId: string; status: string; errorMessage: string | null; replayOf: string | null }>
     replayAutomationRun(runId: string): string
@@ -368,7 +369,7 @@ describe('WorkspaceDatabase', () => {
 
   it('isolates failed automation actions and replays captured input with a corrected rule', () => {
     database = new WorkspaceDatabase(':memory:')
-    const rule = { id: 'failing-relation', name: 'Broken relation', enabled: true, trigger: { type: 'propertyChanged', propertyId: 'task-owner' }, condition: { propertyId: 'task-owner', operator: 'equals', value: 'boom' }, actions: [{ type: 'setProperty', propertyId: 'task-dependencies', value: ['missing-record'] }] }
+    const rule: AutomationRule = { id: 'failing-relation', name: 'Broken relation', enabled: true, trigger: { type: 'propertyChanged', propertyId: 'task-owner' }, condition: { propertyId: 'task-owner', operator: 'equals', value: 'boom' }, actions: [{ type: 'setProperty', propertyId: 'task-dependencies', value: ['missing-record'] }] }
     database.saveDatabaseAutomation('roadmap-db', rule)
     database.updateDatabaseCell('task-1', 'task-owner', 'boom')
     const failed = database.listAutomationRuns('roadmap-db').find((run) => run.automationId === rule.id)!

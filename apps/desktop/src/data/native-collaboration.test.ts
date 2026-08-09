@@ -1,10 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { Editor, type JSONContent } from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
-import TaskItem from '@tiptap/extension-task-item'
-import TaskList from '@tiptap/extension-task-list'
-import Collaboration from '@tiptap/extension-collaboration'
 import * as Y from 'yjs'
 import { collaborativeExtensions, migrateHtmlToNativeFragment } from './native-collaboration'
 import { RemoteCursors, renderRemoteCursors } from './remote-cursors'

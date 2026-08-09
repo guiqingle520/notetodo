@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, fireEvent, render, waitFor } from '@testing-library/react'
 import type { DatabaseRecord, DatabaseSchema, DatabaseView } from '@notetodo/database-core'
-import { BoardView, BulkEditToolbar, DatabaseCreationPrompt, DatabaseTemplateMenu, GalleryView, GenericTable, GroupLedger, ListView, QuickFilterMenu, RecordDetailPanel, RecordTrashPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewLayoutMenu, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { BoardView, BulkEditToolbar, DatabaseTemplateMenu, GalleryView, GenericTable, GroupLedger, ListView, QuickFilterMenu, RecordDetailPanel, RecordTrashPanel, SchemaPanel, TemplateEditorPanel, TimelineView, ViewLayoutMenu, ViewManagementMenu, ViewRulesPanel, VirtualTable } from './DatabaseBlock'
+import { DatabaseCreationPrompt } from './DatabaseMount'
 
 const schema: DatabaseSchema = { id: 'tasks', name: 'Tasks', properties: [
   { id: 'title', name: 'Title', type: 'title' },

@@ -58,4 +58,6 @@ module.exports = Object.freeze({
     ORDER BY last_visited_at DESC
     LIMIT ?
   `,
+  pageById: `SELECT id, title, icon, parent_id, favorite, content,
+      updated_at, last_visited_at, archived_at FROM pages WHERE id=?`,
 })
