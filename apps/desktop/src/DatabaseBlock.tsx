@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Activity, ArrowRight, ArrowUpDown, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Download, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
+import { Activity, ArrowRight, ArrowUpDown, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Download, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Settings2, Sigma, SlidersHorizontal, Table2, Trash2, X, Zap } from 'lucide-react'
 import { buildCalendarMonth, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, moveRecordInOrder, normalizeViewConfig, orderRecordsByView, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validateFormulaExpression, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseTrashRecord, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
@@ -11,9 +11,11 @@ import { BoardView, GenericTable, ListView, RecordDetailPanel, propertyTypeLabel
 import { DatabaseNameEditor, defaultViewConfig } from './DatabaseBlockHelpers'
 import { QuickFilterMenu, quickFilterLabel } from './DatabaseQuickFilter'
 import { ViewLayoutMenu } from './DatabaseViewLayoutMenu'
+import { ViewManagementMenu } from './DatabaseViewManagementMenu'
 export { BoardView, GenericTable, ListView, RecordDetailPanel, VirtualTable } from './DatabaseViews'
 export { QuickFilterMenu } from './DatabaseQuickFilter'
 export { ViewLayoutMenu } from './DatabaseViewLayoutMenu'
+export { ViewManagementMenu } from './DatabaseViewManagementMenu'
 
 const statuses = [
   { id: 'todo', label: '待开始' },
@@ -309,54 +311,6 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       }} />}
     </section>
   )
-}
-
-const databaseViewTypes: Array<{ type: DatabaseView['type']; label: string; description: string; icon: typeof Table2 }> = [
-  { type: 'table', label: '表格', description: '按属性列查看记录', icon: Table2 },
-  { type: 'board', label: '看板', description: '按状态分组卡片', icon: Columns3 },
-  { type: 'list', label: '列表', description: '紧凑浏览记录', icon: List },
-  { type: 'calendar', label: '日历', description: '按日期安排记录', icon: CalendarDays },
-  { type: 'timeline', label: '时间轴', description: '查看日期范围', icon: ChartNoAxesGantt },
-  { type: 'gallery', label: '画廊', description: '以卡片展示内容', icon: Images },
-]
-
-export function ViewManagementMenu({ mode, views, activeView, defaultViewId, onClose, onCreate, onRename, onDuplicate, onDelete, onSetDefault }: {
-  mode: 'create' | 'manage'; views: DatabaseView[]; activeView: DatabaseView; defaultViewId: string; onClose: () => void
-  onCreate: (name: string, type: DatabaseView['type']) => Promise<void>; onRename: (name: string) => Promise<void>
-  onDuplicate: () => Promise<void>; onDelete: () => Promise<void>; onSetDefault: () => Promise<void>
-}) {
-  const [name, setName] = useState(mode === 'create' ? '新视图' : activeView.name)
-  const [type, setType] = useState<DatabaseView['type']>('table')
-  const [busy, setBusy] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [error, setError] = useState('')
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
-    window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close)
-  }, [onClose])
-  const run = async (action: () => Promise<void>) => {
-    if (busy) return
-    setBusy(true); setError('')
-    try { await action() } catch (cause) { setError(cause instanceof Error ? cause.message : '操作失败，请重试。') } finally { setBusy(false) }
-  }
-  if (mode === 'create') return <section className="database-view-menu is-create" role="dialog" aria-label="新建数据库视图">
-    <header><strong>新建视图</strong><button aria-label="关闭新建视图" onClick={onClose}><X size={14} /></button></header>
-    <label><span>视图名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && name.trim()) void run(() => onCreate(name.trim(), type)) }} /></label>
-    <div className="database-view-types">{databaseViewTypes.map((candidate) => { const Icon = candidate.icon; return <button className={type === candidate.type ? 'is-selected' : ''} key={candidate.type} onClick={() => setType(candidate.type)}><Icon size={16} /><span><strong>{candidate.label}</strong><small>{candidate.description}</small></span>{type === candidate.type && <Check size={14} />}</button> })}</div>
-    {error && <p>{error}</p>}
-    <footer><button onClick={onClose}>取消</button><button disabled={!name.trim() || busy} onClick={() => void run(() => onCreate(name.trim(), type))}>{busy ? '创建中…' : '创建'}</button></footer>
-  </section>
-  return <section className="database-view-menu is-manage" role="dialog" aria-label="管理数据库视图">
-    <header><strong>视图选项</strong><button aria-label="关闭视图选项" onClick={onClose}><X size={14} /></button></header>
-    <label><span>名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && name.trim() && name.trim() !== activeView.name) void run(() => onRename(name.trim())) }} /></label>
-    <div className="database-view-actions">
-      <button disabled={busy || name.trim() === activeView.name || !name.trim()} onClick={() => void run(() => onRename(name.trim()))}><Check size={14} /><span>保存名称</span></button>
-      <button disabled={busy} onClick={() => void run(onDuplicate)}><Copy size={14} /><span>复制视图</span></button>
-      <button disabled={busy || activeView.id === defaultViewId} onClick={() => void run(onSetDefault)}><Star size={14} /><span>{activeView.id === defaultViewId ? '当前默认视图' : '设为默认视图'}</span></button>
-      <button className={confirmDelete ? 'is-confirm-delete' : 'is-danger'} disabled={busy || views.length <= 1} onClick={() => { if (!confirmDelete) return setConfirmDelete(true); void run(onDelete) }}><Trash2 size={14} /><span>{views.length <= 1 ? '至少保留一个视图' : confirmDelete ? '确认删除此视图' : '删除视图'}</span></button>
-    </div>
-    {error && <p>{error}</p>}
-  </section>
 }
 
 export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCreateBlank, onApply, onEdit, onSaveSelection, onDelete }: {
