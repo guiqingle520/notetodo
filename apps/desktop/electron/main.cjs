@@ -18,6 +18,7 @@ const { collaborationIpcContracts } = require('./ipc-collaboration-contracts.cjs
 const { removePagePermission, resolveLocalCollaborationIdentity, upsertPagePermission } = require('./ipc-collaboration-authorization.cjs')
 const { commentsIpcContracts } = require('./ipc-comments-contracts.cjs')
 const { aiIpcContracts } = require('./ipc-ai-contracts.cjs')
+const { attachmentIpcContracts } = require('./ipc-attachment-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -197,9 +198,7 @@ function registerWorkspaceIpc(database) {
   onTrusted('import:cancel', (_event, requestId) => {
     if (typeof requestId === 'string') activeImports.get(requestId)?.abort()
   })
-  handleTrusted('attachments:pick-and-store', async (event, pageId, kind, requestId) => {
-    assertId(pageId); assertId(requestId)
-    if (!['image', 'file'].includes(kind)) throw new TypeError('Invalid attachment kind.')
+  handleTrusted('attachments:pick-and-store', attachmentIpcContracts.pickAndStore, async (event, pageId, kind, requestId) => {
     const selected = await dialog.showOpenDialog({
       title: kind === 'image' ? '插入本地图片' : '插入本地文件',
       buttonLabel: kind === 'image' ? '插入图片' : '插入文件',
@@ -211,10 +210,8 @@ function registerWorkspaceIpc(database) {
     if (selected.canceled || !selected.filePaths.length) return []
     return storeAttachmentPaths(event, pageId, selected.filePaths, requestId, kind === 'image')
   })
-  handleTrusted('attachments:store-dropped', (event, pageId, filePaths, requestId) => storeAttachmentPaths(event, pageId, filePaths, requestId))
-  handleTrusted('attachments:store-memory', async (event, pageId, items, requestId) => {
-    assertId(pageId); assertId(requestId)
-    if (!Array.isArray(items) || items.length > 20) throw new TypeError('Invalid clipboard attachment selection.')
+  handleTrusted('attachments:store-dropped', attachmentIpcContracts.storeDropped, (event, pageId, filePaths, requestId) => storeAttachmentPaths(event, pageId, filePaths, requestId))
+  handleTrusted('attachments:store-memory', attachmentIpcContracts.storeMemory, async (event, pageId, items, requestId) => {
     const normalized = items.map((item) => {
       if (!item || typeof item.name !== 'string') throw new TypeError('Invalid clipboard attachment.')
       const data = Buffer.from(item.data)
@@ -237,9 +234,8 @@ function registerWorkspaceIpc(database) {
       await fs.promises.rm(temporaryDir, { recursive: true, force: true })
     }
   })
-  handleTrusted('attachments:open', async (_event, hash, requestedName) => {
+  handleTrusted('attachments:open', attachmentIpcContracts.open, async (_event, hash, requestedName) => {
     const { sourcePath } = resolveAttachment(hash)
-    if (typeof requestedName !== 'string') throw new TypeError('Invalid attachment name.')
     const displayName = safeDisplayName(requestedName)
     const extension = path.extname(displayName).toLowerCase()
     if (['.exe', '.msi', '.bat', '.cmd', '.com', '.scr', '.ps1', '.vbs', '.js', '.lnk'].includes(extension)) {
@@ -252,9 +248,8 @@ function registerWorkspaceIpc(database) {
     const errorMessage = await shell.openPath(openPath)
     if (errorMessage) throw new Error(errorMessage)
   })
-  handleTrusted('attachments:export', async (_event, hash, requestedName) => {
+  handleTrusted('attachments:export', attachmentIpcContracts.export, async (_event, hash, requestedName) => {
     const { sourcePath } = resolveAttachment(hash)
-    if (typeof requestedName !== 'string') throw new TypeError('Invalid attachment name.')
     const displayName = safeDisplayName(requestedName)
     const selected = await dialog.showSaveDialog({ title: '导出附件', defaultPath: displayName, buttonLabel: '导出' })
     if (selected.canceled || !selected.filePath) return false
