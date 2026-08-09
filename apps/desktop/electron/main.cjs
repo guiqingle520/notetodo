@@ -23,6 +23,7 @@ const { platformIpcContracts } = require('./ipc-platform-contracts.cjs')
 const { webhookIpcContracts } = require('./ipc-webhook-contracts.cjs')
 const { createWebhookEndpoint } = require('./ipc-webhook-service.cjs')
 const { registerAutomationIpc } = require('./ipc-automation-register.cjs')
+const { registerHistoryIpc } = require('./ipc-history-register.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -124,20 +125,7 @@ function registerWorkspaceIpc(database) {
   handleTrusted('webhooks:set-active', webhookIpcContracts.setActive, (_event, id, active) => database.setWebhookEndpointActive(id, active))
   handleTrusted('webhooks:list-deliveries', webhookIpcContracts.listDeliveries, (_event, endpointId) => database.listWebhookDeliveries(endpointId))
   registerAutomationIpc(handleTrusted, database)
-  handleTrusted('history:list', (_event, pageId) => { assertId(pageId); return database.listPageVersions(pageId) })
-  handleTrusted('history:get', (_event, pageId, versionId) => {
-    assertId(pageId)
-    if (!Number.isSafeInteger(versionId) || versionId < 1) throw new TypeError('Invalid page version.')
-    return database.getPageVersion(pageId, versionId)
-  })
-  handleTrusted('history:restore', (_event, pageId, versionId) => {
-    assertId(pageId)
-    if (!Number.isSafeInteger(versionId) || versionId < 1) throw new TypeError('Invalid page version.')
-    const userId = database.getSetting('collaboration_user_id')
-    const role = userId ? database.getPageRole(pageId, userId) : null
-    if (role && !['editor', 'owner'].includes(role)) throw new Error('当前角色无权恢复页面历史。')
-    return database.restorePageVersion(pageId, versionId)
-  })
+  registerHistoryIpc(handleTrusted, database)
   handleTrusted('retrieval:search', (_event, query, limit = 8) => {
     if (typeof query !== 'string' || query.length > 500 || !Number.isSafeInteger(limit)) throw new TypeError('Invalid retrieval query.')
     const userId = database.getSetting('collaboration_user_id')
