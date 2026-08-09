@@ -106,11 +106,14 @@ interface Window {
         events: import('@notetodo/webhook-core').WebhookEvent[]
         active: boolean
         secret: string
+        createdAt: string
+        updatedAt: string
       }>
       setActive: (id: string, active: boolean) => Promise<boolean>
       listDeliveries: (endpointId: string) => Promise<
         Array<{
           id: string
+          endpointId: string
           event: import('@notetodo/webhook-core').WebhookEvent
           status: 'pending' | 'leased' | 'delivered' | 'dead'
           attempts: number
