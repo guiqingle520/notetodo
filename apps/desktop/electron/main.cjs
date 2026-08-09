@@ -11,6 +11,7 @@ const { convertZipArchive, inspectZipArchive } = require('@notetodo/import-core/
 const { randomBytes, randomUUID } = require('node:crypto')
 const { createTrustedIpcHandler, createTrustedIpcListener } = require('./ipc-security.cjs')
 const { appInfoIpcContract } = require('./ipc-contracts.cjs')
+const { workspaceIpcContracts } = require('./ipc-workspace-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -43,17 +44,6 @@ if (process.platform === 'win32') app.setAppUserModelId('dev.notetodo.desktop')
 if (process.env.NOTETODO_SMOKE_TEST === '1' && process.env.NOTETODO_SMOKE_DATA_DIR) {
   if (!path.isAbsolute(process.env.NOTETODO_SMOKE_DATA_DIR)) throw new Error('Smoke data directory must be absolute.')
   app.setPath('userData', process.env.NOTETODO_SMOKE_DATA_DIR)
-}
-
-function assertPage(value) {
-  if (!value || typeof value !== 'object') throw new TypeError('A page object is required.')
-  if (typeof value.id !== 'string' || value.id.length < 1 || value.id.length > 128) {
-    throw new TypeError('Invalid page id.')
-  }
-  if (typeof value.title !== 'string' || value.title.length > 1000) throw new TypeError('Invalid title.')
-  if (typeof value.content !== 'string' || value.content.length > 20_000_000) {
-    throw new TypeError('Page content exceeds the local safety limit.')
-  }
 }
 
 function assertId(id) {
@@ -109,27 +99,12 @@ function registerWorkspaceIpc(database) {
     }))
   }
 
-  handleTrusted('workspace:load', () => database.loadWorkspace())
-  handleTrusted('workspace:upsert-page', (_event, page) => {
-    assertPage(page)
-    return database.upsertPage(page)
-  })
-  handleTrusted('workspace:set-active-page', (_event, id) => {
-    assertId(id)
-    database.setActivePage(id)
-  })
-  handleTrusted('workspace:archive-page', (_event, id) => {
-    assertId(id)
-    database.archivePage(id)
-  })
-  handleTrusted('workspace:restore-page', (_event, id) => {
-    assertId(id)
-    database.restorePage(id)
-  })
-  handleTrusted('workspace:search', (_event, query) => {
-    if (typeof query !== 'string' || query.length > 500) throw new TypeError('Invalid search query.')
-    return database.searchPages(query)
-  })
+  handleTrusted('workspace:load', workspaceIpcContracts.load, () => database.loadWorkspace())
+  handleTrusted('workspace:upsert-page', workspaceIpcContracts.upsertPage, (_event, page) => database.upsertPage(page))
+  handleTrusted('workspace:set-active-page', workspaceIpcContracts.setActivePage, (_event, id) => database.setActivePage(id))
+  handleTrusted('workspace:archive-page', workspaceIpcContracts.archivePage, (_event, id) => database.archivePage(id))
+  handleTrusted('workspace:restore-page', workspaceIpcContracts.restorePage, (_event, id) => database.restorePage(id))
+  handleTrusted('workspace:search', workspaceIpcContracts.search, (_event, query) => database.searchPages(query))
   handleTrusted('platform:list-tokens', () => database.listApiTokens())
   handleTrusted('platform:issue-token', (_event, name, scopes) => {
     if (!Array.isArray(scopes) || scopes.some((scope) => !API_SCOPES.includes(scope))) throw new TypeError('Invalid API token scopes.')

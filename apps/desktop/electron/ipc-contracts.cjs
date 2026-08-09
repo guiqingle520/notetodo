@@ -37,7 +37,11 @@ function assertAppInfoResponse(value) {
   if (typeof value.version !== 'string' || value.version.length < 1 || value.version.length > 100) {
     throw new TypeError('Invalid app version response.')
   }
-  if (typeof value.platform !== 'string' || value.platform.length < 1 || value.platform.length > 32) {
+  if (
+    typeof value.platform !== 'string' ||
+    value.platform.length < 1 ||
+    value.platform.length > 32
+  ) {
     throw new TypeError('Invalid app platform response.')
   }
 }
@@ -58,7 +62,8 @@ function assertIpcValue(value, path, depth = 0, ancestors = new Set()) {
     typeof value === 'boolean' ||
     (typeof value === 'number' && Number.isFinite(value)) ||
     typeof value === 'bigint'
-  ) return
+  )
+    return
   if (typeof value === 'number') throw new TypeError(`${path} contains a non-finite number.`)
   if (typeof value === 'function' || typeof value === 'symbol') {
     throw new TypeError(`${path} contains a non-serializable value.`)
@@ -69,8 +74,11 @@ function assertIpcValue(value, path, depth = 0, ancestors = new Set()) {
 
   const nextAncestors = new Set(ancestors).add(value)
   if (Array.isArray(value)) {
-    if (value.length > MAX_IPC_COLLECTION_SIZE) throw new TypeError(`${path} exceeds the IPC collection limit.`)
-    value.forEach((item, index) => assertIpcValue(item, `${path}[${index}]`, depth + 1, nextAncestors))
+    if (value.length > MAX_IPC_COLLECTION_SIZE)
+      throw new TypeError(`${path} exceeds the IPC collection limit.`)
+    value.forEach((item, index) =>
+      assertIpcValue(item, `${path}[${index}]`, depth + 1, nextAncestors),
+    )
     return
   }
 
@@ -79,7 +87,8 @@ function assertIpcValue(value, path, depth = 0, ancestors = new Set()) {
     throw new TypeError(`${path} contains an unsupported object prototype.`)
   }
   const entries = Object.entries(value)
-  if (entries.length > MAX_IPC_COLLECTION_SIZE) throw new TypeError(`${path} exceeds the IPC collection limit.`)
+  if (entries.length > MAX_IPC_COLLECTION_SIZE)
+    throw new TypeError(`${path} exceeds the IPC collection limit.`)
   for (const [key, item] of entries) {
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
       throw new TypeError(`${path} contains an unsafe property.`)

@@ -33,7 +33,11 @@ function createTrustedIpcHandler(ipcMain, options) {
     const contract = typeof contractOrListener === 'function' ? null : contractOrListener
     const listener = optionalListener ?? contractOrListener
     if (typeof listener !== 'function') throw new TypeError('IPC listener is required.')
-    if (contract && (typeof contract.assertRequest !== 'function' || typeof contract.assertResponse !== 'function')) {
+    if (
+      contract &&
+      (typeof contract.assertRequest !== 'function' ||
+        typeof contract.assertResponse !== 'function')
+    ) {
       throw new TypeError('IPC contract must validate requests and responses.')
     }
 
