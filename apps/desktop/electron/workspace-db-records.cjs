@@ -44,18 +44,16 @@ module.exports = {
       { id: 'doing', name: '进行中', color: 'amber' },
       { id: 'done', name: '已完成', color: 'green' },
     ] })
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      if (!this.database.prepare('SELECT 1 FROM pages WHERE id = ? AND archived_at IS NULL').get(pageId)) throw new Error('Database page does not exist.')
-      this.database.prepare('INSERT INTO databases(id, page_id, name, active_view_id) VALUES (?, ?, ?, ?)').run(databaseId, pageId, name, tableView)
-      const insertProperty = this.database.prepare('INSERT INTO database_properties(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+    this.recordRepository.transaction(() => {
+      if (!this.recordRepository.activePageExists.get(pageId)) throw new Error('Database page does not exist.')
+      this.recordRepository.insertDatabase.run(databaseId, pageId, name, tableView)
+      const insertProperty = this.recordRepository.insertProperty
       insertProperty.run(title, databaseId, '名称', 'title', 0, '{}')
       insertProperty.run(status, databaseId, '状态', 'select', 1, statusConfig)
       insertProperty.run(date, databaseId, '日期', 'date', 2, '{}')
-      this.database.prepare('INSERT INTO database_views(id, database_id, name, type, position, config_json) VALUES (?, ?, ?, ?, ?, ?)')
+      this.recordRepository.insertView
         .run(tableView, databaseId, '默认表格', 'table', 0, '{}')
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+    })
     return this.loadDatabaseByPage(pageId)
   },
 
@@ -65,31 +63,26 @@ module.exports = {
       { id: 'option-2', name: '选项 2', color: 'amber' },
     ] }) : type === 'relation' ? JSON.stringify({ relation: { databaseId } }) : type === 'formula' ? JSON.stringify({ formula: { expression: '""' } }) : '{}'
     if (type === 'rollup') {
-      const relation = this.database.prepare("SELECT id, config_json FROM database_properties WHERE database_id = ? AND type = 'relation' ORDER BY position LIMIT 1").get(databaseId)
+      const relation = this.recordRepository.firstRelationProperty.get(databaseId)
       if (!relation) throw new Error('Rollup requires an existing relation property.')
       const targetDatabaseId = JSON.parse(relation.config_json || '{}').relation?.databaseId || databaseId
-      const target = this.database.prepare("SELECT id FROM database_properties WHERE database_id = ? AND type NOT IN ('formula', 'rollup') ORDER BY position LIMIT 1").get(targetDatabaseId)
+      const target = this.recordRepository.firstWritableProperty.get(targetDatabaseId)
       if (!target) throw new Error('The relation target has no properties.')
       config = JSON.stringify({ rollup: { relationPropertyId: relation.id, targetPropertyId: target.id, aggregation: 'count' } })
     }
-    const position = this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_properties WHERE database_id = ?').get(databaseId).position
-    const result = this.database.prepare('INSERT INTO database_properties(id, database_id, name, type, position, config_json) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)')
+    const position = this.recordRepository.nextPropertyPosition.get(databaseId).position
+    const result = this.recordRepository.insertPropertyForDatabase
       .run(propertyId, databaseId, name, type, position, config, databaseId)
     if (result.changes !== 1) throw new Error('Database does not exist.')
     return this.loadDatabaseById(databaseId)
   },
 
   listDatabaseSources() {
-    return this.database.prepare(`
-      SELECT database.id, database.page_id AS pageId, database.name, page.title AS pageTitle,
-        (SELECT COUNT(*) FROM database_records record WHERE record.database_id = database.id) AS recordCount
-      FROM databases database JOIN pages page ON page.id = database.page_id
-      WHERE page.archived_at IS NULL ORDER BY page.last_visited_at DESC, database.name, database.id
-    `).all()
+    return this.recordRepository.databaseSources.all()
   },
 
   updateDatabasePropertyConfig(databaseId, propertyId, config) {
-    const property = this.database.prepare('SELECT type, config_json FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
+    const property = this.recordRepository.propertyConfig.get(propertyId, databaseId)
     if (!property) throw new Error('Database property does not exist.')
     let normalized = {}
     if (property.type === 'select' || property.type === 'multiSelect') {
@@ -106,10 +99,10 @@ module.exports = {
       normalized = { options }
     } else if (property.type === 'relation') {
       const targetId = config?.relation?.databaseId
-      if (typeof targetId !== 'string' || !this.database.prepare('SELECT 1 FROM databases WHERE id = ?').get(targetId)) throw new TypeError('Relation target database does not exist.')
+      if (typeof targetId !== 'string' || !this.recordRepository.databaseExists.get(targetId)) throw new TypeError('Relation target database does not exist.')
       const reciprocalPropertyId = config?.relation?.reciprocalPropertyId
       if (reciprocalPropertyId !== undefined) {
-        const reciprocal = this.database.prepare("SELECT config_json FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'").get(reciprocalPropertyId, targetId)
+        const reciprocal = this.recordRepository.reciprocalPropertyConfig.get(reciprocalPropertyId, targetId)
         if (!reciprocal || JSON.parse(reciprocal.config_json || '{}').relation?.databaseId !== databaseId) throw new TypeError('反向关联属性必须位于目标数据库并指回当前数据库。')
       }
       normalized = { relation: { databaseId: targetId, ...(reciprocalPropertyId ? { reciprocalPropertyId } : {}) } }
@@ -119,10 +112,10 @@ module.exports = {
       normalized = { formula: { expression } }
     } else if (property.type === 'rollup') {
       const rollup = config?.rollup
-      const relation = this.database.prepare("SELECT config_json FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'").get(rollup?.relationPropertyId, databaseId)
+      const relation = this.recordRepository.reciprocalPropertyConfig.get(rollup?.relationPropertyId, databaseId)
       if (!relation) throw new TypeError('Rollup relation property does not exist.')
       const targetDatabaseId = JSON.parse(relation.config_json || '{}').relation?.databaseId || databaseId
-      const target = this.database.prepare("SELECT type FROM database_properties WHERE id = ? AND database_id = ? AND type NOT IN ('formula', 'rollup')").get(rollup?.targetPropertyId, targetDatabaseId)
+      const target = this.recordRepository.rollupTargetProperty.get(rollup?.targetPropertyId, targetDatabaseId)
       const aggregations = new Set(['count', 'sum', 'average', 'min', 'max', 'showOriginal'])
       const numericAggregations = new Set(['sum', 'average', 'min', 'max'])
       if (!target || !aggregations.has(rollup?.aggregation) || (numericAggregations.has(rollup?.aggregation) && target.type !== 'number')) throw new TypeError('Rollup target property or aggregation is invalid.')
@@ -153,38 +146,36 @@ module.exports = {
         seen.add(key)
       }
     }
-    const result = this.database.prepare('UPDATE database_properties SET config_json = ? WHERE id = ? AND database_id = ?').run(JSON.stringify(normalized), propertyId, databaseId)
+    const result = this.recordRepository.updatePropertyConfig.run(JSON.stringify(normalized), propertyId, databaseId)
     if (result.changes !== 1) throw new Error('Database property does not exist.')
     return this.loadDatabaseById(databaseId)
   },
 
   renameDatabaseProperty(databaseId, propertyId, name) {
-    const result = this.database.prepare('UPDATE database_properties SET name = ? WHERE id = ? AND database_id = ?').run(name, propertyId, databaseId)
+    const result = this.recordRepository.renameProperty.run(name, propertyId, databaseId)
     if (result.changes !== 1) throw new Error('Database property does not exist.')
     return this.loadDatabaseById(databaseId)
   },
 
   renameDatabase(databaseId, name) {
-    const result = this.database.prepare('UPDATE databases SET name = ? WHERE id = ?').run(name, databaseId)
+    const result = this.recordRepository.renameDatabase.run(name, databaseId)
     if (result.changes !== 1) throw new Error('Database does not exist.')
     return this.loadDatabaseById(databaseId)
   },
 
   reorderDatabaseProperties(databaseId, propertyIds) {
-    const existing = this.database.prepare('SELECT id FROM database_properties WHERE database_id = ? ORDER BY position').all(databaseId).map((row) => row.id)
+    const existing = this.recordRepository.propertyOrder.all(databaseId).map((row) => row.id)
     if (propertyIds.length !== existing.length || new Set(propertyIds).size !== existing.length || propertyIds.some((id) => !existing.includes(id))) throw new TypeError('Property order must contain every property exactly once.')
-    const update = this.database.prepare('UPDATE database_properties SET position = ? WHERE id = ? AND database_id = ?')
-    this.database.exec('BEGIN IMMEDIATE')
-    try { propertyIds.forEach((id, position) => update.run(position, id, databaseId)); this.database.exec('COMMIT') }
-    catch (error) { this.database.exec('ROLLBACK'); throw error }
+    const update = this.recordRepository.reorderProperty
+    this.recordRepository.transaction(() => propertyIds.forEach((id, position) => update.run(position, id, databaseId)))
     return this.loadDatabaseById(databaseId)
   },
 
   deleteDatabaseProperty(databaseId, propertyId) {
-    const property = this.database.prepare('SELECT name, type FROM database_properties WHERE id = ? AND database_id = ?').get(propertyId, databaseId)
+    const property = this.recordRepository.propertyForDelete.get(propertyId, databaseId)
     if (!property) throw new Error('Database property does not exist.')
     if (property.type === 'title') throw new Error('The title property cannot be deleted.')
-    const allProperties = this.database.prepare('SELECT id, name, type, database_id AS databaseId, config_json AS configJson FROM database_properties').all()
+    const allProperties = this.recordRepository.allProperties.all()
     const blockers = allProperties.filter((candidate) => {
       const config = JSON.parse(candidate.configJson || '{}')
       if (candidate.type === 'rollup') return config.rollup?.relationPropertyId === propertyId || config.rollup?.targetPropertyId === propertyId
@@ -192,18 +183,16 @@ module.exports = {
       return false
     })
     if (blockers.length) throw new Error(`属性正在被 ${blockers.map((candidate) => candidate.name).join('、')} 使用，请先修改依赖配置。`)
-    this.database.exec('BEGIN IMMEDIATE')
-    try {
-      const updateConfig = this.database.prepare('UPDATE database_properties SET config_json = ? WHERE id = ?')
+    this.recordRepository.transaction(() => {
+      const updateConfig = this.recordRepository.updatePropertyConfigById
       for (const candidate of allProperties) {
         const config = JSON.parse(candidate.configJson || '{}')
         if (candidate.type !== 'relation' || config.relation?.reciprocalPropertyId !== propertyId) continue
         delete config.relation.reciprocalPropertyId
         updateConfig.run(JSON.stringify(config), candidate.id)
       }
-      this.database.prepare('DELETE FROM database_properties WHERE id = ? AND database_id = ?').run(propertyId, databaseId)
-      this.database.exec('COMMIT')
-    } catch (error) { this.database.exec('ROLLBACK'); throw error }
+      this.recordRepository.deleteProperty.run(propertyId, databaseId)
+    })
     return this.loadDatabaseById(databaseId)
   },
 
