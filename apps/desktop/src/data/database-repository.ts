@@ -103,6 +103,11 @@ class DatabaseRepository {
     if (window.notetodo?.database) return window.notetodo.database.updatePropertyConfig(snapshot.schema.id, propertyId, config)
     const candidate = snapshot.schema.properties.find((property) => property.id === propertyId)
     if (!candidate) throw new Error('属性不存在。')
+    if (candidate.type === 'relation' && config.relation?.reciprocalPropertyId) {
+      const target = this.findByDatabaseId(config.relation.databaseId)
+      const reciprocal = target?.schema.properties.find((property) => property.id === config.relation!.reciprocalPropertyId)
+      if (reciprocal?.type !== 'relation' || reciprocal.relation?.databaseId !== snapshot.schema.id) throw new Error('反向关联属性必须位于目标数据库并指回当前数据库。')
+    }
     const configured = { ...candidate, ...structuredClone(config) }
     for (const record of snapshot.records) {
       const issue = validatePropertyConstraints(configured, record.values[propertyId] ?? null, snapshot.records, record.id)
@@ -145,9 +150,26 @@ class DatabaseRepository {
     if (window.notetodo?.database) return window.notetodo.database.updateCell(recordId, propertyId, value)
     const property = snapshot.schema.properties.find((candidate) => candidate.id === propertyId)
     if (property) { const issue = validatePropertyConstraints(property, value, snapshot.records, recordId); if (issue) throw new Error(issue) }
+    if (property?.type === 'relation' && property.relation?.reciprocalPropertyId) this.syncBrowserReciprocal(snapshot, recordId, property, previous, value)
     this.appendBrowserHistory({ recordId, propertyId, propertyName: property?.name ?? '属性', kind: 'property', previous, next: value })
     this.write(snapshot)
     return undefined
+  }
+
+  private syncBrowserReciprocal(snapshot: DatabaseSnapshot, recordId: string, property: DatabaseProperty, previous: PropertyValue, next: PropertyValue) {
+    const relation = property.relation!
+    const target = this.findByDatabaseId(relation.databaseId)
+    const reciprocal = target?.schema.properties.find((candidate) => candidate.id === relation.reciprocalPropertyId)
+    if (!target || reciprocal?.type !== 'relation' || reciprocal.relation?.databaseId !== snapshot.schema.id) throw new Error('反向关联配置已失效，请重新配置关联属性。')
+    const before = new Set(Array.isArray(previous) ? previous : [])
+    const after = new Set(Array.isArray(next) ? next : [])
+    const records = target.records.map((record) => {
+      if (!before.has(record.id) && !after.has(record.id)) return record
+      const values = new Set(Array.isArray(record.values[reciprocal.id]) ? record.values[reciprocal.id] as string[] : [])
+      if (after.has(record.id)) values.add(recordId); else values.delete(recordId)
+      return { ...record, values: { ...record.values, [reciprocal.id]: [...values] }, updatedAt: new Date().toISOString() }
+    })
+    this.write({ ...target, records })
   }
 
   private findByDatabaseId(databaseId: string) {

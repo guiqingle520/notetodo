@@ -11,7 +11,7 @@ export interface DatabaseProperty {
   name: string
   type: PropertyType
   options?: SelectOption[]
-  relation?: { databaseId: string }
+  relation?: { databaseId: string; reciprocalPropertyId?: string }
   rollup?: { relationPropertyId: string; targetPropertyId: string; aggregation: 'count' | 'sum' | 'average' | 'min' | 'max' | 'showOriginal' }
   formula?: { expression: string }
   /** Write-time rules shared by SQLite, imports and the browser fallback. */

@@ -324,6 +324,24 @@ describe('WorkspaceDatabase', () => {
     expect(() => database?.updateDatabaseCell('task-1', 'task-dependencies', ['missing-record'])).toThrow(/does not exist/)
   })
 
+  it('keeps reciprocal relation properties consistent in one transaction', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const now = new Date().toISOString()
+    database.upsertPage({ id: 'research', title: '研究台账', icon: 'grid', parentId: null, favorite: false, content: '<p></p>', updatedAt: now, lastVisitedAt: now, archivedAt: null })
+    database.createDatabaseForPage('research', 'research-db', '研究台账')
+    database.createDatabaseRecord('research-db', 'research-1')
+    database.addDatabaseProperty('research-db', 'research-tasks', '相关任务', 'relation')
+    database.updateDatabasePropertyConfig('research-db', 'research-tasks', { relation: { databaseId: 'roadmap-db' } })
+    database.addDatabaseProperty('roadmap-db', 'task-research', '研究资料', 'relation')
+    database.updateDatabasePropertyConfig('roadmap-db', 'task-research', { relation: { databaseId: 'research-db', reciprocalPropertyId: 'research-tasks' } })
+
+    database.updateDatabaseCell('task-1', 'task-research', ['research-1'])
+    expect(database.loadDatabaseByPage('research')?.records[0]?.values['research-tasks']).toEqual(['task-1'])
+    database.updateDatabaseCell('task-1', 'task-research', [])
+    expect(database.loadDatabaseByPage('research')?.records[0]?.values['research-tasks']).toEqual([])
+    expect(() => database?.updateDatabasePropertyConfig('roadmap-db', 'task-research', { relation: { databaseId: 'research-db', reciprocalPropertyId: 'research-db-title' } })).toThrow(/反向关联/)
+  })
+
   it('executes persisted automations transactionally and records successful runs', () => {
     database = new WorkspaceDatabase(':memory:')
     expect(database.listDatabaseAutomations('roadmap-db')).toEqual([expect.objectContaining({ id: 'completed-task-priority', enabled: true })])

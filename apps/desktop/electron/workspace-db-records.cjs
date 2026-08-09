@@ -110,7 +110,12 @@ module.exports = {
     } else if (property.type === 'relation') {
       const targetId = config?.relation?.databaseId
       if (typeof targetId !== 'string' || !this.database.prepare('SELECT 1 FROM databases WHERE id = ?').get(targetId)) throw new TypeError('Relation target database does not exist.')
-      normalized = { relation: { databaseId: targetId } }
+      const reciprocalPropertyId = config?.relation?.reciprocalPropertyId
+      if (reciprocalPropertyId !== undefined) {
+        const reciprocal = this.database.prepare("SELECT config_json FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'").get(reciprocalPropertyId, targetId)
+        if (!reciprocal || JSON.parse(reciprocal.config_json || '{}').relation?.databaseId !== databaseId) throw new TypeError('反向关联属性必须位于目标数据库并指回当前数据库。')
+      }
+      normalized = { relation: { databaseId: targetId, ...(reciprocalPropertyId ? { reciprocalPropertyId } : {}) } }
     } else if (property.type === 'formula') {
       const expression = typeof config?.formula?.expression === 'string' ? config.formula.expression.trim() : ''
       if (!expression || expression.length > 1000) throw new TypeError('Formula expression must contain 1 to 1,000 characters.')
@@ -206,6 +211,7 @@ module.exports = {
     try {
       const previous = this.readDatabasePropertyValue(recordId, propertyId)
       this.writeDatabasePropertyValue(recordId, { id: propertyId, ...property }, value, now)
+      if (property.type === 'relation') this.syncReciprocalRelation(recordId, property, previous, value, now)
       this.appendDatabaseRecordHistory(recordId, propertyId, 'property', previous, this.normalizeDatabasePropertyValue(property, value), now)
       this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, recordId)
       const automationRuns = this.executeDatabaseAutomations(property.databaseId, recordId, propertyId, now)
@@ -213,6 +219,24 @@ module.exports = {
       this.database.exec('COMMIT')
       return { automationRuns }
     } catch (error) { this.database.exec('ROLLBACK'); throw error }
+  },
+
+  syncReciprocalRelation(recordId, property, previous, next, now) {
+    const relation = JSON.parse(property.config_json || '{}').relation
+    if (!relation?.reciprocalPropertyId) return
+    const reciprocal = this.database.prepare("SELECT id, type, config_json, database_id AS databaseId FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'").get(relation.reciprocalPropertyId, relation.databaseId)
+    if (!reciprocal || JSON.parse(reciprocal.config_json || '{}').relation?.databaseId !== property.databaseId) throw new Error('反向关联配置已失效，请重新配置关联属性。')
+    const before = new Set(Array.isArray(previous) ? previous : [])
+    const after = new Set(this.normalizeDatabasePropertyValue(property, next) || [])
+    for (const targetRecordId of new Set([...before, ...after])) {
+      const current = this.readDatabasePropertyValue(targetRecordId, reciprocal.id)
+      const values = new Set(Array.isArray(current) ? current : [])
+      if (after.has(targetRecordId)) values.add(recordId); else values.delete(recordId)
+      const updated = [...values]
+      this.writeDatabasePropertyValue(targetRecordId, reciprocal, updated, now)
+      this.appendDatabaseRecordHistory(targetRecordId, reciprocal.id, 'property', current, updated, now)
+      this.database.prepare('UPDATE database_records SET updated_at = ? WHERE id = ?').run(now, targetRecordId)
+    }
   },
 
   writeDatabasePropertyValue(recordId, property, value, now) {
