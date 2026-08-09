@@ -94,6 +94,20 @@ describe('database quick queries and groups', () => {
     fireEvent.click(button)
     expect(onToggle).toHaveBeenCalledWith('doing')
   })
+
+  it('moves a board card into another select group', () => {
+    const onMove = vi.fn()
+    const boardRecords: DatabaseRecord[] = [
+      { ...record, id: 'a', values: { title: 'A', status: 'todo' } },
+      { ...record, id: 'b', values: { title: 'B', status: 'doing' } },
+    ]
+    const values = new Map<string, string>(); const dataTransfer = { effectAllowed: 'none', dropEffect: 'none', setData: (type: string, value: string) => values.set(type, value), getData: (type: string) => values.get(type) ?? '' }
+    const { container } = render(<BoardView records={boardRecords} schema={querySchema} groupByPropertyId="status" updateCell={vi.fn()} onMove={onMove} />)
+    fireEvent.dragStart(container.querySelectorAll('article')[0]!, { dataTransfer })
+    fireEvent.dragOver(container.querySelectorAll('.board-column')[1]!, { dataTransfer })
+    fireEvent.drop(container.querySelectorAll('.board-column')[1]!, { dataTransfer })
+    expect(onMove).toHaveBeenCalledWith('a', 'doing', undefined)
+  })
 })
 
 describe('table view layout', () => {
@@ -138,6 +152,23 @@ describe('table view layout', () => {
     const { container } = render(<GenericTable records={records} schema={layoutSchema} config={{ visiblePropertyIds: ['title', 'score'], calculations: { score: 'sum' } }} updateCell={vi.fn()} />)
     expect(container.querySelectorAll('.generic-database-row').length).toBeLessThanOrEqual(18)
     expect(container.querySelector('.generic-database-footer output')?.textContent).toBe('49995000')
+  })
+
+  it('reorders rows by drag handle and disables manual order when sorted', () => {
+    const rows: DatabaseRecord[] = [
+      { id: 'a', values: { title: '甲', status: '待处理', score: 1 }, createdAt: '', updatedAt: '' },
+      { id: 'b', values: { title: '乙', status: '完成', score: 2 }, createdAt: '', updatedAt: '' },
+    ]
+    const onReorder = vi.fn(); const values = new Map<string, string>()
+    const dataTransfer = { effectAllowed: 'none', dropEffect: 'none', setData: (type: string, value: string) => values.set(type, value), getData: (type: string) => values.get(type) ?? '' }
+    const table = render(<GenericTable records={rows} schema={layoutSchema} updateCell={vi.fn()} onReorder={onReorder} />)
+    fireEvent.dragStart(table.getByRole('button', { name: '拖动记录 乙' }), { dataTransfer })
+    fireEvent.dragOver(table.container.querySelectorAll('.generic-database-row')[0]!, { dataTransfer })
+    fireEvent.drop(table.container.querySelectorAll('.generic-database-row')[0]!, { dataTransfer })
+    expect(onReorder).toHaveBeenCalledWith('b', 'a')
+    table.unmount()
+    const sorted = render(<GenericTable records={rows} schema={layoutSchema} config={{ sorts: [{ propertyId: 'score', direction: 'asc' }] }} updateCell={vi.fn()} onReorder={onReorder} />)
+    expect(sorted.getByRole('button', { name: '拖动记录 甲' })).toBeDisabled()
   })
 })
 

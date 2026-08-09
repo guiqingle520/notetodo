@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Activity, ArrowRight, ArrowUpDown, BookOpen, Calculator, CalendarDays, ChartNoAxesGantt, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Columns3, Copy, Database, Download, Eye, EyeOff, FileUp, Filter, GripVertical, Images, Layers3, LayoutTemplate, Link2, List, Lock, MoreHorizontal, PencilLine, Plus, RotateCcw, Rows3, Search, Settings2, Sigma, SlidersHorizontal, Star, Table2, Trash2, X, Zap } from 'lucide-react'
-import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, normalizeViewConfig, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validColumnCalculations, validateFormulaExpression, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
+import { buildCalendarMonth, calculateColumn, coerceCsvPropertyValue, evaluateFormula, groupRecordsByDate, groupRecordsByProperty, inferCsvPropertyMappings, layoutTimelineRecords, moveRecordInOrder, normalizeViewConfig, orderRecordsByView, parseDatabaseCsv, prepareGalleryRecords, queryRecords, resolveDerivedRecordsIncremental, safeGalleryCover, searchDatabaseRecords, serializeDatabaseCsv, timelineDays, validColumnCalculations, validateFormulaExpression, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseSnapshot, type DatabaseTemplate, type DatabaseView, type DatabaseViewConfig, type FilterRule, type ParsedDatabaseCsv, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { databaseRepository } from './data/database-repository'
 
@@ -114,12 +114,13 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const derivedRecords = projection.records
   const activeView = snapshot ? snapshot.views.find((view) => view.id === snapshot.activeViewId) ?? snapshot.views[0] : undefined
   useEffect(() => { setSearchOpen(false); setSearchQuery(''); setQuickFilterOpen(false) }, [activeView?.id])
+  const orderedDerivedRecords = useMemo(() => orderRecordsByView(derivedRecords, activeView?.config.recordOrder), [derivedRecords, activeView?.config.recordOrder])
   const filteredRecords = useMemo(() => snapshot && activeView ? queryRecords(
-    derivedRecords,
+    orderedDerivedRecords,
     activeView.config.filters,
     activeView.config.sorts,
     activeView.config.filterMode,
-  ) : [], [snapshot, activeView, derivedRecords])
+  ) : [], [snapshot, activeView, orderedDerivedRecords])
   const quickFilteredRecords = useMemo(() => activeView ? queryRecords(filteredRecords, activeView.config.quickFilters, [], 'and') : [], [activeView, filteredRecords])
   const queriedRecords = useMemo(() => snapshot ? searchDatabaseRecords(quickFilteredRecords, snapshot.schema, searchQuery) : [], [quickFilteredRecords, searchQuery, snapshot])
   const recordGroups = useMemo(() => activeView?.config.groupByPropertyId ? groupRecordsByProperty(queriedRecords, activeView.config.groupByPropertyId) : [], [queriedRecords, activeView])
@@ -190,6 +191,23 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     const collapsed = new Set(activeView.config.collapsedGroupKeys ?? [])
     if (collapsed.has(groupKey)) collapsed.delete(groupKey); else collapsed.add(groupKey)
     saveViewConfig({ ...activeView.config, collapsedGroupKeys: [...collapsed] })
+  }
+
+  const moveRecord = (recordId: string, targetId?: string, groupChange?: { propertyId: string; value: PropertyValue }) => {
+    // Explicit sort rules remain authoritative. Manual order is only available
+    // when the current view is in its natural, user-controlled order.
+    if (activeView.config.sorts?.length) return
+    const recordOrder = moveRecordInOrder(orderedDerivedRecords.map((record) => record.id), recordId, targetId)
+    const config = normalizeViewConfig(snapshot.schema, { ...activeView.config, recordOrder })
+    let records = snapshot.records
+    if (groupChange) {
+      records = records.map((record) => record.id === recordId ? { ...record, values: { ...record.values, [groupChange.propertyId]: groupChange.value }, updatedAt: new Date().toISOString() } : record)
+      changedRecordIds.current.add(recordId)
+    }
+    const next = { ...snapshot, records, views: snapshot.views.map((view) => view.id === activeView.id ? { ...view, config } : view) }
+    setSnapshot(next)
+    if (groupChange) void databaseRepository.updateCell(next, recordId, groupChange.propertyId, groupChange.value)
+    void databaseRepository.updateViewConfig(next, activeView.id, config)
   }
 
   const createView = async (name: string, type: DatabaseView['type']) => {
@@ -273,8 +291,8 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       {(activeView.config.quickFilters?.length || searchQuery) && <div className="database-active-query">{searchQuery && <span><Search size={11} />“{searchQuery}”<button aria-label="清除数据库搜索" onClick={() => setSearchQuery('')}><X size={10} /></button></span>}{activeView.config.quickFilters?.map((filter, index) => <span key={`${filter.propertyId}-${index}`}><Filter size={11} />{quickFilterLabel(snapshot.schema, filter)}<button aria-label={`移除快速筛选 ${index + 1}`} onClick={() => saveViewConfig({ ...activeView.config, quickFilters: activeView.config.quickFilters?.filter((_, candidate) => candidate !== index) })}><X size={10} /></button></span>)}</div>}
       <ViewRuleSummary config={activeView.config} schema={snapshot.schema} onOpen={setRulesOpen} />
       {recordGroups.length > 0 && <GroupLedger groups={recordGroups} schema={snapshot.schema} propertyId={activeView.config.groupByPropertyId} collapsedKeys={collapsedGroups} onToggle={toggleGroup} />}
-      {activeView.type === 'table' && <GenericTable records={records} schema={snapshot.schema} config={activeView.config} onConfigChange={saveViewConfig} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} />}
-      {activeView.type === 'board' && <BoardView records={records} updateCell={updateCell} />}
+      {activeView.type === 'table' && <GenericTable records={records} schema={snapshot.schema} config={activeView.config} onConfigChange={saveViewConfig} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} onReorder={(recordId, targetId) => moveRecord(recordId, targetId)} />}
+      {activeView.type === 'board' && <BoardView records={records} schema={snapshot.schema} groupByPropertyId={activeView.config.groupByPropertyId} updateCell={updateCell} onMove={(recordId, groupValue, targetId) => activeView.config.groupByPropertyId && moveRecord(recordId, targetId, { propertyId: activeView.config.groupByPropertyId, value: groupValue })} manualOrderEnabled={!activeView.config.sorts?.length} />}
       {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
       {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
       {activeView.type === 'timeline' && <TimelineView records={records} schema={snapshot.schema} startDatePropertyId={activeView.config.startDatePropertyId} endDatePropertyId={activeView.config.endDatePropertyId} updateCell={updateCell} />}
@@ -913,8 +931,10 @@ function defaultPropertyValue(property: DatabaseProperty): PropertyValue {
 
 type RelationTargets = Record<string, { schema: DatabaseSchema; records: DatabaseRecord[] }>
 
-export function GenericTable({ records, schema, config = {}, onConfigChange, relationTargets = {}, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll }: { records: DatabaseRecord[]; schema: DatabaseSchema; config?: DatabaseViewConfig; onConfigChange?: (config: DatabaseViewConfig) => void; relationTargets?: RelationTargets; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void }) {
+export function GenericTable({ records, schema, config = {}, onConfigChange, relationTargets = {}, updateCell, onOpenRecord, selectedIds = new Set<string>(), onToggleRecord, onToggleAll, onReorder }: { records: DatabaseRecord[]; schema: DatabaseSchema; config?: DatabaseViewConfig; onConfigChange?: (config: DatabaseViewConfig) => void; relationTargets?: RelationTargets; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onOpenRecord?: (recordId: string) => void; selectedIds?: Set<string>; onToggleRecord?: (recordId: string) => void; onToggleAll?: () => void; onReorder?: (recordId: string, targetId?: string) => void }) {
   const [scrollTop, setScrollTop] = useState(0)
+  const [draggedRecordId, setDraggedRecordId] = useState<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const headerScrollRef = useRef<HTMLDivElement | null>(null)
   const footerScrollRef = useRef<HTMLDivElement | null>(null)
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>(() => ({ ...config.propertyWidths }))
@@ -928,6 +948,8 @@ export function GenericTable({ records, schema, config = {}, onConfigChange, rel
   const propertyWidth = (property: DatabaseProperty) => liveWidths[property.id] ?? (property.type === 'title' ? 220 : 140)
   const template = `34px ${properties.map((property) => `${propertyWidth(property)}px`).join(' ')}`
   const minWidth = 34 + properties.reduce((sum, property) => sum + propertyWidth(property), 0)
+  const manualOrderEnabled = Boolean(onReorder && !config.sorts?.length)
+  const titlePropertyId = properties.find((property) => property.type === 'title')?.id ?? ''
   const calculationValues = useMemo(() => Object.fromEntries(properties.map((property) => {
     const calculation = config.calculations?.[property.id]
     return [property.id, calculation ? calculateColumn(records, property.id, calculation) : null]
@@ -958,7 +980,7 @@ export function GenericTable({ records, schema, config = {}, onConfigChange, rel
   return <div className={`generic-database-table ${config.freezeFirstColumn ? 'is-first-column-frozen' : ''}`} style={{ '--database-row-height': `${rowHeight}px` } as CSSProperties}>
     <div className="generic-database-sync" ref={headerScrollRef}><div className="generic-database-grid generic-database-head" style={{ gridTemplateColumns: template, minWidth }}><label className="database-row-select"><input aria-label="选择全部记录" type="checkbox" checked={records.length > 0 && selectedIds.size === records.length} onChange={() => onToggleAll?.()} /><span /></label>{properties.map((property) => <span key={property.id}><i>{propertyTypeLabel(property.type)}</i><b>{property.name}</b><button className="database-column-resizer" aria-label={`调整列宽 ${property.name}`} onMouseDown={(event) => beginResize(event, property)} /></span>)}</div></div>
     <div className="generic-database-viewport" style={{ height: Math.min(VIEWPORT_HEIGHT, Math.max(rowHeight, records.length * rowHeight)) }} onScroll={(event) => { setScrollTop(event.currentTarget.scrollTop); if (headerScrollRef.current) headerScrollRef.current.scrollLeft = event.currentTarget.scrollLeft; if (footerScrollRef.current) footerScrollRef.current.scrollLeft = event.currentTarget.scrollLeft }}>
-      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => <div className={`generic-database-grid generic-database-row ${selectedIds.has(record.id) ? 'is-selected' : ''}`} key={record.id} style={{ gridTemplateColumns: template, height: rowHeight, transform: `translateY(${(start + offset) * rowHeight}px)` }}><label className="database-row-select"><input aria-label={`选择记录 ${String(record.values[properties.find((property) => property.type === 'title')?.id ?? ''] || record.id)}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} relationTargets={relationTargets} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div>)}</div>
+      <div className="generic-database-space" style={{ height: totalSize, minWidth }}>{records.slice(start, end).map((record, offset) => { const title = String(record.values[titlePropertyId] || record.id); return <div className={`generic-database-grid generic-database-row ${selectedIds.has(record.id) ? 'is-selected' : ''} ${draggedRecordId === record.id ? 'is-dragging' : ''} ${dropTargetId === record.id ? 'is-drop-target' : ''}`} key={record.id} style={{ gridTemplateColumns: template, height: rowHeight, transform: `translateY(${(start + offset) * rowHeight}px)` }} onDragOver={(event) => { if (!manualOrderEnabled || draggedRecordId === record.id) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetId(record.id) }} onDrop={(event) => { if (!manualOrderEnabled) return; event.preventDefault(); const sourceId = event.dataTransfer.getData('application/x-notetodo-record-order') || draggedRecordId; if (sourceId && sourceId !== record.id) onReorder?.(sourceId, record.id); setDraggedRecordId(null); setDropTargetId(null) }}><div className="database-row-select database-row-control"><label><input aria-label={`选择记录 ${title}`} type="checkbox" checked={selectedIds.has(record.id)} onChange={() => onToggleRecord?.(record.id)} /><span /></label><button type="button" draggable={manualOrderEnabled} disabled={!manualOrderEnabled} aria-label={`拖动记录 ${title}`} title={manualOrderEnabled ? '拖动调整当前视图顺序' : '存在排序规则时无法手动排序'} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-notetodo-record-order', record.id); setDraggedRecordId(record.id) }} onDragEnd={() => { setDraggedRecordId(null); setDropTargetId(null) }}><GripVertical size={12} /></button></div>{properties.map((property) => <GenericCell key={property.id} record={record} property={property} relationTargets={relationTargets} updateCell={updateCell} onOpenRecord={onOpenRecord} />)}</div> })}</div>
     </div>
     <div className="generic-database-sync" ref={footerScrollRef}><div className="generic-database-grid generic-database-footer" style={{ gridTemplateColumns: template, minWidth }}><span><Calculator size={12} /></span>{properties.map((property) => { const calculation = config.calculations?.[property.id]; const value = calculationValues[property.id]; return <label key={property.id}><select aria-label={`${property.name} 列底计算`} value={calculation ?? ''} onChange={(event) => setCalculation(property.id, event.target.value as ColumnCalculation | '')}><option value="">计算</option>{validColumnCalculations(property).map((candidate) => <option key={candidate} value={candidate}>{columnCalculationLabel(candidate)}</option>)}</select>{calculation && <output>{formatCalculationValue(value, calculation)}</output>}</label> })}</div></div>
     {!records.length && <div className="generic-database-empty"><Database size={17} /><span>还没有记录</span><small>点击右上角“新建”写入第一行</small></div>}
@@ -1135,16 +1157,22 @@ function StatusSelect({ record, updateCell }: { record: DatabaseRecord; updateCe
   return <select className={`status-select status-${value}`} value={value} onChange={(event) => updateCell(record.id, 'task-status', event.target.value)}>{statuses.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}</select>
 }
 
-export function BoardView({ records, updateCell }: { records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
-  const groups = new Map(statuses.map((status) => [status.id, [] as DatabaseRecord[]]))
-  for (const record of records) groups.get(String(record.values['task-status']))?.push(record)
-  return <div className="database-board">{statuses.map((status) => <VirtualBoardColumn key={status.id} status={status} records={groups.get(status.id) ?? []} updateCell={updateCell} />)}</div>
+export function BoardView({ records, schema, groupByPropertyId, updateCell, onMove, manualOrderEnabled = true }: { records: DatabaseRecord[]; schema?: DatabaseSchema; groupByPropertyId?: string; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onMove?: (recordId: string, groupValue: string, targetId?: string) => void; manualOrderEnabled?: boolean }) {
+  const [draggedRecordId, setDraggedRecordId] = useState<string | null>(null)
+  const groupProperty = schema?.properties.find((property) => property.id === groupByPropertyId && property.type === 'select')
+  const boardGroups = groupProperty?.options?.length ? groupProperty.options.map((option) => ({ id: option.id, label: option.name })) : statuses
+  const propertyId = groupProperty?.id ?? 'task-status'
+  const titlePropertyId = schema?.properties.find((property) => property.type === 'title')?.id ?? 'task-title'
+  const groups = new Map(boardGroups.map((status) => [status.id, [] as DatabaseRecord[]]))
+  for (const record of records) groups.get(String(record.values[propertyId]))?.push(record)
+  return <div className="database-board">{boardGroups.map((status, index) => <VirtualBoardColumn key={status.id} status={status} propertyId={propertyId} titlePropertyId={titlePropertyId} nextGroupId={boardGroups[(index + 1) % boardGroups.length]?.id ?? status.id} records={groups.get(status.id) ?? []} updateCell={updateCell} draggedRecordId={draggedRecordId} manualOrderEnabled={manualOrderEnabled && Boolean(onMove)} onDragStart={setDraggedRecordId} onDragEnd={() => setDraggedRecordId(null)} onMove={(recordId, targetId) => onMove?.(recordId, status.id, targetId)} />)}</div>
 }
 
-function VirtualBoardColumn({ status, records, updateCell }: { status: typeof statuses[number]; records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {
+function VirtualBoardColumn({ status, propertyId, titlePropertyId, nextGroupId, records, updateCell, draggedRecordId, manualOrderEnabled, onDragStart, onDragEnd, onMove }: { status: { id: string; label: string }; propertyId: string; titlePropertyId: string; nextGroupId: string; records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; draggedRecordId: string | null; manualOrderEnabled: boolean; onDragStart: (recordId: string) => void; onDragEnd: () => void; onMove: (recordId: string, targetId?: string) => void }) {
   const [scrollTop, setScrollTop] = useState(0)
+  const [dragOver, setDragOver] = useState(false)
   const { start, end, totalSize } = virtualWindow(records.length, scrollTop, BOARD_CARD_HEIGHT, 360, 3)
-  return <div className="board-column"><header><span className={`status-dot status-${status.id}`} />{status.label}<em>{records.length}</em></header><div className="board-card-viewport" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="board-card-space" style={{ height: Math.max(230, totalSize) }}>{records.slice(start, end).map((record, offset) => <article key={record.id} style={{ transform: `translateY(${(start + offset) * BOARD_CARD_HEIGHT}px)` }}><strong>{record.values['task-title']}</strong><span><i>{record.values['task-owner'] || '未分配'}</i><time>{record.values['task-due']}</time></span><small className={record.values['task-risk'] === '需关注' ? 'is-risk' : ''}>{record.values['task-risk']} · 依赖分 {record.values['task-dependency-score'] ?? 0}</small><button onClick={() => updateCell(record.id, 'task-status', status.id === 'todo' ? 'doing' : status.id === 'doing' ? 'done' : 'todo')}>推进状态 →</button></article>)}</div></div></div>
+  return <div className={`board-column ${dragOver ? 'is-drag-over' : ''}`} onDragOver={(event) => { if (!manualOrderEnabled || !draggedRecordId) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDragOver(true) }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragOver(false) }} onDrop={(event) => { if (!manualOrderEnabled || !draggedRecordId) return; event.preventDefault(); onMove(draggedRecordId); setDragOver(false); onDragEnd() }}><header><span className={`status-dot status-${status.id}`} />{status.label}<em>{records.length}</em></header><div className="board-card-viewport" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="board-card-space" style={{ height: Math.max(230, totalSize) }}>{records.slice(start, end).map((record, offset) => <article className={draggedRecordId === record.id ? 'is-dragging' : ''} draggable={manualOrderEnabled} key={record.id} style={{ transform: `translateY(${(start + offset) * BOARD_CARD_HEIGHT}px)` }} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-notetodo-record-order', record.id); onDragStart(record.id) }} onDragEnd={() => { setDragOver(false); onDragEnd() }} onDragOver={(event) => { if (!manualOrderEnabled || draggedRecordId === record.id) return; event.preventDefault(); event.stopPropagation() }} onDrop={(event) => { if (!manualOrderEnabled || !draggedRecordId || draggedRecordId === record.id) return; event.preventDefault(); event.stopPropagation(); onMove(draggedRecordId, record.id); setDragOver(false); onDragEnd() }}><div className="board-card-title"><GripVertical size={12} /><strong>{record.values[titlePropertyId] ?? '无标题'}</strong></div><span><i>{record.values['task-owner'] || '未分配'}</i><time>{record.values['task-due']}</time></span><small className={record.values['task-risk'] === '需关注' ? 'is-risk' : ''}>{record.values['task-risk'] ?? '拖动卡片调整分组'} · 依赖分 {record.values['task-dependency-score'] ?? 0}</small><button onClick={() => updateCell(record.id, propertyId, nextGroupId)}>推进状态 →</button></article>)}</div></div></div>
 }
 
 export function ListView({ records, updateCell }: { records: DatabaseRecord[]; updateCell: (recordId: string, propertyId: string, value: PropertyValue) => void }) {

@@ -50,6 +50,8 @@ export interface DatabaseViewConfig {
   groupByPropertyId?: string
   /** Stable group keys collapsed by the user in this saved view. */
   collapsedGroupKeys?: string[]
+  /** View-local manual order. Missing record IDs retain their source order. */
+  recordOrder?: string[]
   datePropertyId?: string
   startDatePropertyId?: string
   endDatePropertyId?: string
@@ -470,6 +472,29 @@ export function searchDatabaseRecords(records: DatabaseRecord[], schema: Databas
   }))
 }
 
+/** Applies a partial saved order in O(records + saved IDs) without sorting. */
+export function orderRecordsByView(records: DatabaseRecord[], recordOrder?: string[]): DatabaseRecord[] {
+  if (!recordOrder?.length) return records
+  const byId = new Map(records.map((record) => [record.id, record]))
+  const ordered: DatabaseRecord[] = []
+  for (const id of recordOrder) {
+    const record = byId.get(id)
+    if (record) { ordered.push(record); byId.delete(id) }
+  }
+  for (const record of records) if (byId.has(record.id)) ordered.push(record)
+  return ordered
+}
+
+/** Returns a deduplicated order with the dragged ID inserted before target. */
+export function moveRecordInOrder(recordIds: string[], draggedId: string, targetId?: string): string[] {
+  const unique = [...new Set(recordIds)]
+  if (!unique.includes(draggedId) || targetId === draggedId) return unique
+  const next = unique.filter((id) => id !== draggedId)
+  const targetIndex = targetId ? next.indexOf(targetId) : -1
+  next.splice(targetIndex < 0 ? next.length : targetIndex, 0, draggedId)
+  return next
+}
+
 /** Removes stale or oversized rules before view configuration is persisted. */
 export function normalizeViewConfig(schema: DatabaseSchema, config: DatabaseViewConfig): DatabaseViewConfig {
   const propertyIds = new Set(schema.properties.map((property) => property.id))
@@ -481,6 +506,7 @@ export function normalizeViewConfig(schema: DatabaseSchema, config: DatabaseView
   const sorts = (config.sorts ?? []).filter((rule) => propertyIds.has(rule.propertyId) && ['asc', 'desc'].includes(rule.direction) && !seenSorts.has(rule.propertyId) && Boolean(seenSorts.add(rule.propertyId))).slice(0, 10)
   const groupByPropertyId = config.groupByPropertyId && propertyIds.has(config.groupByPropertyId) ? config.groupByPropertyId : undefined
   const collapsedGroupKeys = groupByPropertyId ? [...new Set((config.collapsedGroupKeys ?? []).filter((key) => typeof key === 'string' && key.length > 0 && key.length <= 200))].slice(0, 100) : []
+  const recordOrder = [...new Set((config.recordOrder ?? []).filter((id) => typeof id === 'string' && id.length > 0 && id.length <= 200))].slice(0, 10_000)
   const visiblePropertyIds = config.visiblePropertyIds === undefined ? undefined : [...new Set(config.visiblePropertyIds.filter((id) => propertyIds.has(id)))].slice(0, 50)
   const propertyWidths = Object.fromEntries(Object.entries(config.propertyWidths ?? {}).filter(([id, width]) => propertyIds.has(id) && Number.isFinite(width)).map(([id, width]) => [id, Math.max(80, Math.min(600, Math.round(width)))]))
   const rowHeight = ['compact', 'default', 'comfortable'].includes(config.rowHeight ?? '') ? config.rowHeight : 'default'
@@ -490,7 +516,7 @@ export function normalizeViewConfig(schema: DatabaseSchema, config: DatabaseView
     const property = schema.properties.find((candidate) => candidate.id === id)
     return property && validColumnCalculations(property).includes(calculation)
   }))
-  return { ...config, filters, quickFilters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId, collapsedGroupKeys, visiblePropertyIds, propertyWidths, rowHeight, propertyOrder, freezeFirstColumn: Boolean(config.freezeFirstColumn), calculations }
+  return { ...config, filters, quickFilters, filterMode: config.filterMode === 'or' ? 'or' : 'and', sorts, groupByPropertyId, collapsedGroupKeys, recordOrder, visiblePropertyIds, propertyWidths, rowHeight, propertyOrder, freezeFirstColumn: Boolean(config.freezeFirstColumn), calculations }
 }
 
 export function validColumnCalculations(property: DatabaseProperty): ColumnCalculation[] {

@@ -1424,6 +1424,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .database-group-ledger > button strong { font-size: 11px; font-weight: 500; }
 .database-group-ledger > button em { margin-left: auto; color: var(--notion-faint); font-size: 10px; font-style: normal; }
 .database-group-ledger > button.is-collapsed { color: var(--notion-faint); background: var(--notion-sidebar); }
+.database-row-control { position: relative; padding: 0 !important; }
+.database-row-control > label { width: 100%; height: 100%; display: grid; place-items: center; }
+.database-row-control > button { position: absolute; inset: 0; width: 100%; display: grid; place-items: center; padding: 0; color: var(--notion-faint); border: 0; background: transparent; cursor: grab; opacity: 0; }
+.database-row-control > button:active { cursor: grabbing; }
+.database-row-control > button:disabled { cursor: not-allowed; }
+.generic-database-row:hover .database-row-control:not(:has(input:checked)) > label span { opacity: 0; }
+.generic-database-row:hover .database-row-control:not(:has(input:checked)) > button { opacity: 1; }
+.generic-database-row.is-dragging { opacity: .42; }
+.generic-database-row.is-drop-target { box-shadow: inset 0 2px var(--notion-blue); }
+.board-card-title { min-width: 0; display: flex; align-items: center; gap: 3px; }
+.board-card-title > svg { flex: 0 0 auto; margin-left: -3px; color: var(--notion-faint); opacity: 0; }
+.board-column article:hover .board-card-title > svg { opacity: 1; }
+.board-column article[draggable="true"] { cursor: grab; }
+.board-column article[draggable="true"]:active { cursor: grabbing; }
+.board-column article.is-dragging { opacity: .38; }
+.board-column.is-drag-over { background: rgba(35,131,226,.055); box-shadow: inset 0 0 0 1px rgba(35,131,226,.18); }
 
 .database-template-menu { position: absolute; z-index: 25; top: 68px; right: 92px; width: 330px; overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px; background: #fff; box-shadow: var(--notion-shadow); animation: menu-rise .12s ease both; }
 .database-template-menu > header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; border-bottom: 1px solid var(--notion-divider); }
