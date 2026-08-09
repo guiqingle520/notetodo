@@ -20,7 +20,7 @@ const violations = []
 // Existing large modules are frozen at their current ceiling and must shrink over time.
 // Every new module is limited to 500 lines; the absolute compatibility ceiling remains 1000.
 const legacyLargeFileBudgets = Object.freeze({
-  'apps/desktop/electron/main.cjs': 736,
+  'apps/desktop/electron/main.cjs': 732,
   'apps/desktop/electron/workspace-db-migrations.cjs': 518,
   'apps/desktop/electron/workspace-db-records.cjs': 590,
   'apps/desktop/src/App.tsx': 895,

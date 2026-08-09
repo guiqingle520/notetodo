@@ -15,6 +15,7 @@ const { workspaceIpcContracts } = require('./ipc-workspace-contracts.cjs')
 const { assertModelStreamEvent, modelIpcContracts, normalizeModelConfig } = require('./ipc-model-contracts.cjs')
 const { syncIpcContracts } = require('./ipc-sync-contracts.cjs')
 const { collaborationIpcContracts } = require('./ipc-collaboration-contracts.cjs')
+const { removePagePermission, resolveLocalCollaborationIdentity, upsertPagePermission } = require('./ipc-collaboration-authorization.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -458,12 +459,7 @@ function registerWorkspaceIpc(database) {
   handleTrusted('collaboration:get-ticket', collaborationIpcContracts.getTicket, (_event, pageId) => {
     const secret = process.env.NOTETODO_COLLAB_TOKEN
     if (!secret) return null
-    let userId = database.getSetting('collaboration_user_id')
-    if (!userId) { userId = randomUUID(); database.setSetting('collaboration_user_id', userId) }
-    const existingRole = database.getPageRole(pageId, userId)
-    const role = existingRole ?? 'owner'
-    const identity = { userId, name: '本机用户', color: '#c45134', role }
-    if (!existingRole) database.upsertPagePermission(pageId, userId, identity.name, 'owner')
+    const identity = resolveLocalCollaborationIdentity(database, pageId)
     return {
       endpoint: process.env.NOTETODO_COLLAB_URL ?? 'ws://127.0.0.1:4789',
       ...identity,
@@ -471,8 +467,8 @@ function registerWorkspaceIpc(database) {
     }
   })
   handleTrusted('sharing:list', collaborationIpcContracts.listPermissions, (_event, pageId) => database.loadPagePermissions(pageId))
-  handleTrusted('sharing:upsert', collaborationIpcContracts.upsertPermission, (_event, pageId, subjectId, displayName, role) => database.upsertPagePermission(pageId, subjectId, displayName, role))
-  handleTrusted('sharing:remove', collaborationIpcContracts.removePermission, (_event, pageId, subjectId) => database.removePagePermission(pageId, subjectId))
+  handleTrusted('sharing:upsert', collaborationIpcContracts.upsertPermission, (_event, pageId, subjectId, displayName, role) => upsertPagePermission(database, pageId, subjectId, displayName, role))
+  handleTrusted('sharing:remove', collaborationIpcContracts.removePermission, (_event, pageId, subjectId) => removePagePermission(database, pageId, subjectId))
   handleTrusted('comments:list', (_event, pageId) => { assertId(pageId); return database.loadComments(pageId) })
   handleTrusted('comments:create', (_event, pageId, body, anchor, mentions = []) => {
     assertId(pageId)
