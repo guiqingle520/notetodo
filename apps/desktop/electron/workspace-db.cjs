@@ -6,6 +6,7 @@ const { createApiToken, verifyApiToken } = require('@notetodo/auth-core')
 const { planAutomationRuns, validateAutomationRule } = require('@notetodo/automation-core')
 const { WEBHOOK_EVENTS, createWebhookEnvelope, nextWebhookAttempt, stableJson, validateWebhookUrl } = require('@notetodo/webhook-core')
 const { createWorkspaceRepository } = require('./repositories/workspace-repository.cjs')
+const { createDatabaseRecordRepository } = require('./repositories/database-record-repository.cjs')
 
 const LATEST_SCHEMA_VERSION = 16
 
@@ -20,6 +21,7 @@ class WorkspaceDatabase {
     this.workspaceRepository = createWorkspaceRepository(this.database)
     this.configure()
     this.migrate()
+    this.recordRepository = createDatabaseRecordRepository(this.database)
     this.recoverInterruptedImports()
     this.seedIfEmpty()
     this.seedDatabaseIfEmpty()

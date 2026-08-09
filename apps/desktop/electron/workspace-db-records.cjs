@@ -2,20 +2,17 @@ const { randomUUID } = require('node:crypto')
 
 module.exports = {
   loadDatabaseByPage(pageId) {
-    const database = this.database.prepare('SELECT id, name, active_view_id FROM databases WHERE page_id = ?').get(pageId)
+    const database = this.recordRepository.databaseByPage.get(pageId)
     if (!database) return null
-    const propertyRows = this.database.prepare('SELECT id, name, type, config_json FROM database_properties WHERE database_id = ? ORDER BY position').all(database.id)
+    const propertyRows = this.recordRepository.propertiesByDatabase.all(database.id)
     const properties = propertyRows.map((property) => ({
       id: property.id,
       name: property.name,
       type: property.type,
       ...JSON.parse(property.config_json),
     }))
-    const recordRows = this.database.prepare('SELECT id, content, created_at, updated_at FROM database_records WHERE database_id = ? AND archived_at IS NULL ORDER BY position').all(database.id)
-    const valueStatement = this.database.prepare(`
-      SELECT property_id, text_value, number_value, boolean_value, json_value
-      FROM property_values WHERE record_id = ?
-    `)
+    const recordRows = this.recordRepository.activeRecordsByDatabase.all(database.id)
+    const valueStatement = this.recordRepository.valuesByRecord
     const records = recordRows.map((record) => {
       const values = {}
       for (const row of valueStatement.all(record.id)) {
@@ -25,14 +22,14 @@ module.exports = {
       }
       return { id: record.id, values, content: record.content, createdAt: record.created_at, updatedAt: record.updated_at }
     })
-    const views = this.database.prepare('SELECT id, name, type, config_json FROM database_views WHERE database_id = ? ORDER BY position').all(database.id).map((view) => ({
+    const views = this.recordRepository.viewsByDatabase.all(database.id).map((view) => ({
       id: view.id,
       databaseId: database.id,
       name: view.name,
       type: view.type,
       config: JSON.parse(view.config_json),
     }))
-    const templates = this.database.prepare('SELECT id, name, values_json, content, created_at, updated_at FROM database_templates WHERE database_id = ? ORDER BY created_at, id').all(database.id).map((template) => ({
+    const templates = this.recordRepository.templatesByDatabase.all(database.id).map((template) => ({
       id: template.id, databaseId: database.id, name: template.name, values: JSON.parse(template.values_json), content: template.content,
       createdAt: template.created_at, updatedAt: template.updated_at,
     }))
@@ -211,7 +208,7 @@ module.exports = {
   },
 
   loadDatabaseById(databaseId) {
-    const page = this.database.prepare('SELECT page_id FROM databases WHERE id = ?').get(databaseId)
+    const page = this.recordRepository.pageByDatabase.get(databaseId)
     if (!page) throw new Error('Database does not exist.')
     return this.loadDatabaseByPage(page.page_id)
   },
