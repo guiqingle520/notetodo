@@ -14,6 +14,7 @@ const { appInfoIpcContract } = require('./ipc-contracts.cjs')
 const { workspaceIpcContracts } = require('./ipc-workspace-contracts.cjs')
 const { assertModelStreamEvent, modelIpcContracts, normalizeModelConfig } = require('./ipc-model-contracts.cjs')
 const { syncIpcContracts } = require('./ipc-sync-contracts.cjs')
+const { collaborationIpcContracts } = require('./ipc-collaboration-contracts.cjs')
 const isDev = !app.isPackaged
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
@@ -454,8 +455,7 @@ function registerWorkspaceIpc(database) {
   handleTrusted('sync:load-document', syncIpcContracts.loadDocument, (_event, pageId) => database.loadSyncDocument(pageId))
   handleTrusted('sync:append-update', syncIpcContracts.appendUpdate, (_event, pageId, clientId, data) => database.appendSyncUpdate(pageId, clientId, data))
   handleTrusted('sync:compact-document', syncIpcContracts.compactDocument, (_event, pageId, snapshot, throughId) => database.compactSyncDocument(pageId, snapshot, throughId))
-  handleTrusted('collaboration:get-ticket', (_event, pageId) => {
-    assertId(pageId)
+  handleTrusted('collaboration:get-ticket', collaborationIpcContracts.getTicket, (_event, pageId) => {
     const secret = process.env.NOTETODO_COLLAB_TOKEN
     if (!secret) return null
     let userId = database.getSetting('collaboration_user_id')
@@ -470,13 +470,9 @@ function registerWorkspaceIpc(database) {
       token: signRoomTicket({ pageId, ...identity, ttlSeconds: 300 }, secret),
     }
   })
-  handleTrusted('sharing:list', (_event, pageId) => { assertId(pageId); return database.loadPagePermissions(pageId) })
-  handleTrusted('sharing:upsert', (_event, pageId, subjectId, displayName, role) => {
-    assertId(pageId); assertId(subjectId)
-    if (typeof displayName !== 'string' || displayName.length < 1 || displayName.length > 80 || !['viewer', 'commenter', 'editor'].includes(role)) throw new TypeError('Invalid page permission.')
-    database.upsertPagePermission(pageId, subjectId, displayName, role)
-  })
-  handleTrusted('sharing:remove', (_event, pageId, subjectId) => { assertId(pageId); assertId(subjectId); database.removePagePermission(pageId, subjectId) })
+  handleTrusted('sharing:list', collaborationIpcContracts.listPermissions, (_event, pageId) => database.loadPagePermissions(pageId))
+  handleTrusted('sharing:upsert', collaborationIpcContracts.upsertPermission, (_event, pageId, subjectId, displayName, role) => database.upsertPagePermission(pageId, subjectId, displayName, role))
+  handleTrusted('sharing:remove', collaborationIpcContracts.removePermission, (_event, pageId, subjectId) => database.removePagePermission(pageId, subjectId))
   handleTrusted('comments:list', (_event, pageId) => { assertId(pageId); return database.loadComments(pageId) })
   handleTrusted('comments:create', (_event, pageId, body, anchor, mentions = []) => {
     assertId(pageId)
