@@ -1,0 +1,357 @@
+/* Remaining feature surfaces: remove the prototype's editorial treatment. */
+.slash-menu, .page-mention-menu {
+  color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px;
+  background: #fff; box-shadow: var(--notion-shadow);
+}
+.slash-menu header, .slash-menu footer, .page-mention-menu header, .page-mention-menu footer {
+  color: var(--notion-muted); border-color: var(--notion-divider); background: #fff;
+  font-family: inherit; letter-spacing: 0; text-transform: none;
+}
+.slash-menu > div > button, .page-mention-menu > div > button { color: var(--notion-text); border-radius: 4px; }
+.slash-menu > div > button:hover, .slash-menu > div > button.is-selected,
+.page-mention-menu > div > button:hover, .page-mention-menu > div > button.is-selected { background: var(--notion-hover); }
+.slash-menu > div > button > span:first-child, .page-mention-menu > div > button > span:first-child { color: var(--notion-muted); background: var(--notion-sidebar); border-radius: 4px; }
+.slash-menu small, .page-mention-menu small, .slash-empty { color: var(--notion-faint); font-family: inherit; }
+.editor-content .page-mention { color: var(--notion-text); background: rgba(35,131,226,.10); border-color: rgba(35,131,226,.25); font-family: inherit; }
+.editor-content .page-mention:hover, .editor-content .page-mention.ProseMirror-selectednode { color: var(--notion-text); background: rgba(35,131,226,.18); }
+
+.editor-content .linked-database-block { margin: 30px -22px; padding: 0; background: #fff; border: 0; box-shadow: none; }
+.editor-content .linked-database-block.is-selected { outline: 2px solid rgba(35,131,226,.25); outline-offset: 3px; }
+.linked-database-head { min-height: 36px; padding: 0 2px 4px; }
+.linked-database-head > span { color: var(--notion-text); }
+.linked-database-head small { color: var(--notion-faint); font: 10px inherit; letter-spacing: 0; }
+.linked-database-head strong { color: var(--notion-text); font: 600 13px inherit; }
+.linked-database-head button { padding: 5px 7px; color: var(--notion-muted); border-radius: 3px; font: 12px inherit; }
+.linked-database-head button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.editor-content .linked-database-block .database-block { background: #fff; }
+.linked-database-error { color: #eb5757; background: rgba(235,87,87,.10); font-family: inherit; }
+
+.database-summary { height: 26px; color: var(--notion-faint); background: #fff; font-size: 10px; }
+.database-name-trigger { min-width: 0; width: max-content; max-width: 280px; display: flex; align-items: center; gap: 5px; padding: 3px 5px; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; cursor: pointer; font: inherit; }
+.database-name-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.database-name-trigger svg { flex: 0 0 auto; opacity: 0; }
+.database-name-trigger:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-name-trigger:hover svg { opacity: 1; }
+.database-name-editor { width: min(280px, 100%); display: flex; align-items: center; gap: 6px; }
+.database-name-editor input { min-width: 80px; height: 22px; padding: 0 5px; color: var(--notion-text); border: 1px solid var(--notion-blue); border-radius: 3px; outline: 2px solid rgba(35,131,226,.15); background: #fff; font: inherit; }
+.database-name-editor i { color: var(--notion-faint); font: normal 9px var(--font-ui); white-space: nowrap; }
+.database-compute-mark { color: var(--notion-muted); background: var(--notion-sidebar); font-size: 10px; }
+.view-rule-summary { color: var(--notion-muted); border-color: var(--notion-divider); background: #fff; }
+.view-rule-summary > span, .view-rule-summary button { font-family: inherit; letter-spacing: 0; }
+.view-rule-summary > span { font-size: 10px; }
+.view-rule-summary button { color: var(--notion-muted); border-color: var(--notion-border); border-radius: 3px; background: #fff; font-size: 11px; }
+.view-rule-summary button:hover { color: var(--notion-text); border-color: var(--notion-border); background: var(--notion-hover); }
+.database-group-ledger { min-height: 34px; color: var(--notion-text); border-bottom: 1px solid var(--notion-divider); background: #fff; }
+.database-group-ledger > span { color: var(--notion-faint); border-color: var(--notion-divider); font: 10px inherit; letter-spacing: 0; }
+.database-group-ledger > div { border-color: var(--notion-divider); }
+.database-group-ledger strong, .database-group-ledger em { color: var(--notion-muted); font-family: inherit; font-size: 11px; }
+.database-viewport, .database-row-space, .generic-database-table, .database-list { background: #fff; }
+.database-grid-row:hover, .generic-database-row:hover, .database-list-row:hover { background: rgba(55,53,47,.04); box-shadow: none; }
+.generic-database-head { color: var(--notion-muted); background: #fff; }
+.generic-database-head span, .generic-database-head i, .generic-database-row > input,
+.generic-database-row > select, .generic-database-row > output, .generic-database-row > label,
+.generic-database-empty span, .generic-database-empty small, .database-list input,
+.database-list .list-index, .database-list-row > span, .database-list time { font-family: inherit; }
+.generic-database-head span { font-size: 11px; }
+.generic-database-head i { color: var(--notion-faint); }
+.generic-database-row > input.is-title, .database-list input { color: var(--notion-text); font-family: inherit; }
+.database-board { gap: 8px; padding: 8px 0; background: #fff; }
+.board-column { background: rgba(247,247,245,.7); border: 0; }
+.board-column > header { border: 0; font-size: 12px; }
+.board-column > header em, .board-column article strong, .board-column article > span,
+.board-column article small, .board-column article button { font-family: inherit; }
+.board-column article { border-color: var(--notion-divider); border-radius: 3px; background: #fff; box-shadow: 0 1px 2px rgba(15,15,15,.08); }
+.board-column article strong { color: var(--notion-text); font-size: 13px; }
+.board-column article > span { color: var(--notion-muted); font-size: 11px; }
+.board-column article i { color: var(--notion-muted); }
+.board-column article small { font-size: 10px; }
+.board-column article button { color: var(--notion-muted); font-size: 11px; }
+
+.schema-panel, .view-rules-panel, .automation-panel { color: var(--notion-text); background: #fff; }
+.schema-panel > header, .view-rules-panel > header, .automation-panel > header {
+  color: var(--notion-text); background: #fff; border-bottom: 1px solid var(--notion-divider);
+}
+.schema-panel > header small, .automation-panel > header small, .view-rules-panel > header small { color: var(--notion-faint); font-family: inherit; letter-spacing: 0; }
+.schema-panel > header strong, .view-rules-panel > header strong, .automation-panel > header strong { color: var(--notion-text); font-family: inherit; }
+.schema-panel > header button, .view-rules-panel > header button, .automation-panel > header button { color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; }
+.schema-panel > header button:hover, .view-rules-panel > header button:hover, .automation-panel > header button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.schema-panel > main, .view-rules-panel > main { background: #fff; background-image: none; }
+.schema-ledger-head, .schema-ledger-row { border-color: var(--notion-divider); }
+.schema-ledger-head, .schema-ledger-row > em, .schema-ledger-row > small,
+.schema-ledger-row > input, .schema-ledger-row > span, .schema-ledger-row > button { font-family: inherit; }
+.schema-ledger-row > span i { color: var(--notion-muted); background: var(--notion-sidebar); }
+.schema-ledger-row > em { display: flex; align-items: center; gap: 2px; }
+.schema-ledger-row > em button { width: 18px; height: 28px; display: grid; place-items: center; padding: 0; color: var(--notion-faint); border: 0; border-radius: 3px; background: transparent; cursor: grab; }
+.schema-ledger-row > em button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.schema-ledger-row > em button:active { cursor: grabbing; }
+.schema-ledger-row.is-dragging { opacity: .38; background: rgba(35,131,226,.06); }
+.schema-ledger-row > input:hover, .schema-ledger-row > input:focus { background: #fff; }
+.schema-panel > footer, .view-rules-panel > footer { border-color: var(--notion-divider); background: var(--notion-sidebar); }
+.schema-panel > footer input, .schema-panel > footer select { color: var(--notion-text); border-color: var(--notion-border); background: #fff; font-family: inherit; }
+.schema-panel > footer button, .schema-panel > footer > span, .view-rules-panel > footer button, .view-rules-panel > footer > span { font-family: inherit; letter-spacing: 0; }
+.rollup-config { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.rollup-config > p { margin: 0 0 2px; color: var(--notion-muted); font-size: 11px; line-height: 1.6; }
+.rollup-config > label { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 10px; }
+.rollup-config > label > span { color: var(--notion-muted); font-size: 11px; }
+.rollup-config select { min-width: 0; width: 100%; height: 32px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); border-radius: 4px; background: #fff; font: 11px var(--font-ui); }
+.rollup-preview { display: flex; align-items: center; gap: 9px; min-height: 48px; margin-top: 4px; padding: 8px 10px; color: var(--notion-muted); border: 1px solid var(--notion-divider); border-radius: 5px; background: var(--notion-sidebar); }
+.rollup-preview > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rollup-preview small { color: var(--notion-faint); font-size: 9px; }
+.rollup-preview strong { overflow: hidden; color: var(--notion-text); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.view-rules-panel > nav, .automation-panel > nav { border-color: var(--notion-divider); background: #fff; }
+.view-rules-panel > nav button, .automation-panel > nav button { color: var(--notion-muted); border-color: var(--notion-divider); background: transparent; font-family: inherit; }
+.view-rules-panel > nav button.is-active, .automation-panel > nav button.is-active { color: var(--notion-text); background: var(--notion-sidebar); box-shadow: inset 0 -2px var(--notion-text); }
+.rule-logic, .filter-rule, .sort-rule, .group-rule { border-color: var(--notion-divider); border-radius: 4px; background: #fff; box-shadow: none; }
+.rule-logic > span, .rule-logic button, .filter-rule > em, .sort-rule > em,
+.filter-rule select, .filter-rule input, .sort-rule select, .group-rule select,
+.rule-add, .rule-intro strong, .rule-intro span, .rule-empty strong, .rule-empty span,
+.group-rule strong, .group-rule small, .group-rule p, .group-rule label > span { font-family: inherit; }
+.rule-logic button.is-active { color: #fff; background: var(--notion-text); border-color: var(--notion-text); }
+.filter-rule select, .filter-rule input, .sort-rule select, .group-rule select { color: var(--notion-text); border-color: var(--notion-border); background: #fff; }
+.rule-add { color: var(--notion-muted); border-color: var(--notion-border); background: #fff; }
+.rule-add:hover { color: var(--notion-text); border-color: var(--notion-border); background: var(--notion-hover); }
+.rule-empty { color: var(--notion-muted); border-color: var(--notion-divider); background: var(--notion-sidebar); }
+
+.database-calendar, .database-timeline, .database-gallery { color: var(--notion-text); background: #fff; }
+.calendar-header, .timeline-toolbar, .gallery-masthead { color: var(--notion-text); border-color: var(--notion-divider); background: #fff; }
+.calendar-header small, .calendar-header strong, .calendar-header > span,
+.calendar-header nav button, .calendar-weekdays span, .calendar-grid *,
+.timeline-toolbar *, .timeline-scale *, .timeline-row *, .timeline-foot *,
+.gallery-masthead *, .gallery-card *, .gallery-foot * { font-family: inherit; }
+.calendar-header small, .calendar-header > span { color: var(--notion-faint); letter-spacing: 0; }
+.calendar-header strong { color: var(--notion-text); }
+.calendar-header nav { border-color: var(--notion-border); border-radius: 3px; }
+.calendar-header nav button { color: var(--notion-muted); border-color: var(--notion-divider); }
+.calendar-header nav button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.calendar-weekdays { border-color: var(--notion-divider); background: var(--notion-sidebar); }
+.calendar-grid > section, .calendar-grid > section.is-outside, .calendar-grid > section.is-today { border-color: var(--notion-divider); background: #fff; box-shadow: none; }
+.calendar-grid > section.is-outside { background: var(--notion-sidebar); }
+.calendar-grid > section.is-today { box-shadow: inset 0 0 0 1px var(--notion-blue); }
+.gallery-grid { background: #fff; }
+.gallery-cover, .gallery-generated, .gallery-missing { background: var(--notion-sidebar); }
+
+/* Database view management mirrors Notion's compact view popover. */
+.database-viewbar { position: relative; }
+.database-tabs .database-view-add { width: 28px; flex: 0 0 28px; justify-content: center; padding: 0; color: var(--notion-faint); }
+.database-tabs .database-view-add:hover { color: var(--notion-text); }
+.database-view-menu { position: absolute; z-index: 24; top: 37px; left: 7px; width: 320px; overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px; background: #fff; box-shadow: var(--notion-shadow); animation: menu-rise .12s ease both; }
+.database-view-menu.is-manage { left: auto; right: 7px; width: 270px; }
+.database-view-menu > header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; border-bottom: 1px solid var(--notion-divider); }
+.database-view-menu > header strong { font-size: 12px; font-weight: 600; }
+.database-view-menu > header button { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-muted); border: 0; background: transparent; cursor: pointer; }
+.database-view-menu > header button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-view-menu > label { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 6px; padding: 10px 10px 8px; }
+.database-view-menu > label > span { color: var(--notion-muted); font-size: 12px; }
+.database-view-menu > label input { min-width: 0; height: 32px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); outline: 0; background: #fff; font-size: 13px; }
+.database-view-menu > label input:focus { border-color: var(--notion-blue); box-shadow: 0 0 0 1px var(--notion-blue); }
+.database-view-types { max-height: 254px; overflow-y: auto; padding: 3px 5px 5px; border-top: 1px solid var(--notion-divider); }
+.database-view-types > button { width: 100%; min-height: 40px; display: grid; grid-template-columns: 28px 1fr 20px; align-items: center; gap: 4px; padding: 4px 7px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: pointer; }
+.database-view-types > button:hover, .database-view-types > button.is-selected { background: var(--notion-hover); }
+.database-view-types > button > svg:first-child { color: var(--notion-muted); }
+.database-view-types > button > svg:last-child { color: var(--notion-blue); }
+.database-view-types > button span { display: flex; flex-direction: column; gap: 1px; }
+.database-view-types strong { font-size: 12px; font-weight: 500; }
+.database-view-types small { color: var(--notion-faint); font-size: 10px; }
+.database-view-menu > footer { height: 46px; display: flex; align-items: center; justify-content: flex-end; gap: 7px; padding: 0 10px; border-top: 1px solid var(--notion-divider); }
+.database-view-menu > footer button { height: 30px; padding: 0 11px; color: var(--notion-text); border: 1px solid var(--notion-border); background: #fff; font-size: 12px; cursor: pointer; }
+.database-view-menu > footer button:last-child { color: #fff; border-color: var(--notion-blue); background: var(--notion-blue); }
+.database-view-menu > footer button:last-child:hover { background: var(--notion-blue-hover); }
+.database-view-menu button:disabled { opacity: .42; cursor: default; }
+.database-view-actions { padding: 3px 5px 5px; border-top: 1px solid var(--notion-divider); }
+.database-view-actions > button { width: 100%; height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 8px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; font-size: 12px; text-align: left; cursor: pointer; }
+.database-view-actions > button:hover:not(:disabled) { background: var(--notion-hover); }
+.database-view-actions > button > svg { color: var(--notion-muted); }
+.database-view-actions > button.is-danger { color: #eb5757; }
+.database-view-actions > button.is-danger > svg { color: #eb5757; }
+.database-view-actions > button.is-confirm-delete { color: #fff; background: #eb5757; }
+.database-view-actions > button.is-confirm-delete > svg { color: #fff; }
+.database-view-menu > p { margin: 0; padding: 8px 11px; color: #eb5757; border-top: 1px solid var(--notion-divider); font-size: 11px; line-height: 1.4; }
+.database-layout-menu { position: absolute; z-index: 26; top: 37px; right: 7px; width: 286px; overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px; background: #fff; box-shadow: var(--notion-shadow); animation: menu-rise .12s ease both; }
+.database-layout-menu > header { height: 46px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; border-bottom: 1px solid var(--notion-divider); }
+.database-layout-menu > header > div { display: flex; flex-direction: column; gap: 1px; }
+.database-layout-menu > header strong { font-size: 12px; font-weight: 600; }
+.database-layout-menu > header small { color: var(--notion-faint); font-size: 9px; }
+.database-layout-menu > header button { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
+.database-layout-menu > header button:hover { background: var(--notion-hover); }
+.layout-density { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 10px 9px; border-bottom: 1px solid var(--notion-divider); }
+.layout-density > span { display: flex; align-items: center; gap: 6px; color: var(--notion-muted); font-size: 11px; }
+.layout-density > div { display: flex; padding: 2px; border-radius: 5px; background: var(--notion-sidebar); }
+.layout-density button { height: 26px; padding: 0 8px; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; font-size: 10px; cursor: pointer; }
+.layout-density button.is-selected { color: var(--notion-text); background: #fff; box-shadow: 0 1px 3px rgba(15,15,15,.12); }
+.layout-freeze { width: calc(100% - 10px); min-height: 43px; margin: 5px; display: grid; grid-template-columns: 26px 1fr 28px; align-items: center; gap: 4px; padding: 5px 7px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: pointer; }
+.layout-freeze:hover { background: var(--notion-hover); }
+.layout-freeze > svg { color: var(--notion-muted); }
+.layout-freeze > span { display: flex; flex-direction: column; gap: 1px; }
+.layout-freeze strong { font-size: 11px; font-weight: 500; }
+.layout-freeze small { color: var(--notion-faint); font-size: 9px; }
+.layout-freeze > i { width: 26px; height: 14px; position: relative; border-radius: 8px; background: rgba(55,53,47,.2); }
+.layout-freeze > i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(15,15,15,.22); transition: transform .14s ease; }
+.layout-freeze.is-active > i { background: var(--notion-blue); }
+.layout-freeze.is-active > i::after { transform: translateX(12px); }
+.layout-property-heading { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; color: var(--notion-faint); font-size: 9px; }
+.layout-property-heading em { font-style: normal; }
+.layout-property-list { max-height: 264px; overflow-y: auto; padding: 0 5px 5px; }
+.layout-property-row { width: 100%; height: 32px; display: grid; grid-template-columns: 22px 22px 1fr 24px; align-items: center; gap: 2px; padding: 0 4px; color: var(--notion-text); border-radius: 4px; }
+.layout-property-row:hover { background: var(--notion-hover); }
+.layout-property-row.is-dragging { opacity: .38; background: rgba(35,131,226,.08); }
+.layout-property-row > i { color: var(--notion-faint); font: normal 10px var(--font-ui); text-align: center; }
+.layout-property-row > span { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.layout-property-row > button { width: 22px; height: 26px; display: grid; place-items: center; padding: 0; color: var(--notion-muted); border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
+.layout-property-row > button:hover { color: var(--notion-text); background: rgba(55,53,47,.08); }
+.layout-property-row > button:disabled { cursor: default; opacity: .45; }
+.layout-property-row .layout-property-drag { color: var(--notion-faint); cursor: grab; }
+.layout-property-row .layout-property-drag:active { cursor: grabbing; }
+.database-layout-menu > footer { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border-top: 1px solid var(--notion-divider); background: var(--notion-sidebar); }
+.database-layout-menu > footer button { padding: 5px 7px; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; font-size: 10px; cursor: pointer; }
+.database-layout-menu > footer button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-layout-menu > footer span { color: var(--notion-faint); font-size: 9px; }
+.generic-database-head > span { position: relative; }
+.generic-database-head > span > b { min-width: 0; overflow: hidden; font: inherit; text-overflow: ellipsis; white-space: nowrap; }
+.database-column-resizer { position: absolute; z-index: 2; top: 0; right: -3px; width: 7px; height: 100%; padding: 0; border: 0; background: transparent; cursor: col-resize; }
+.database-column-resizer:hover, .database-column-resizer:active { background: var(--notion-blue); }
+.generic-database-row > input, .generic-database-row > select, .generic-database-row > output, .generic-database-row > label, .generic-title-cell { height: calc(var(--database-row-height, 42px) - 1px); }
+.generic-database-footer { min-height: 34px; color: var(--notion-faint); border-top: 1px solid var(--notion-divider); background: #fff; }
+.generic-database-footer > span { display: grid; place-items: center; border-right: 1px solid var(--notion-divider); }
+.generic-database-footer > label { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 4px 7px; border-right: 1px solid var(--notion-divider); }
+.generic-database-footer select { min-width: 0; max-width: 82px; height: 24px; padding: 0 3px; color: var(--notion-faint); border: 0; border-radius: 3px; background: transparent; font: 9px var(--font-ui); cursor: pointer; }
+.generic-database-footer select:hover { color: var(--notion-text); background: var(--notion-hover); }
+.generic-database-footer output { overflow: hidden; color: var(--notion-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.generic-database-table { overflow-x: hidden; }
+.generic-database-sync { width: 100%; overflow: hidden; }
+.generic-database-table.is-first-column-frozen .generic-database-head > :first-child,
+.generic-database-table.is-first-column-frozen .generic-database-footer > :first-child,
+.generic-database-table.is-first-column-frozen .generic-database-row > :first-child { position: sticky; left: 0; z-index: 5; background: #fff !important; }
+.generic-database-table.is-first-column-frozen .generic-database-head > :nth-child(2),
+.generic-database-table.is-first-column-frozen .generic-database-footer > :nth-child(2),
+.generic-database-table.is-first-column-frozen .generic-database-row > :nth-child(2) { position: sticky; left: 52px; z-index: 4; background: #fff; box-shadow: 1px 0 0 var(--notion-divider), 5px 0 8px rgba(15,15,15,.035); }
+.generic-database-table.is-first-column-frozen .generic-database-head > :first-child,
+.generic-database-table.is-first-column-frozen .generic-database-head > :nth-child(2) { z-index: 7; }
+
+/* Compact database query controls follow Notion's quiet toolbar treatment. */
+.database-tools { justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+.database-tools::-webkit-scrollbar { display: none; }
+.database-tools > button { flex: 0 0 auto; }
+.database-tools .database-new { position: sticky; z-index: 3; right: 0; margin-left: auto; box-shadow: -7px 0 8px #fff; }
+.database-inline-search { width: 190px; height: 29px; flex: 0 0 190px; display: grid; grid-template-columns: 24px 1fr 24px; align-items: center; color: var(--notion-muted); border: 1px solid var(--notion-border); border-radius: 4px; background: #fff; }
+.database-inline-search > svg { justify-self: center; }
+.database-inline-search input { min-width: 0; height: 27px; padding: 0; color: var(--notion-text); border: 0; outline: 0; background: transparent; font: 11px var(--font-ui); }
+.database-tools .database-inline-search button { width: 24px; height: 24px; display: grid; place-items: center; padding: 0; color: var(--notion-faint); }
+.database-tools .database-inline-search button:hover { color: var(--notion-text); }
+.database-active-query { min-height: 31px; display: flex; align-items: center; gap: 5px; overflow-x: auto; padding: 4px 9px; border-bottom: 1px solid var(--notion-divider); background: #fff; scrollbar-width: none; }
+.database-active-query > span { flex: 0 0 auto; height: 23px; display: flex; align-items: center; gap: 4px; padding: 0 3px 0 7px; color: var(--notion-muted); border-radius: 3px; background: var(--notion-sidebar); font-size: 10px; }
+.database-active-query > span > button { width: 19px; height: 19px; display: grid; place-items: center; padding: 0; color: var(--notion-faint); border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
+.database-active-query > span > button:hover { color: var(--notion-text); background: rgba(55,53,47,.09); }
+.quick-filter-menu { position: absolute; z-index: 27; top: 68px; right: clamp(8px, 25vw, 350px); width: min(350px, calc(100% - 16px)); overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px; background: #fff; box-shadow: var(--notion-shadow); animation: menu-rise .12s ease both; }
+.quick-filter-menu > header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 7px 0 11px; border-bottom: 1px solid var(--notion-divider); }
+.quick-filter-menu > header > span { display: flex; align-items: center; gap: 7px; }
+.quick-filter-menu > header strong { font-size: 12px; font-weight: 600; }
+.quick-filter-menu > header button, .quick-filter-list button { display: grid; place-items: center; padding: 0; color: var(--notion-faint); border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
+.quick-filter-menu > header button { width: 26px; height: 26px; }
+.quick-filter-menu > header button:hover, .quick-filter-list button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.quick-filter-list { max-height: 140px; overflow-y: auto; padding: 5px; border-bottom: 1px solid var(--notion-divider); }
+.quick-filter-list > span { min-height: 31px; display: grid; grid-template-columns: 1fr 24px; align-items: center; padding: 0 3px 0 7px; border-radius: 4px; color: var(--notion-muted); font-size: 11px; }
+.quick-filter-list > span:hover { background: var(--notion-hover); }
+.quick-filter-list button { width: 22px; height: 22px; }
+.quick-filter-composer { display: grid; grid-template-columns: minmax(90px,.9fr) minmax(110px,1.2fr) 65px; gap: 5px; padding: 9px; }
+.quick-filter-composer select, .quick-filter-composer input { min-width: 0; height: 30px; padding: 0 7px; color: var(--notion-text); border: 1px solid var(--notion-border); border-radius: 3px; outline: 0; background: #fff; font: 11px var(--font-ui); }
+.quick-filter-composer select:focus, .quick-filter-composer input:focus { border-color: var(--notion-blue); box-shadow: 0 0 0 1px rgba(35,131,226,.14); }
+.quick-filter-composer > button { height: 30px; display: flex; align-items: center; justify-content: center; gap: 4px; color: #fff; border: 0; border-radius: 3px; background: var(--notion-blue); font: 11px var(--font-ui); cursor: pointer; }
+.quick-filter-menu > p { margin: 0; padding: 18px 12px; color: var(--notion-faint); font-size: 11px; text-align: center; }
+.quick-filter-menu > footer { min-height: 32px; display: flex; align-items: center; padding: 0 10px; color: var(--notion-faint); border-top: 1px solid var(--notion-divider); background: var(--notion-sidebar); font-size: 9px; }
+.database-group-ledger > button { flex: 0 0 auto; min-width: 94px; height: 34px; display: flex; align-items: center; gap: 5px; padding: 0 9px; color: var(--notion-muted); border: 0; border-right: 1px solid var(--notion-divider); background: #fff; cursor: pointer; }
+.database-group-ledger > button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-group-ledger > button > svg { color: var(--notion-faint); }
+.database-group-ledger > button strong { font-size: 11px; font-weight: 500; }
+.database-group-ledger > button em { margin-left: auto; color: var(--notion-faint); font-size: 10px; font-style: normal; }
+.database-group-ledger > button.is-collapsed { color: var(--notion-faint); background: var(--notion-sidebar); }
+.database-row-control { padding: 0 4px !important; display: grid !important; grid-template-columns: 18px 18px; justify-content: center; }
+.database-row-control > label { grid-column: 2; grid-row: 1; width: 18px; height: 100%; display: grid; place-items: center; }
+.database-row-control > button { grid-column: 1; grid-row: 1; width: 18px; height: 100%; display: grid; place-items: center; padding: 0; color: var(--notion-faint); border: 0; background: transparent; cursor: grab; opacity: 0; }
+.database-row-control > button:active { cursor: grabbing; }
+.database-row-control > button:disabled { cursor: not-allowed; }
+.generic-database-row:hover .database-row-control > button { opacity: 1; }
+.generic-database-row.is-dragging { opacity: .42; }
+.generic-database-row.is-drop-target { box-shadow: inset 0 2px var(--notion-blue); }
+.board-card-title { min-width: 0; display: flex; align-items: center; gap: 3px; }
+.board-card-title > svg { flex: 0 0 auto; margin-left: -3px; color: var(--notion-faint); opacity: 0; }
+.board-column article:hover .board-card-title > svg { opacity: 1; }
+.board-column article[draggable="true"] { cursor: grab; }
+.board-column article[draggable="true"]:active { cursor: grabbing; }
+.board-column article.is-dragging { opacity: .38; }
+.board-column.is-drag-over { background: rgba(35,131,226,.055); box-shadow: inset 0 0 0 1px rgba(35,131,226,.18); }
+
+.database-template-menu { position: absolute; z-index: 25; top: 68px; right: 92px; width: 330px; overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 6px; background: #fff; box-shadow: var(--notion-shadow); animation: menu-rise .12s ease both; }
+.database-template-menu > header { height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; border-bottom: 1px solid var(--notion-divider); }
+.database-template-menu > header strong { font-size: 12px; }
+.database-template-menu > header button { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-muted); border: 0; background: transparent; cursor: pointer; }
+.database-template-menu > header button:hover { background: var(--notion-hover); }
+.database-template-menu .template-blank { width: calc(100% - 10px); min-height: 42px; margin: 5px; display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 4px; padding: 5px 8px; color: var(--notion-text); border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: pointer; }
+.database-template-menu .template-blank:hover { background: var(--notion-hover); }
+.database-template-menu .template-blank > svg { color: var(--notion-muted); }
+.database-template-menu button > span { display: flex; flex-direction: column; gap: 1px; }
+.database-template-menu button strong { font-size: 12px; font-weight: 500; }
+.database-template-menu button small { color: var(--notion-faint); font-size: 10px; }
+.database-template-list { max-height: 210px; overflow-y: auto; padding: 4px 5px 6px; border-top: 1px solid var(--notion-divider); }
+.database-template-list > small { display: block; padding: 4px 7px; color: var(--notion-faint); font-size: 10px; }
+.database-template-list > div { display: grid; grid-template-columns: minmax(0,1fr) 28px 28px; align-items: center; border-radius: 4px; }
+.database-template-list > div:hover { background: var(--notion-hover); }
+.database-template-list > div > button:first-child { min-height: 42px; display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 4px; padding: 4px 7px; color: var(--notion-text); border: 0; background: transparent; text-align: left; cursor: pointer; }
+.database-template-list > div > button:last-child { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-faint); border: 0; background: transparent; cursor: pointer; }
+.database-template-list > div > button:last-child:hover { color: #eb5757; background: rgba(235,87,87,.10); }
+.database-template-list > div > button:nth-last-child(2):not(:first-child) { width: 26px; height: 26px; display: grid; place-items: center; color: var(--notion-faint); border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
+.database-template-list > div > button:nth-last-child(2):not(:first-child):hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-template-list > p { margin: 0; padding: 14px 10px; color: var(--notion-faint); font-size: 11px; line-height: 1.5; text-align: center; }
+.database-template-menu > footer { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding: 9px; border-top: 1px solid var(--notion-divider); background: var(--notion-sidebar); }
+.database-template-menu > footer input { min-width: 0; height: 31px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); background: #fff; font-size: 12px; }
+.database-template-menu > footer button { height: 31px; padding: 0 9px; color: #fff; border: 0; background: var(--notion-blue); font-size: 11px; cursor: pointer; }
+.database-template-menu button:disabled, .database-template-menu input:disabled { opacity: .42; cursor: default; }
+
+.database-bulk-toolbar { min-height: 42px; display: grid; grid-template-columns: auto minmax(110px, .6fr) minmax(130px, 1fr) auto auto auto 28px; align-items: center; gap: 5px; padding: 5px 8px; color: var(--notion-text); border-bottom: 1px solid var(--notion-divider); background: #f1f7fc; }
+.database-bulk-toolbar > span { display: flex; align-items: center; gap: 5px; color: var(--notion-blue); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.database-bulk-toolbar select, .database-bulk-toolbar > input { min-width: 0; height: 30px; padding: 0 8px; color: var(--notion-text); border: 1px solid var(--notion-border); background: #fff; font-size: 12px; }
+.database-bulk-toolbar > label { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 8px; border: 1px solid var(--notion-border); background: #fff; font-size: 12px; }
+.database-bulk-toolbar > button { height: 30px; padding: 0 11px; color: #fff; border: 0; background: var(--notion-blue); font-size: 12px; cursor: pointer; }
+.database-bulk-toolbar > button:last-child { width: 28px; padding: 0; display: grid; place-items: center; color: var(--notion-muted); background: transparent; }
+.database-bulk-toolbar > button:last-child:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-bulk-toolbar > button.bulk-secondary { display: flex; align-items: center; gap: 4px; color: var(--notion-muted); border: 1px solid var(--notion-border); background: #fff; }
+.database-bulk-toolbar > button.bulk-secondary:hover { color: var(--notion-text); background: var(--notion-hover); }
+.database-bulk-toolbar > button.bulk-danger { display: flex; align-items: center; gap: 4px; color: #eb5757; border: 1px solid rgba(235,87,87,.22); background: #fff; }
+.database-bulk-toolbar > button.bulk-danger:hover { background: rgba(235,87,87,.08); }
+.database-bulk-toolbar button:disabled { opacity: .5; cursor: default; }
+
+.record-trash-backdrop { position: fixed; z-index: 76; inset: 44px 0 0; display: grid; place-items: center; padding: 20px; background: rgba(15,15,15,.32); animation: veil-in .12s ease both; }
+.record-trash-panel { width: min(580px, calc(100vw - 48px)); max-height: min(560px, calc(100vh - 86px)); display: grid; grid-template-rows: 54px minmax(180px,1fr) 44px; overflow: hidden; color: var(--notion-text); border: 1px solid rgba(15,15,15,.08); border-radius: 7px; background: #fff; box-shadow: var(--notion-shadow); }
+.record-trash-panel > header { display: flex; align-items: center; justify-content: space-between; padding: 0 11px 0 15px; border-bottom: 1px solid var(--notion-divider); }
+.record-trash-panel > header > span { display: flex; align-items: center; gap: 9px; }
+.record-trash-panel > header > span > div { display: flex; flex-direction: column; gap: 1px; }
+.record-trash-panel > header small { color: var(--notion-faint); font-size: 9px; letter-spacing: .04em; }
+.record-trash-panel > header strong { font-size: 14px; font-weight: 600; }
+.record-trash-panel > header > button { width: 28px; height: 28px; display: grid; place-items: center; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
+.record-trash-panel > header > button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.record-trash-panel > main { overflow-y: auto; padding: 5px; }
+.record-trash-panel article { min-height: 54px; display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 5px; padding: 5px 7px 5px 10px; border-radius: 4px; }
+.record-trash-panel article:hover { background: var(--notion-hover); }
+.record-trash-panel article > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.record-trash-panel article strong { overflow: hidden; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.record-trash-panel article small { color: var(--notion-faint); font-size: 10px; }
+.record-trash-panel article button { height: 28px; display: flex; align-items: center; gap: 4px; padding: 0 8px; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; font-size: 10px; cursor: pointer; }
+.record-trash-panel article button:hover { color: var(--notion-text); background: rgba(55,53,47,.09); }
+.record-trash-panel article button:last-child { color: #eb5757; }
+.record-trash-panel article button.is-confirm { color: #fff; background: #eb5757; }
+.record-trash-panel article button:disabled { opacity: .45; cursor: default; }
+.record-trash-empty { min-height: 230px; display: grid; place-content: center; justify-items: center; gap: 5px; color: var(--notion-faint); text-align: center; }
+.record-trash-empty strong { color: var(--notion-muted); font-size: 12px; }
+.record-trash-empty span { max-width: 270px; font-size: 10px; line-height: 1.5; }
+.record-trash-panel > footer { display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 14px; border-top: 1px solid var(--notion-divider); background: var(--notion-sidebar); }
+.record-trash-panel > footer span { color: var(--notion-faint); font-size: 10px; }
+.record-trash-panel > footer button { height: 28px; padding: 0 10px; color: var(--notion-text); border: 1px solid var(--notion-border); border-radius: 4px; background: #fff; font-size: 10px; cursor: pointer; }
+
+.database-grid { grid-template-columns: 34px minmax(180px, 1.7fr) 112px 95px 124px 72px 126px 72px 82px; min-width: 1024px; }
+.database-row-space { min-width: 1024px; }
+.database-row-select { height: 100%; display: grid; place-items: center; padding: 0 !important; border-right: 1px solid var(--notion-divider) !important; background: transparent !important; }
+.database-row-select input { position: absolute; opacity: 0; pointer-events: none; }
+.database-row-select span { width: 14px; height: 14px; display: grid; place-items: center; border: 1px solid #b7b6b2; border-radius: 2px; background: #fff; cursor: pointer; }
+.database-row-select input:checked + span { color: #fff; border-color: var(--notion-blue); background: var(--notion-blue); }
+.database-row-select input:checked + span::after { content: '✓'; font-size: 10px; line-height: 1; }
+.database-grid-row.is-selected, .generic-database-row.is-selected { background: rgba(35,131,226,.07); }
+.generic-database-head > .database-row-select { border-bottom: 0; }
