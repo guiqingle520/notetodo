@@ -35,7 +35,6 @@ module.exports = {
     }))
     return { schema: { id: database.id, name: database.name, properties }, records, views, activeViewId: database.active_view_id, templates }
   },
-
   createDatabaseForPage(pageId, databaseId, name) {
     const title = `${databaseId}-title`; const status = `${databaseId}-status`; const date = `${databaseId}-date`
     const tableView = `${databaseId}-table`
@@ -56,8 +55,8 @@ module.exports = {
     })
     return this.loadDatabaseByPage(pageId)
   },
-
   addDatabaseProperty(databaseId, propertyId, name, type) {
+    if (this.recordRepository.propertyOrder.all(databaseId).length >= 50) throw new Error('A database cannot contain more than 50 properties.')
     let config = type === 'select' || type === 'multiSelect' ? JSON.stringify({ options: [
       { id: 'option-1', name: '选项 1', color: 'slate' },
       { id: 'option-2', name: '选项 2', color: 'amber' },
@@ -76,11 +75,9 @@ module.exports = {
     if (result.changes !== 1) throw new Error('Database does not exist.')
     return this.loadDatabaseById(databaseId)
   },
-
   listDatabaseSources() {
     return this.recordRepository.databaseSources.all()
   },
-
   updateDatabasePropertyConfig(databaseId, propertyId, config) {
     const property = this.recordRepository.propertyConfig.get(propertyId, databaseId)
     if (!property) throw new Error('Database property does not exist.')
@@ -150,19 +147,16 @@ module.exports = {
     if (result.changes !== 1) throw new Error('Database property does not exist.')
     return this.loadDatabaseById(databaseId)
   },
-
   renameDatabaseProperty(databaseId, propertyId, name) {
     const result = this.recordRepository.renameProperty.run(name, propertyId, databaseId)
     if (result.changes !== 1) throw new Error('Database property does not exist.')
     return this.loadDatabaseById(databaseId)
   },
-
   renameDatabase(databaseId, name) {
     const result = this.recordRepository.renameDatabase.run(name, databaseId)
     if (result.changes !== 1) throw new Error('Database does not exist.')
     return this.loadDatabaseById(databaseId)
   },
-
   reorderDatabaseProperties(databaseId, propertyIds) {
     const existing = this.recordRepository.propertyOrder.all(databaseId).map((row) => row.id)
     if (propertyIds.length !== existing.length || new Set(propertyIds).size !== existing.length || propertyIds.some((id) => !existing.includes(id))) throw new TypeError('Property order must contain every property exactly once.')
@@ -170,7 +164,6 @@ module.exports = {
     this.recordRepository.transaction(() => propertyIds.forEach((id, position) => update.run(position, id, databaseId)))
     return this.loadDatabaseById(databaseId)
   },
-
   deleteDatabaseProperty(databaseId, propertyId) {
     const property = this.recordRepository.propertyForDelete.get(propertyId, databaseId)
     if (!property) throw new Error('Database property does not exist.')
@@ -195,13 +188,11 @@ module.exports = {
     })
     return this.loadDatabaseById(databaseId)
   },
-
   loadDatabaseById(databaseId) {
     const page = this.recordRepository.pageByDatabase.get(databaseId)
     if (!page) throw new Error('Database does not exist.')
     return this.loadDatabaseByPage(page.page_id)
   },
-
   updateDatabaseCell(recordId, propertyId, value) {
     const property = this.recordRepository.cellProperty.get(recordId, propertyId)
     if (!property) throw new Error('Database property does not exist.')
@@ -218,7 +209,6 @@ module.exports = {
       return { automationRuns }
     })
   },
-
   syncReciprocalRelation(recordId, property, previous, next, now) {
     const relation = JSON.parse(property.config_json || '{}').relation
     if (!relation?.reciprocalPropertyId) return
@@ -236,7 +226,6 @@ module.exports = {
       this.recordRepository.touchRecord.run(now, targetRecordId)
     }
   },
-
   writeDatabasePropertyValue(recordId, property, value, now) {
     if (property.type === 'formula' || property.type === 'rollup') throw new Error('Derived database properties are read-only.')
     value = this.normalizeDatabasePropertyValue(property, value)
@@ -263,7 +252,6 @@ module.exports = {
     }
     this.recordRepository.upsertPropertyValue.run(recordId, property.id, textValue, numberValue, booleanValue, jsonValue, now)
   },
-
   normalizeDatabasePropertyValue(property, value) {
     if (value === null || value === undefined || value === '') return null
     if (property.type === 'number') { const number = Number(value); if (!Number.isFinite(number)) throw new TypeError('Number property requires a finite value.'); return number }
@@ -274,11 +262,9 @@ module.exports = {
     }
     return String(value)
   },
-
   isEmptyDatabasePropertyValue(value) {
     return value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
   },
-
   readDatabasePropertyValue(recordId, propertyId) {
     const row = this.recordRepository.propertyValue.get(recordId, propertyId)
     if (!row) return null
@@ -287,14 +273,12 @@ module.exports = {
     if (row.number_value !== null) return row.number_value
     return row.boolean_value === null ? null : Boolean(row.boolean_value)
   },
-
   appendDatabaseRecordHistory(recordId, propertyId, kind, previous, next, now) {
     if (JSON.stringify(previous) === JSON.stringify(next)) return
     this.recordRepository.insertRecordHistory
       .run(randomUUID(), recordId, propertyId, kind, JSON.stringify(previous), JSON.stringify(next), now)
     this.recordRepository.trimRecordHistory.run(recordId, recordId)
   },
-
   listDatabaseRecordHistory(recordId, limit = 100) {
     return this.recordRepository.recordHistory.all(recordId, Math.max(1, Math.min(200, Math.trunc(limit)))).map((row) => {
       const result = { ...row, previous: JSON.parse(row.previousJson), next: JSON.parse(row.nextJson) }
@@ -303,7 +287,6 @@ module.exports = {
       return result
     })
   },
-
   restoreDatabaseRecordHistory(historyId) {
     const history = this.recordRepository.recordHistoryById.get(historyId)
     if (!history) throw new Error('Database record history does not exist.')
@@ -313,7 +296,6 @@ module.exports = {
     const databaseId = this.recordRepository.recordDatabaseId.get(history.record_id)?.database_id
     return this.loadDatabaseById(databaseId)
   },
-
   listDatabaseRecordComments(recordId, unresolvedOnly = false) {
     return this.recordRepository.recordComments.all(recordId, unresolvedOnly ? 1 : 0)
   },
@@ -354,8 +336,14 @@ module.exports = {
     const property = this.recordRepository.reminderDateProperty.get(reminder.recordId, reminder.propertyId)
     if (!property || property.type !== 'date') throw new Error('Reminder property must be a date property on this record.')
     const now = new Date().toISOString()
-    this.recordRepository.upsertRecordReminder
-      .run(reminder.id, reminder.recordId, reminder.propertyId, dueAt.toISOString(), String(reminder.note ?? '').trim(), now, now)
+    this.recordRepository.transaction(() => {
+      const owner = this.recordRepository.reminderOwner.get(reminder.id)
+      // An id is immutable to its record; otherwise an upsert can silently mutate another record's reminder.
+      if (owner && owner.recordId !== reminder.recordId) throw new Error('Record reminder belongs to another record.')
+      if (!owner && this.recordRepository.reminderCount.get(reminder.recordId).count >= 500) throw new Error('A database record cannot contain more than 500 reminders.')
+      this.recordRepository.upsertRecordReminder
+        .run(reminder.id, reminder.recordId, reminder.propertyId, dueAt.toISOString(), String(reminder.note ?? '').trim(), now, now)
+    })
     return this.listDatabaseRecordReminders(reminder.recordId)
   },
 
@@ -372,6 +360,7 @@ module.exports = {
   createDatabaseRecord(databaseId, recordId) {
     const now = new Date().toISOString()
     this.recordRepository.transaction(() => {
+      this.assertDatabaseRecordCapacity(databaseId, 1)
       const nextPosition = this.recordRepository.nextRecordPosition.get(databaseId).position
       this.recordRepository.insertRecord.run(recordId, databaseId, nextPosition, now, now)
       const properties = this.recordRepository.writableProperties.all(databaseId)
@@ -388,6 +377,7 @@ module.exports = {
     if (!source) throw new Error('Database record does not exist.')
     const now = new Date().toISOString()
     this.recordRepository.transaction(() => {
+      this.assertDatabaseRecordCapacity(databaseId, 1)
       const nextPosition = this.recordRepository.nextRecordPosition.get(databaseId).position
       this.recordRepository.insertRecordWithContent.run(recordId, databaseId, nextPosition, source.content, now, now)
       const properties = this.recordRepository.writableProperties.all(databaseId)
@@ -423,6 +413,7 @@ module.exports = {
     const update = this.recordRepository.restoreRecord
     const constrainedValues = this.recordRepository.constrainedRecordValues
     this.recordRepository.transaction(() => {
+      this.assertDatabaseRecordCapacity(databaseId, recordIds.length)
       for (const recordId of recordIds) {
         for (const row of constrainedValues.all(recordId, databaseId)) {
           let value = row.text_value ?? row.number_value ?? (row.boolean_value === null ? null : Boolean(row.boolean_value))
@@ -480,6 +471,7 @@ module.exports = {
     const now = new Date().toISOString()
     let position = this.recordRepository.nextRecordPosition.get(databaseId).position
     this.recordRepository.transaction(() => {
+      this.assertDatabaseRecordCapacity(databaseId, records.length)
       const insert = this.recordRepository.insertRecordWithContent
       for (const record of records) {
         if (!record || typeof record.id !== 'string' || !record.id || typeof record.values !== 'object' || Array.isArray(record.values)) throw new TypeError('CSV import contains an invalid record.')
@@ -521,6 +513,7 @@ module.exports = {
     const properties = this.recordRepository.databaseProperties.all(databaseId)
     const now = new Date().toISOString()
     this.recordRepository.transaction(() => {
+      this.assertDatabaseRecordCapacity(databaseId, 1)
       const position = this.recordRepository.nextRecordPosition.get(databaseId).position
       this.recordRepository.insertRecordWithContent.run(recordId, databaseId, position, template.content, now, now)
       for (const property of properties) if (!['formula', 'rollup'].includes(property.type)) {
@@ -585,5 +578,12 @@ module.exports = {
       ordered.forEach((id, position) => update.run(position, id, databaseId))
     })
     return this.loadDatabaseById(databaseId)
+  },
+
+  assertDatabaseRecordCapacity(databaseId, additionalCount) {
+    const current = this.recordRepository.activeRecordCount.get(databaseId)
+    if (!current) throw new Error('Database does not exist.')
+    // IPC snapshots are intentionally bounded; reject inside the write transaction so a commit can never exceed it.
+    if (current.count + additionalCount > 50_000) throw new Error('A database cannot contain more than 50,000 active records.')
   }
 }

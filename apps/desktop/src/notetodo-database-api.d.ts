@@ -10,7 +10,7 @@ interface NoteTodoDatabaseApi {
     databaseId: string,
     propertyId: string,
     name: string,
-    type: import('@notetodo/database-core').PropertyType,
+    type: Exclude<import('@notetodo/database-core').PropertyType, 'title'>,
   ) => Promise<import('@notetodo/database-core').DatabaseSnapshot>
   listSources: () => Promise<
     Array<{ id: string; pageId: string; name: string; pageTitle: string; recordCount: number }>

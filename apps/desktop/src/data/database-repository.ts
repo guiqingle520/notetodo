@@ -272,8 +272,11 @@ class DatabaseRepository {
   }
 
   async createRecordComment(recordId: string, propertyId: string | null, propertyName: string, body: string) {
-    const comment = { id: crypto.randomUUID(), recordId, propertyId, propertyName, authorName: '本机用户', body: body.trim(), resolvedAt: null, createdAt: new Date().toISOString() }
-    if (window.notetodo?.database) return window.notetodo.database.createRecordComment(comment)
+    const request = { id: crypto.randomUUID(), recordId, propertyId, authorName: '本机用户', body: body.trim() }
+    // The main process derives display and lifecycle fields from trusted state;
+    // projecting here keeps the exact IPC request smaller and non-spoofable.
+    if (window.notetodo?.database) return window.notetodo.database.createRecordComment(request)
+    const comment = { ...request, propertyName, resolvedAt: null, createdAt: new Date().toISOString() }
     const comments = this.readComments(); comments[recordId] = [comment, ...(comments[recordId] ?? [])].slice(0, 500)
     localStorage.setItem(this.commentKey, JSON.stringify(comments)); return comments[recordId]!
   }
@@ -306,8 +309,10 @@ class DatabaseRepository {
 
   async saveRecordReminder(recordId: string, propertyId: string, propertyName: string, dueAt: string, note: string) {
     const reminders = this.readReminders(); const now = new Date().toISOString()
-    const reminder: DatabaseRecordReminder = { id: crypto.randomUUID(), recordId, propertyId, propertyName, dueAt: new Date(dueAt).toISOString(), note: note.trim(), completedAt: null, createdAt: now, updatedAt: now, overdue: false }
-    if (window.notetodo?.database) return window.notetodo.database.saveRecordReminder(reminder)
+    const request = { id: crypto.randomUUID(), recordId, propertyId, dueAt: new Date(dueAt).toISOString(), note: note.trim() }
+    // Completion timestamps and overdue state are server-owned response data.
+    if (window.notetodo?.database) return window.notetodo.database.saveRecordReminder(request)
+    const reminder: DatabaseRecordReminder = { ...request, propertyName, completedAt: null, createdAt: now, updatedAt: now, overdue: false }
     reminders[recordId] = [...(reminders[recordId] ?? []), reminder].slice(-500); localStorage.setItem(this.reminderKey, JSON.stringify(reminders))
     return this.decorateReminders(reminders[recordId]!)
   }

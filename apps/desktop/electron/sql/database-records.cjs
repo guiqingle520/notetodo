@@ -29,7 +29,8 @@ module.exports = Object.freeze({
   insertPropertyForDatabase:
     'INSERT INTO database_properties(id, database_id, name, type, position, config_json) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM databases WHERE id = ?)',
   databaseSources: `SELECT database.id, database.page_id AS pageId, database.name, page.title AS pageTitle,
-      (SELECT COUNT(*) FROM database_records record WHERE record.database_id = database.id) AS recordCount
+      (SELECT COUNT(*) FROM database_records record
+        WHERE record.database_id = database.id AND record.archived_at IS NULL) AS recordCount
     FROM databases database JOIN pages page ON page.id = database.page_id
     WHERE page.archived_at IS NULL ORDER BY page.last_visited_at DESC, database.name, database.id`,
   propertyConfig:
@@ -98,7 +99,8 @@ module.exports = Object.freeze({
       reminder.due_at AS dueAt, reminder.note, reminder.completed_at AS completedAt,
       reminder.created_at AS createdAt, reminder.updated_at AS updatedAt
     FROM database_record_reminders reminder JOIN database_properties property ON property.id = reminder.property_id
-    WHERE reminder.record_id = ? ORDER BY reminder.completed_at IS NOT NULL, reminder.due_at, reminder.id`,
+    WHERE reminder.record_id = ?
+    ORDER BY reminder.completed_at IS NOT NULL, reminder.due_at, reminder.id LIMIT 500`,
   dueRecordReminders: `SELECT reminder.id, reminder.record_id AS recordId, reminder.property_id AS propertyId, property.name AS propertyName,
       reminder.due_at AS dueAt, reminder.note, reminder.completed_at AS completedAt,
       reminder.created_at AS createdAt, reminder.updated_at AS updatedAt
@@ -109,6 +111,8 @@ module.exports = Object.freeze({
   reminderDateProperty: `SELECT property.type FROM database_properties property
     JOIN database_records record ON record.id = ? AND record.database_id = property.database_id
     WHERE property.id = ?`,
+  reminderOwner: 'SELECT record_id AS recordId FROM database_record_reminders WHERE id = ?',
+  reminderCount: 'SELECT COUNT(*) AS count FROM database_record_reminders WHERE record_id = ?',
   upsertRecordReminder: `INSERT INTO database_record_reminders(id, record_id, property_id, due_at, note, completed_at, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT(id) DO UPDATE SET property_id=excluded.property_id,
     due_at=excluded.due_at, note=excluded.note, completed_at=NULL, updated_at=excluded.updated_at`,
@@ -117,6 +121,9 @@ module.exports = Object.freeze({
   deleteRecordReminder: 'DELETE FROM database_record_reminders WHERE id = ?',
   nextRecordPosition:
     'SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?',
+  activeRecordCount: `SELECT COUNT(record.id) AS count FROM databases database
+    LEFT JOIN database_records record ON record.database_id = database.id AND record.archived_at IS NULL
+    WHERE database.id = ? GROUP BY database.id`,
   insertRecord:
     'INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
   writableProperties:
