@@ -33,11 +33,31 @@ module.exports = Object.freeze({
         WHERE record.database_id = database.id AND record.archived_at IS NULL) AS recordCount
     FROM databases database JOIN pages page ON page.id = database.page_id
     WHERE page.archived_at IS NULL ORDER BY page.last_visited_at DESC, database.name, database.id`,
+  authorizedDatabaseSources: `SELECT database.id, database.page_id AS pageId, database.name, page.title AS pageTitle,
+      (SELECT COUNT(*) FROM database_records record
+        WHERE record.database_id = database.id AND record.archived_at IS NULL) AS recordCount
+    FROM databases database JOIN pages page ON page.id = database.page_id
+    WHERE page.archived_at IS NULL AND (
+      NOT EXISTS (SELECT 1 FROM page_permissions permission WHERE permission.page_id = page.id) OR
+      EXISTS (SELECT 1 FROM page_permissions mine WHERE mine.page_id = page.id AND mine.subject_id = ?)
+    ) ORDER BY page.last_visited_at DESC, database.name, database.id`,
+  accessPageByDatabase: 'SELECT page_id AS pageId FROM databases WHERE id = ?',
+  accessPageByRecord: `SELECT database.page_id AS pageId FROM database_records record
+    JOIN databases database ON database.id = record.database_id WHERE record.id = ?`,
+  accessPageByHistory: `SELECT database.page_id AS pageId FROM database_record_history history
+    JOIN database_records record ON record.id = history.record_id
+    JOIN databases database ON database.id = record.database_id WHERE history.id = ?`,
+  accessPageByComment: `SELECT database.page_id AS pageId FROM database_record_comments comment
+    JOIN database_records record ON record.id = comment.record_id
+    JOIN databases database ON database.id = record.database_id WHERE comment.id = ?`,
+  accessPageByReminder: `SELECT database.page_id AS pageId FROM database_record_reminders reminder
+    JOIN database_records record ON record.id = reminder.record_id
+    JOIN databases database ON database.id = record.database_id WHERE reminder.id = ?`,
   propertyConfig:
     'SELECT type, config_json FROM database_properties WHERE id = ? AND database_id = ?',
   databaseExists: 'SELECT 1 FROM databases WHERE id = ?',
   reciprocalPropertyConfig:
-    "SELECT config_json FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'",
+    "SELECT type, config_json FROM database_properties WHERE id = ? AND database_id = ? AND type = 'relation'",
   rollupTargetProperty:
     "SELECT type FROM database_properties WHERE id = ? AND database_id = ? AND type NOT IN ('formula', 'rollup')",
   updatePropertyConfig:
@@ -108,6 +128,18 @@ module.exports = Object.freeze({
     JOIN database_records record ON record.id = reminder.record_id
     WHERE reminder.completed_at IS NULL AND reminder.due_at <= ? AND record.archived_at IS NULL
     ORDER BY reminder.due_at, reminder.id LIMIT ?`,
+  authorizedDueRecordReminders: `SELECT reminder.id, reminder.record_id AS recordId, reminder.property_id AS propertyId,
+      property.name AS propertyName, reminder.due_at AS dueAt, reminder.note,
+      reminder.completed_at AS completedAt, reminder.created_at AS createdAt,
+      reminder.updated_at AS updatedAt
+    FROM database_record_reminders reminder
+    JOIN database_properties property ON property.id = reminder.property_id
+    JOIN database_records record ON record.id = reminder.record_id
+    JOIN databases database ON database.id = record.database_id
+    WHERE reminder.completed_at IS NULL AND reminder.due_at <= ? AND record.archived_at IS NULL AND (
+      NOT EXISTS (SELECT 1 FROM page_permissions permission WHERE permission.page_id = database.page_id) OR
+      EXISTS (SELECT 1 FROM page_permissions mine WHERE mine.page_id = database.page_id AND mine.subject_id = ?)
+    ) ORDER BY reminder.due_at, reminder.id LIMIT ?`,
   reminderDateProperty: `SELECT property.type FROM database_properties property
     JOIN database_records record ON record.id = ? AND record.database_id = property.database_id
     WHERE property.id = ?`,

@@ -35,4 +35,21 @@ describe('database IPC aggregate registration', () => {
       expect(listener).toEqual(expect.any(Function))
     }
   })
+
+  it('routes production listeners through the authorized database service', () => {
+    const handleTrusted = vi.fn()
+    const databaseService = { loadDatabaseByPage: vi.fn(() => null) }
+    registerDatabaseIpc({
+      handleTrusted,
+      database: {},
+      databaseService,
+      exportCsv: vi.fn(),
+    })
+
+    const loadListener = handleTrusted.mock.calls.find(
+      ([channel]) => channel === 'database:load-by-page',
+    )?.[2]
+    expect(loadListener({}, 'projects')).toBeNull()
+    expect(databaseService.loadDatabaseByPage).toHaveBeenCalledWith('projects')
+  })
 })
