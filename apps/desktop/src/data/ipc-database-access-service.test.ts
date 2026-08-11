@@ -6,8 +6,14 @@ interface TestDatabase {
   close(): void
   setSetting(key: string, value: string): void
   upsertPagePermission(pageId: string, subjectId: string, displayName: string, role: string): void
+  removePagePermission(pageId: string, subjectId: string): void
   updateDatabaseCell(recordId: string, propertyId: string, value: unknown): unknown
-  listDatabaseRecordHistory(recordId: string): Array<{ id: string }>
+  listDatabaseRecordHistory(recordId: string): Array<{
+    id: string
+    propertyId?: string | null
+    previous?: unknown
+    next?: unknown
+  }>
   createDatabaseRecordComment(comment: Record<string, unknown>): Array<Record<string, unknown>>
   saveDatabaseRecordReminder(reminder: Record<string, unknown>): Array<Record<string, unknown>>
   createDatabaseForPage(pageId: string, databaseId: string, name: string): unknown
@@ -18,15 +24,27 @@ interface TestDatabase {
     propertyId: string,
     config: Record<string, unknown>,
   ): unknown
-  recordRepository: unknown
+  recordRepository: {
+    propertyConfig: {
+      get(propertyId: string, databaseId: string): { config_json: string } | undefined
+    }
+  }
 }
 
 interface AccessService {
-  loadDatabaseByPage(pageId: string): unknown
+  loadDatabaseByPage(pageId: string): {
+    schema: { properties: Array<Record<string, unknown>> }
+    records: Array<{ values: Record<string, unknown> }>
+  } | null
   renameDatabase(databaseId: string, name: string): unknown
   listDatabaseSources(): Array<{ id: string; pageId: string }>
   listDueDatabaseRecordReminders(): Array<{ id: string; recordId: string }>
-  listDatabaseRecordHistory(recordId: string): Array<{ id: string }>
+  listDatabaseRecordHistory(recordId: string): Array<{
+    id: string
+    propertyId?: string | null
+    previous?: unknown
+    next?: unknown
+  }>
   restoreDatabaseRecordHistory(historyId: string): unknown
   createDatabaseRecordComment(comment: Record<string, unknown>): Array<Record<string, unknown>>
   resolveDatabaseRecordComment(id: string, resolved: boolean): void
@@ -37,6 +55,14 @@ interface AccessService {
     propertyId: string,
     config: Record<string, unknown>,
   ): unknown
+  duplicateDatabaseRecord(databaseId: string, sourceRecordId: string, recordId: string): unknown
+  saveDatabaseTemplate(databaseId: string, template: Record<string, unknown>): unknown
+  createDatabaseRecordFromTemplate(
+    databaseId: string,
+    templateId: string,
+    recordId: string,
+  ): unknown
+  deleteDatabaseProperty(databaseId: string, propertyId: string): unknown
 }
 
 const require = createRequire(import.meta.url)
@@ -170,5 +196,96 @@ describe('database access service', () => {
         },
       }),
     ).toThrow(/无权/)
+  })
+
+  it('redacts unreadable relations and rechecks target access for copied or templated values', () => {
+    database.createDatabaseForPage('knowledge', 'knowledge-db', '知识数据库')
+    database.createDatabaseRecord('knowledge-db', 'knowledge-record')
+    database.updateDatabasePropertyConfig('roadmap-db', 'task-dependencies', {
+      relation: { databaseId: 'knowledge-db' },
+    })
+    database.updateDatabaseCell('task-1', 'task-dependencies', ['knowledge-record'])
+    database.createDatabaseRecord('roadmap-db', 'blank-source')
+    setActor('editor-user', 'editor')
+    database.upsertPagePermission('knowledge', 'other-owner', '其他所有者', 'owner')
+
+    const safe = service.loadDatabaseByPage('projects')!
+    expect(
+      safe.schema.properties.find((property) => property.id === 'task-dependencies'),
+    ).not.toHaveProperty('relation')
+    expect(
+      safe.schema.properties.find((property) => property.id === 'task-dependency-score'),
+    ).not.toHaveProperty('rollup')
+    expect(safe.records[0]?.values['task-dependencies']).toBeNull()
+    expect(safe.records[0]?.values['task-dependency-score']).toBeNull()
+    expect(safe.records[0]?.values['task-risk']).toBeNull()
+    expect(
+      service
+        .listDatabaseRecordHistory('task-1')
+        .find((entry) => entry.propertyId === 'task-dependencies'),
+    ).toMatchObject({ previous: null, next: null })
+
+    expect(() =>
+      service.duplicateDatabaseRecord('roadmap-db', 'blank-source', 'copy-denied'),
+    ).toThrow(/无权/)
+    const now = '2026-08-11T00:00:00.000Z'
+    const template = {
+      id: 'relation-template',
+      databaseId: 'roadmap-db',
+      name: '关联模板',
+      values: { 'task-dependencies': ['knowledge-record'] },
+      content: '',
+      createdAt: now,
+      updatedAt: now,
+    }
+    expect(() => service.saveDatabaseTemplate('roadmap-db', template)).toThrow(/无权/)
+
+    database.upsertPagePermission('knowledge', 'editor-user', '编辑者', 'viewer')
+    expect(() =>
+      service.duplicateDatabaseRecord('roadmap-db', 'blank-source', 'copy-allowed'),
+    ).not.toThrow()
+    expect(() => service.saveDatabaseTemplate('roadmap-db', template)).not.toThrow()
+    database.removePagePermission('knowledge', 'editor-user')
+    expect(() =>
+      service.createDatabaseRecordFromTemplate(
+        'roadmap-db',
+        'relation-template',
+        'template-denied',
+      ),
+    ).toThrow(/无权/)
+  })
+
+  it('requires foreign write access before deleting a reciprocal relation', () => {
+    database.createDatabaseForPage('knowledge', 'knowledge-db', '知识数据库')
+    database.addDatabaseProperty('roadmap-db', 'source-relation', '外部关联', 'relation')
+    database.addDatabaseProperty('knowledge-db', 'knowledge-relation', '关联路线', 'relation')
+    database.updateDatabasePropertyConfig('roadmap-db', 'source-relation', {
+      relation: { databaseId: 'knowledge-db' },
+    })
+    database.updateDatabasePropertyConfig('knowledge-db', 'knowledge-relation', {
+      relation: {
+        databaseId: 'roadmap-db',
+        reciprocalPropertyId: 'source-relation',
+      },
+    })
+    setActor('editor-user', 'editor')
+    database.upsertPagePermission('knowledge', 'editor-user', '编辑者', 'viewer')
+
+    expect(() => service.deleteDatabaseProperty('roadmap-db', 'source-relation')).toThrow(/无权/)
+    expect(
+      JSON.parse(
+        database.recordRepository.propertyConfig.get('knowledge-relation', 'knowledge-db')!
+          .config_json,
+      ).relation.reciprocalPropertyId,
+    ).toBe('source-relation')
+
+    database.upsertPagePermission('knowledge', 'editor-user', '编辑者', 'editor')
+    expect(() => service.deleteDatabaseProperty('roadmap-db', 'source-relation')).not.toThrow()
+    expect(
+      JSON.parse(
+        database.recordRepository.propertyConfig.get('knowledge-relation', 'knowledge-db')!
+          .config_json,
+      ).relation.reciprocalPropertyId,
+    ).toBeUndefined()
   })
 })

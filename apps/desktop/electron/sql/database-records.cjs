@@ -47,6 +47,8 @@ module.exports = Object.freeze({
   accessPageByHistory: `SELECT database.page_id AS pageId FROM database_record_history history
     JOIN database_records record ON record.id = history.record_id
     JOIN databases database ON database.id = record.database_id WHERE history.id = ?`,
+  accessPropertyByHistory: `SELECT property.type, property.config_json FROM database_record_history history
+    LEFT JOIN database_properties property ON property.id = history.property_id WHERE history.id = ?`,
   accessPageByComment: `SELECT database.page_id AS pageId FROM database_record_comments comment
     JOIN database_records record ON record.id = comment.record_id
     JOIN databases database ON database.id = record.database_id WHERE comment.id = ?`,
