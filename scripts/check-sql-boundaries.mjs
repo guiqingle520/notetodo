@@ -17,7 +17,8 @@ function inspect(path) {
   const localPath = relative(electronRoot, path)
   const inSqlLayer = localPath.startsWith(`sql${sep}`)
   const inRepositoryLayer = localPath.startsWith(`repositories${sep}`)
-  const isMigration = localPath === 'workspace-db-migrations.cjs'
+  const isMigration =
+    localPath === 'workspace-db-migrations.cjs' || localPath.startsWith(`migrations${sep}`)
 
   // Domain and IPC modules may invoke repositories, but must never compile or execute SQL themselves.
   if (
