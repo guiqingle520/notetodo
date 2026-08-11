@@ -4,6 +4,7 @@ out/
 release/
 artifacts/
 coverage/
+test-results/
 .vite/
 *.log
 .DS_Store

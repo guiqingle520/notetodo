@@ -23,6 +23,9 @@
     "check:lines": "node scripts/check-file-lines.mjs",
     "check:sql": "node scripts/check-sql-boundaries.mjs",
     "check:deps": "node scripts/check-package-boundaries.mjs",
+    "check:electron-security": "node scripts/check-electron-security.mjs",
+    "test:migration-recovery": "npm run test --workspace @notetodo/desktop -- --run src/data/workspace-db-utc-migration.test.ts src/data/workspace-db-record-migrations.test.ts",
+    "check:release": "npm run check && npm run check:electron-security && npm run test:migration-recovery && npm run test:e2e --workspace @notetodo/desktop",
     "check": "npm run format:check && npm run lint && npm run check:lines && npm run check:sql && npm run check:deps && npm run typecheck && npm run test && npm run build"
   },
   "engines": {

@@ -26,7 +26,7 @@ const { registerHistoryIpc } = require('./ipc-history-register.cjs')
 const { registerRetrievalIpc } = require('./ipc-retrieval-register.cjs')
 const { registerImportIpc } = require('./ipc-import-register.cjs')
 const { registerDatabaseIpc } = require('./ipc-database-register.cjs')
-const isDev = !app.isPackaged
+const isDev = !app.isPackaged && process.env.NOTETODO_E2E_TEST !== '1'
 const handleTrusted = createTrustedIpcHandler(ipcMain, {
   isDevelopment: isDev,
   developmentUrl: 'http://127.0.0.1:5173',
@@ -52,11 +52,11 @@ protocol.registerSchemesAsPrivileged([{
 // workspace package name internally.
 app.setName('NoteTodo')
 if (process.platform === 'win32') app.setAppUserModelId('dev.notetodo.desktop')
-if (process.env.NOTETODO_SMOKE_TEST === '1' && process.env.NOTETODO_SMOKE_DATA_DIR) {
-  if (!path.isAbsolute(process.env.NOTETODO_SMOKE_DATA_DIR)) throw new Error('Smoke data directory must be absolute.')
-  app.setPath('userData', process.env.NOTETODO_SMOKE_DATA_DIR)
+const isolatedDataDir = process.env.NOTETODO_E2E_DATA_DIR ?? process.env.NOTETODO_SMOKE_DATA_DIR
+if ((process.env.NOTETODO_SMOKE_TEST === '1' || process.env.NOTETODO_E2E_TEST === '1') && isolatedDataDir) {
+  if (!path.isAbsolute(isolatedDataDir)) throw new Error('Test data directory must be absolute.')
+  app.setPath('userData', isolatedDataDir)
 }
-
 function assertId(id) {
   if (typeof id !== 'string' || id.length < 1 || id.length > 128) throw new TypeError('Invalid page id.')
 }
