@@ -348,6 +348,7 @@ Object.assign(
   require('./workspace-db-seed.cjs'),
   require('./workspace-db-records.cjs'),
   require('./workspace-db-record-activity.cjs'),
+  require('./workspace-db-record-views.cjs'),
   require('./workspace-db-platform.cjs'),
   require('./workspace-db-collaboration.cjs'),
 )
