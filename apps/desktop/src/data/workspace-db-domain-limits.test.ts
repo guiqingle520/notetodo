@@ -10,11 +10,15 @@ interface Statement<Result = unknown> {
 
 interface RecordRepository {
   activeRecordCount: Statement<{ count: number }>
+  commentCount: Statement<{ count: number }>
+  insertRecordComment: Statement
   insertProperty: Statement
   insertRecord: Statement
   nextRecordPosition: Statement<{ position: number }>
   propertyOrder: Statement<{ id: string }>
   reminderCount: Statement<{ count: number }>
+  totalRecordCount: Statement<{ count: number }>
+  trashRecord: Statement
   upsertRecordReminder: Statement
   transaction<Result>(work: () => Result): Result
 }
@@ -23,6 +27,13 @@ interface TestDatabase {
   recordRepository: RecordRepository
   addDatabaseProperty(databaseId: string, propertyId: string, name: string, type: string): unknown
   createDatabaseRecord(databaseId: string, recordId: string): void
+  createDatabaseRecordComment(comment: {
+    id: string
+    recordId: string
+    propertyId: string | null
+    authorName: string
+    body: string
+  }): Array<{ id: string }>
   createDatabaseRecordFromTemplate(
     databaseId: string,
     templateId: string,
@@ -33,6 +44,10 @@ interface TestDatabase {
     databaseId: string,
     records: Array<{ id: string; values: Record<string, unknown> }>,
   ): unknown
+  listDatabaseRecordHistory(recordId: string): Array<{
+    next: string
+    previous: string
+  }>
   listDatabaseRecordReminders(recordId: string): Array<{ id: string; note: string }>
   listDatabaseSources(): Array<{ id: string; recordCount: number }>
   listTrashedDatabaseRecords(databaseId: string): Array<{ id: string }>
@@ -55,6 +70,7 @@ interface TestDatabase {
     },
   ): unknown
   trashDatabaseRecords(databaseId: string, recordIds: string[]): unknown
+  updateDatabaseRecordContent(recordId: string, content: string): void
   close(): void
 }
 
@@ -154,6 +170,57 @@ describe('WorkspaceDatabase domain limits', () => {
     expect(updated.find((reminder) => reminder.id === 'limit-reminder-0')?.note).toBe('允许更新')
   })
 
+  it('caps comments before inserting a response-invisible five-hundred-first row', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const repository = database.recordRepository
+
+    repository.transaction(() => {
+      for (let index = 0; index < 500; index += 1) {
+        repository.insertRecordComment.run(
+          `limit-comment-${index}`,
+          'task-1',
+          null,
+          'Lin',
+          `评论 ${index}`,
+          '2026-01-01T00:00:00.000Z',
+        )
+      }
+    })
+
+    expect(repository.commentCount.get('task-1')?.count).toBe(500)
+    expect(() =>
+      database?.createDatabaseRecordComment({
+        id: 'limit-comment-500',
+        recordId: 'task-1',
+        propertyId: null,
+        authorName: 'Lin',
+        body: '超出上限',
+      }),
+    ).toThrow(/500 comments/)
+    expect(repository.commentCount.get('task-1')?.count).toBe(500)
+  })
+
+  it('bounds materialized history bytes while retaining the newest revision', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const revisions = Array.from({ length: 6 }, (_, index) => String(index).repeat(2_000_000))
+
+    revisions.forEach((content) => database?.updateDatabaseRecordContent('task-1', content))
+    const history = database.listDatabaseRecordHistory('task-1')
+
+    expect(history.length).toBeGreaterThan(0)
+    expect(history.length).toBeLessThan(revisions.length)
+    expect(history[0]?.next).toBe(revisions.at(-1))
+    expect(
+      history.reduce(
+        (bytes, entry) =>
+          bytes +
+          Buffer.byteLength(JSON.stringify(entry.previous)) +
+          Buffer.byteLength(JSON.stringify(entry.next)),
+        0,
+      ),
+    ).toBeLessThanOrEqual(20_000_000)
+  })
+
   it('rejects every path that would exceed fifty thousand active records', () => {
     database = new WorkspaceDatabase(':memory:')
     const repository = database.recordRepository
@@ -209,5 +276,48 @@ describe('WorkspaceDatabase domain limits', () => {
       title: '无标题',
       trashedAt: expect.any(String),
     })
+  }, 20_000)
+
+  it('bounds archived and active rows across every record creation path', () => {
+    database = new WorkspaceDatabase(':memory:')
+    const repository = database.recordRepository
+    const initialCount = repository.totalRecordCount.get('roadmap-db')?.count ?? 0
+    let position = repository.nextRecordPosition.get('roadmap-db')?.position ?? initialCount
+    const now = '2026-01-01T00:00:00.000Z'
+
+    repository.transaction(() => {
+      for (let index = initialCount; index < 100_000; index += 1) {
+        const recordId = `storage-record-${index}`
+        repository.insertRecord.run(recordId, 'roadmap-db', position, now, now)
+        repository.trashRecord.run(now, now, recordId, 'roadmap-db')
+        position += 1
+      }
+    })
+
+    database.saveDatabaseTemplate('roadmap-db', {
+      id: 'storage-template',
+      name: '存储上限模板',
+      values: {},
+      content: '',
+      createdAt: now,
+    })
+    expect(repository.totalRecordCount.get('roadmap-db')?.count).toBe(100_000)
+    expect(() => database?.createDatabaseRecord('roadmap-db', 'storage-create')).toThrow(
+      /100,000 total records/,
+    )
+    expect(() =>
+      database?.duplicateDatabaseRecord('roadmap-db', 'task-1', 'storage-duplicate'),
+    ).toThrow(/100,000 total records/)
+    expect(() =>
+      database?.importDatabaseRecords('roadmap-db', [{ id: 'storage-import', values: {} }]),
+    ).toThrow(/100,000 total records/)
+    expect(() =>
+      database?.createDatabaseRecordFromTemplate(
+        'roadmap-db',
+        'storage-template',
+        'storage-from-template',
+      ),
+    ).toThrow(/100,000 total records/)
+    expect(repository.totalRecordCount.get('roadmap-db')?.count).toBe(100_000)
   }, 20_000)
 })

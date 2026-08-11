@@ -96,11 +96,20 @@ module.exports = Object.freeze({
   trimRecordHistory: `DELETE FROM database_record_history WHERE record_id = ? AND id NOT IN (
     SELECT id FROM database_record_history WHERE record_id = ? ORDER BY created_at DESC, id DESC LIMIT 200
   )`,
-  recordHistory: `SELECT history.id, history.record_id AS recordId, history.property_id AS propertyId, history.kind,
-      history.previous_json AS previousJson, history.next_json AS nextJson, history.created_at AS createdAt,
-      COALESCE(property.name, '正文') AS propertyName
-    FROM database_record_history history LEFT JOIN database_properties property ON property.id = history.property_id
-    WHERE history.record_id = ? ORDER BY history.created_at DESC, history.id DESC LIMIT ?`,
+  recordHistory: `SELECT id, recordId, propertyId, kind, previousJson, nextJson, createdAt, propertyName
+    FROM (
+      SELECT history.id, history.record_id AS recordId, history.property_id AS propertyId, history.kind,
+        history.previous_json AS previousJson, history.next_json AS nextJson, history.created_at AS createdAt,
+        COALESCE(property.name, '正文') AS propertyName,
+        ROW_NUMBER() OVER (ORDER BY history.created_at DESC, history.id DESC) AS rowNumber,
+        SUM(LENGTH(CAST(history.previous_json AS BLOB)) + LENGTH(CAST(history.next_json AS BLOB)))
+          OVER (ORDER BY history.created_at DESC, history.id DESC ROWS UNBOUNDED PRECEDING) AS payloadBytes
+      FROM database_record_history history
+      LEFT JOIN database_properties property ON property.id = history.property_id
+      WHERE history.record_id = ?
+    ) bounded
+    WHERE payloadBytes <= ? OR rowNumber = 1
+    ORDER BY createdAt DESC, id DESC LIMIT ?`,
   recordHistoryById:
     'SELECT record_id, property_id, kind, previous_json FROM database_record_history WHERE id = ?',
   recordDatabaseId: 'SELECT database_id FROM database_records WHERE id = ?',
@@ -113,6 +122,7 @@ module.exports = Object.freeze({
   activeRecordDatabase:
     'SELECT database_id FROM database_records WHERE id = ? AND archived_at IS NULL',
   propertyExists: 'SELECT 1 FROM database_properties WHERE id = ? AND database_id = ?',
+  commentCount: 'SELECT COUNT(*) AS count FROM database_record_comments WHERE record_id = ?',
   insertRecordComment:
     'INSERT INTO database_record_comments(id, record_id, property_id, author_name, body, created_at) VALUES (?, ?, ?, ?, ?, ?)',
   resolveRecordComment: 'UPDATE database_record_comments SET resolved_at = ? WHERE id = ?',
@@ -157,6 +167,9 @@ module.exports = Object.freeze({
     'SELECT COALESCE(MAX(position), -1) + 1 AS position FROM database_records WHERE database_id = ?',
   activeRecordCount: `SELECT COUNT(record.id) AS count FROM databases database
     LEFT JOIN database_records record ON record.database_id = database.id AND record.archived_at IS NULL
+    WHERE database.id = ? GROUP BY database.id`,
+  totalRecordCount: `SELECT COUNT(record.id) AS count FROM databases database
+    LEFT JOIN database_records record ON record.database_id = database.id
     WHERE database.id = ? GROUP BY database.id`,
   insertRecord:
     'INSERT INTO database_records(id, database_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
