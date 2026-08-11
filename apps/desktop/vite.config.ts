@@ -26,5 +26,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // Playwright owns real Electron journeys; Vitest must not execute its specs.
+    exclude: ['e2e/**', '**/node_modules/**', '**/.git/**'],
   },
 })
