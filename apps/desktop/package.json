@@ -7,10 +7,13 @@
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
+    "predev": "npm run build --workspace @notetodo/main-core",
     "dev": "concurrently --kill-others-on-fail \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && electron .\"",
+    "prebuild": "npm run build --workspace @notetodo/main-core",
     "build": "vite build",
     "package:dir": "npm run build && electron-builder --dir",
     "package:win": "npm run build && electron-builder --win nsis",
+    "pretest": "npm run build --workspace @notetodo/main-core",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -22,6 +25,7 @@
     "@notetodo/auth-core": "*",
     "@notetodo/database-core": "*",
     "@notetodo/import-core": "*",
+    "@notetodo/main-core": "*",
     "@notetodo/sync-core": "*",
     "@notetodo/webhook-core": "*",
     "@tiptap/extension-collaboration": "^3.29.2",
