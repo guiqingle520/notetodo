@@ -1,5 +1,18 @@
 export const VECTOR_DIMENSIONS = 256
 
+/** Converts an ISO timestamp to the UTC Unix-millisecond storage representation. */
+export function isoToUnixMs(value: string): number {
+  const unixMs = Date.parse(value)
+  if (!Number.isSafeInteger(unixMs)) throw new TypeError('Timestamp must be a valid ISO date.')
+  return unixMs
+}
+
+/** Converts a persisted UTC Unix-millisecond value back to the public ISO contract. */
+export function unixMsToIso(value: number): string {
+  if (!Number.isSafeInteger(value)) throw new TypeError('Timestamp must be a safe integer.')
+  return new Date(value).toISOString()
+}
+
 export interface RetrievalChunk {
   index: number
   heading: string

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { VECTOR_DIMENSIONS, chunkPage, cosineSimilarity, embedText, fuseRankings } from '.'
+import { VECTOR_DIMENSIONS, chunkPage, cosineSimilarity, embedText, fuseRankings, isoToUnixMs, unixMsToIso } from '.'
 
 describe('main process retrieval core', () => {
   it('sanitizes and chunks editor HTML with stable headings', () => {
@@ -18,5 +18,11 @@ describe('main process retrieval core', () => {
 
   it('fuses lexical and semantic rankings without duplicating resources', () => {
     expect(fuseRankings([{ id: 'a' }], [{ id: 'a' }, { id: 'b' }], 2).map((item) => item.id)).toEqual(['a', 'b'])
+  })
+
+  it('round-trips UTC timestamps through safe Unix milliseconds', () => {
+    const iso = '2026-08-11T15:30:45.123Z'
+    expect(unixMsToIso(isoToUnixMs(iso))).toBe(iso)
+    expect(() => isoToUnixMs('not-a-date')).toThrow(/valid ISO/)
   })
 })

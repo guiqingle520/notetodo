@@ -1,5 +1,6 @@
-const LATEST_SCHEMA_VERSION = 18
+const LATEST_SCHEMA_VERSION = 19
 const { migrateDatabaseRecords } = require('./migrations/database-records.cjs')
+const { migrateUtcTimestampCompatibility } = require('./migrations/utc-timestamps.cjs')
 
 module.exports = {
   migrate() {
@@ -423,6 +424,7 @@ module.exports = {
     }
   
     migrateDatabaseRecords(this.database, currentVersion)
+    migrateUtcTimestampCompatibility(this.database, currentVersion)
   
     if (currentVersion > LATEST_SCHEMA_VERSION) {
       throw new Error(`Workspace schema ${currentVersion} is newer than this app supports.`)
