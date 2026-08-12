@@ -9,6 +9,7 @@ import { WorkspaceEditor } from './WorkspaceEditor'
 import { WorkspaceHome } from './WorkspaceHome'
 import { WorkspacePageList } from './WorkspacePageList'
 import { WorkspaceSearchPalette } from './WorkspaceSearchPalette'
+import { HelpPanel } from './AppHelpPanel'
 
 type AppSurface = 'home' | 'pages' | 'editor'
 
@@ -20,6 +21,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [notificationCount, setNotificationCount] = useState(0)
   const [surface, setSurface] = useState<AppSurface>('home')
   const [selectionContext, setSelectionContext] = useState<SelectionContext | null>(null)
@@ -80,6 +82,7 @@ export function App() {
         setSettingsOpen(false)
         setNotificationsOpen(false)
         setImportOpen(false)
+        setHelpOpen(false)
       }
     }
     window.addEventListener('keydown', handleGlobalShortcut)
@@ -103,6 +106,11 @@ export function App() {
           onSettings={() => setSettingsOpen(true)}
           onNotifications={() => setNotificationsOpen(true)}
           onImport={() => setImportOpen(true)}
+          onAI={() => {
+            setSurface('editor')
+            setAiOpen(true)
+          }}
+          onHelp={() => setHelpOpen(true)}
           notificationCount={notificationCount}
           activeSurface={surface}
           onHome={() => setSurface('home')}
@@ -110,7 +118,11 @@ export function App() {
           onPageOpen={() => setSurface('editor')}
         />
         {sidebarCollapsed && (
-          <button className="floating-menu" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧栏">
+          <button
+            className="floating-menu"
+            onClick={() => setSidebarCollapsed(false)}
+            aria-label="展开侧栏"
+          >
             <Menu size={17} />
           </button>
         )}
@@ -150,6 +162,7 @@ export function App() {
           />
         )}
         {importOpen && <ImportPanel onClose={() => setImportOpen(false)} onImported={hydrate} />}
+        {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
       </div>
     </div>
   )

@@ -1,0 +1,132 @@
+/* Help surface follows Notion's small, calm modal and shortcut-row language. */
+.help-backdrop {
+  padding-top: min(14vh, 120px);
+}
+
+.help-panel {
+  width: min(480px, calc(100vw - 48px));
+  overflow: hidden;
+  color: var(--notion-text);
+  border: 1px solid rgba(15, 15, 15, 0.1);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow:
+    0 14px 40px rgba(15, 15, 15, 0.2),
+    0 2px 5px rgba(15, 15, 15, 0.1);
+}
+
+.help-panel > header {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 8px 16px;
+  border-bottom: 1px solid var(--notion-divider);
+}
+
+.help-panel > header > div,
+.help-panel > header span {
+  display: flex;
+}
+
+.help-panel > header > div {
+  align-items: center;
+  gap: 10px;
+}
+
+.help-panel > header span {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.help-panel > header strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.help-panel > header small {
+  color: var(--notion-faint);
+  font-size: 10px;
+}
+
+.help-panel > header button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--notion-muted);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.help-panel > header button:hover {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
+
+.help-panel > main {
+  padding: 16px;
+}
+
+.help-shortcuts h2 {
+  margin: 0 0 7px;
+  color: var(--notion-faint);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.help-shortcuts > div {
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--notion-divider);
+  font-size: 12px;
+}
+
+.help-shortcuts > div > svg {
+  color: var(--notion-muted);
+}
+
+.help-shortcuts kbd {
+  padding: 3px 6px;
+  color: var(--notion-muted);
+  border: 1px solid var(--notion-divider);
+  border-radius: 4px;
+  background: var(--notion-sidebar);
+  font: 10px var(--font-ui);
+}
+
+.help-ai-note {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  padding: 11px;
+  border-radius: 5px;
+  background: var(--notion-sidebar);
+}
+
+.help-ai-note > svg {
+  flex: 0 0 auto;
+}
+
+.help-ai-note strong {
+  font-size: 12px;
+}
+
+.help-ai-note p {
+  margin: 4px 0 0;
+  color: var(--notion-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.help-panel > footer {
+  padding: 10px 16px;
+  color: var(--notion-faint);
+  border-top: 1px solid var(--notion-divider);
+  background: #fbfbfa;
+  font-size: 10px;
+}

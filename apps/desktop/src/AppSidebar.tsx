@@ -14,7 +14,6 @@ import {
   Grid2X2,
   Home,
   LayoutTemplate,
-  MoreHorizontal,
   Plus,
   Search,
   Settings,
@@ -115,6 +114,8 @@ export function Sidebar({
   onSettings,
   onNotifications,
   onImport,
+  onAI,
+  onHelp,
   notificationCount,
   activeSurface,
   onHome,
@@ -128,6 +129,8 @@ export function Sidebar({
   onSettings: () => void
   onNotifications: () => void
   onImport: () => void
+  onAI: () => void
+  onHelp: () => void
   notificationCount: number
   activeSurface: 'home' | 'pages' | 'editor'
   onHome: () => void
@@ -141,7 +144,9 @@ export function Sidebar({
 
   useEffect(() => {
     if (!templateMenuOpen) return
-    const closeMenu = (event: KeyboardEvent) => { if (event.key === 'Escape') setTemplateMenuOpen(false) }
+    const closeMenu = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setTemplateMenuOpen(false)
+    }
     window.addEventListener('keydown', closeMenu)
     return () => window.removeEventListener('keydown', closeMenu)
   }, [templateMenuOpen])
@@ -206,7 +211,12 @@ export function Sidebar({
             </button>
           </div>
           {templateMenuOpen && (
-            <div className="template-quick-menu" id="sidebar-template-menu" role="dialog" aria-label="选择页面模板">
+            <div
+              className="template-quick-menu"
+              id="sidebar-template-menu"
+              role="dialog"
+              aria-label="选择页面模板"
+            >
               <header>
                 <LayoutTemplate size={13} />
                 <span>选择起点</span>
@@ -248,7 +258,6 @@ export function Sidebar({
         <div className="sidebar-section">
           <div className="section-label">
             <span>共享</span>
-            <MoreHorizontal size={14} />
           </div>
           <p className="sidebar-section-empty">共享给你的页面会显示在这里</p>
         </div>
@@ -256,7 +265,6 @@ export function Sidebar({
         <div className="sidebar-section">
           <div className="section-label">
             <span>工作区</span>
-            <MoreHorizontal size={14} />
           </div>
           <button
             className={`simple-row ${activeSurface === 'home' ? 'is-active' : ''}`}
@@ -272,7 +280,7 @@ export function Sidebar({
             <Files size={15} />
             <span>所有页面</span>
           </button>
-          <button className="simple-row">
+          <button className="simple-row" onClick={onAI}>
             <Bot size={15} />
             <span>AI 工作台</span>
             <i>Beta</i>
@@ -314,7 +322,7 @@ export function Sidebar({
           <Archive size={16} />
           <span>归档与回收站</span>
         </button>
-        <button>
+        <button onClick={onHelp}>
           <CircleHelp size={16} />
           <span>帮助与快捷键</span>
         </button>

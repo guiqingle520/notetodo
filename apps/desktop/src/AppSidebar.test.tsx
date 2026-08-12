@@ -24,6 +24,8 @@ const renderSidebar = (overrides: Partial<React.ComponentProps<typeof Sidebar>> 
     onSettings: vi.fn(),
     onNotifications: vi.fn(),
     onImport: vi.fn(),
+    onAI: vi.fn(),
+    onHelp: vi.fn(),
     notificationCount: 2,
     activeSurface: 'editor',
     onHome: vi.fn(),
@@ -68,5 +70,15 @@ describe('Sidebar', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: '选择页面模板' })).not.toBeInTheDocument()
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('routes AI and help controls to real application actions', () => {
+    const props = renderSidebar()
+
+    fireEvent.click(screen.getByRole('button', { name: /AI 工作台/ }))
+    fireEvent.click(screen.getByRole('button', { name: /帮助与快捷键/ }))
+
+    expect(props.onAI).toHaveBeenCalledOnce()
+    expect(props.onHelp).toHaveBeenCalledOnce()
   })
 })
