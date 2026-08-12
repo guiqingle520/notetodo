@@ -35,8 +35,42 @@ describe('AIPanel', () => {
     )
     expect(screen.getByRole('button', { name: '生成摘要' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '向工作副驾驶提问' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '添加上下文（即将支持）' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '选择 AI 上下文' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '发送消息' })).toBeDisabled()
+  })
+
+  it('selects available context from the composer menu and closes with Escape', () => {
+    render(
+      <AIPanel
+        onClose={vi.fn()}
+        selectionContext={{ from: 0, to: 4, text: '测试选区' }}
+        onApplyPatch={vi.fn()}
+        onUndoPatch={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '选择 AI 上下文' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /所选文本/u }))
+    expect(screen.getByText('所选文本上下文已开启')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '选择 AI 上下文' }))
+    expect(screen.getByRole('menu', { name: '选择 AI 上下文' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('menu', { name: '选择 AI 上下文' })).not.toBeInTheDocument()
+  })
+
+  it('explains why selected text is unavailable', () => {
+    render(
+      <AIPanel
+        onClose={vi.fn()}
+        selectionContext={null}
+        onApplyPatch={vi.fn()}
+        onUndoPatch={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '选择 AI 上下文' }))
+    expect(screen.getByRole('menuitemradio', { name: /请先在页面中选择文字/u })).toBeDisabled()
   })
 
   it('exposes the selected-text context as a pressed state', () => {

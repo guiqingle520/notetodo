@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleHelp,
   FileText,
+  MousePointer2,
   PanelRightClose,
   Plus,
   Sparkles,
@@ -42,8 +43,10 @@ export function AIPanel({
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
   const cancelRef = useRef<null | (() => void)>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
   const [modelName, setModelName] = useState('浏览器预览模型')
   const [contextMode, setContextMode] = useState<'page' | 'selection'>('page')
+  const [contextMenuOpen, setContextMenuOpen] = useState(false)
   const [patch, setPatch] = useState<null | {
     id: string
     text: string
@@ -66,6 +69,26 @@ export function AIPanel({
     if (window.notetodo?.model)
       void window.notetodo.model.getConfig().then((config) => setModelName(config.model))
   }, [])
+
+  useEffect(() => {
+    if (!contextMenuOpen) return
+
+    // Keep the compact composer menu consistent with the rest of the desktop
+    // shell: Escape and a pointer press outside both dismiss it without
+    // changing the active context.
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setContextMenuOpen(false)
+    }
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenuOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('pointerdown', closeOnOutsidePress)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('pointerdown', closeOnOutsidePress)
+    }
+  }, [contextMenuOpen])
 
   const submit = async () => {
     const content = prompt.trim()
@@ -366,10 +389,57 @@ export function AIPanel({
           placeholder="询问、改写，或交给 AI 执行…"
         />
         <div>
-          <button type="button" aria-label="添加上下文（即将支持）" disabled>
-            <Plus size={16} />
-          </button>
-          <span>页面上下文已开启</span>
+          <div className="ai-context-picker" ref={contextMenuRef}>
+            <button
+              type="button"
+              aria-label="选择 AI 上下文"
+              aria-haspopup="menu"
+              aria-expanded={contextMenuOpen}
+              onClick={() => setContextMenuOpen((current) => !current)}
+            >
+              <Plus size={16} />
+            </button>
+            {contextMenuOpen && (
+              <div className="ai-context-menu" role="menu" aria-label="选择 AI 上下文">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={contextMode === 'page'}
+                  onClick={() => {
+                    setContextMode('page')
+                    setContextMenuOpen(false)
+                  }}
+                >
+                  <FileText size={15} />
+                  <span>
+                    <strong>当前页面</strong>
+                    <small>{pageContext.blocks} 个内容块</small>
+                  </span>
+                  {contextMode === 'page' && <CheckCircle2 size={14} />}
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={contextMode === 'selection'}
+                  disabled={!selectionContext}
+                  onClick={() => {
+                    setContextMode('selection')
+                    setContextMenuOpen(false)
+                  }}
+                >
+                  <MousePointer2 size={15} />
+                  <span>
+                    <strong>所选文本</strong>
+                    <small>
+                      {selectionContext ? '仅使用编辑器中的选区' : '请先在页面中选择文字'}
+                    </small>
+                  </span>
+                  {contextMode === 'selection' && <CheckCircle2 size={14} />}
+                </button>
+              </div>
+            )}
+          </div>
+          <span>{usingSelection ? '所选文本上下文已开启' : '页面上下文已开启'}</span>
           {running ? (
             <button
               type="button"

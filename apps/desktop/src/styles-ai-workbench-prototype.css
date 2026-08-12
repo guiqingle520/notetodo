@@ -134,6 +134,79 @@
   border-radius: 5px;
 }
 
+.ai-context-picker {
+  position: relative;
+  display: flex;
+}
+
+.ai-context-picker > button[aria-expanded='true'] {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
+
+.ai-context-menu {
+  position: absolute;
+  z-index: 70;
+  bottom: 34px;
+  left: -4px;
+  width: 244px;
+  padding: 4px;
+  border: 1px solid rgba(15, 15, 15, 0.08);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow:
+    0 8px 24px rgba(15, 15, 15, 0.14),
+    0 2px 5px rgba(15, 15, 15, 0.08);
+}
+
+.ai-context-menu > button {
+  width: 100%;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  color: var(--notion-text);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+}
+
+.ai-context-menu > button:hover:not(:disabled) {
+  background: var(--notion-hover);
+}
+
+.ai-context-menu > button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.ai-context-menu > button > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: inherit;
+}
+
+.ai-context-menu strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ai-context-menu small {
+  overflow: hidden;
+  color: var(--notion-faint);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-context-menu > button > svg:last-child {
+  color: #2383e2;
+}
+
 .ai-disclaimer {
   line-height: 1.4;
   text-align: center;
