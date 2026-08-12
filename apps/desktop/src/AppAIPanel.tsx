@@ -215,15 +215,17 @@ export function AIPanel({
       </div>
       <div className="ai-context">
         <span>上下文</span>
-        <div className="context-switch">
+        <div className="context-switch" role="group" aria-label="AI 上下文范围">
           <button
             className={contextMode === 'page' ? 'is-active' : ''}
+            aria-pressed={contextMode === 'page'}
             onClick={() => setContextMode('page')}
           >
             当前页面 · {pageContext.blocks} 块
           </button>
           <button
             className={contextMode === 'selection' ? 'is-active' : ''}
+            aria-pressed={contextMode === 'selection'}
             disabled={!selectionContext}
             onClick={() => setContextMode('selection')}
           >
@@ -236,7 +238,7 @@ export function AIPanel({
             : (activePage?.title ?? '当前页面')}
         </strong>
       </div>
-      <div className="ai-conversation">
+      <div className="ai-conversation" role="log" aria-live="polite" aria-label="AI 对话">
         {!messages.length && (
           <div className="ai-message">
             <span className="ai-orbit">
@@ -310,9 +312,7 @@ export function AIPanel({
         {patch && (
           <section className={`ai-patch-card is-${patch.status}`}>
             <header>
-              <span>
-                AI PATCH / {patch.operation === 'replace-selection' ? 'REPLACE' : 'INSERT'}
-              </span>
+              <span>AI 变更 / {patch.operation === 'replace-selection' ? '替换' : '插入'}</span>
               <strong>{patch.status === 'applied' ? '已写入页面' : '待确认变更'}</strong>
             </header>
             <div className="patch-target">
@@ -348,7 +348,7 @@ export function AIPanel({
           </section>
         )}
       </div>
-      <div className="model-pill">
+      <div className="model-pill" role="status">
         <span className="status-dot" />
         当前模型 · {modelName}
       </div>
@@ -366,7 +366,7 @@ export function AIPanel({
           placeholder="询问、改写，或交给 AI 执行…"
         />
         <div>
-          <button type="button">
+          <button type="button" aria-label="添加上下文（即将支持）" disabled>
             <Plus size={16} />
           </button>
           <span>页面上下文已开启</span>
