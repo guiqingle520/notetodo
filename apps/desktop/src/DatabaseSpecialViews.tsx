@@ -14,7 +14,7 @@ export function GalleryView({ records, schema, coverPropertyId, visiblePropertyI
 
   if (!titleProperty) return <div className="gallery-missing"><Images size={22} /><strong>需要标题属性</strong><span>Gallery 视图使用标题属性生成卡片。</span></div>
   return <div className={`database-gallery size-${cardSize}`}>
-    <header className="gallery-masthead"><div><small>PROJECT CONTACT SHEET / {String(gallery.records.length).padStart(2, '0')}</small><strong>把工作摊开来看</strong></div><p>以卡片浏览项目脉络；封面缺失时使用稳定的本地生成图形。</p></header>
+    <header className="gallery-masthead"><div><small>{gallery.records.length} 张卡片</small><strong>画廊</strong></div><p>以卡片浏览记录；没有封面时显示本地生成的占位图。</p></header>
     <div className="gallery-grid">{gallery.records.map((record, index) => <GalleryCard key={record.id} record={record} index={index} titleProperty={titleProperty} statusProperty={statusProperty} metadata={metadata} coverPropertyId={coverPropertyId} updateCell={updateCell} />)}</div>
     {gallery.truncatedCount > 0 && <footer className="gallery-foot">已显示前 120 项 · 另有 {gallery.truncatedCount} 项，请使用筛选缩小范围</footer>}
   </div>
@@ -32,7 +32,7 @@ function GalleryCard({ record, index, titleProperty, statusProperty, metadata, c
       {cover ? <img src={cover} alt="" loading="lazy" decoding="async" onError={() => setCoverFailed(true)} /> : <div className="gallery-generated" aria-hidden="true"><i /><b>{initials}</b><em>{String(index + 1).padStart(2, '0')}</em></div>}
       <span>{statusLabel(status)}</span>
     </div>
-    <div className="gallery-card-body"><small>FOLIO {String(index + 1).padStart(2, '0')}</small><strong>{title}</strong><dl>{metadata.map((property) => <div key={property.id}><dt>{property.name}</dt><dd>{formatGalleryValue(record.values[property.id], property)}</dd></div>)}</dl></div>
+      <div className="gallery-card-body"><small>记录 {String(index + 1).padStart(2, '0')}</small><strong>{title}</strong><dl>{metadata.map((property) => <div key={property.id}><dt>{property.name}</dt><dd>{formatGalleryValue(record.values[property.id], property)}</dd></div>)}</dl></div>
     {statusProperty && <button aria-label={`推进“${title}”的状态`} title="推进状态" onClick={() => updateCell(record.id, statusProperty.id, nextStatus)}><span>{statusLabel(status)}</span><ArrowRight size={13} /></button>}
   </article>
 }
@@ -75,7 +75,7 @@ export function TimelineView({ records, schema, startDatePropertyId, endDateProp
   if (!startProperty || !endProperty || !titleProperty) return <div className="calendar-missing"><ChartNoAxesGantt size={22} /><strong>需要开始与截止日期</strong><span>Timeline 视图会使用数据库中的日期属性绘制任务范围。</span></div>
 
   return <div className="database-timeline">
-    <header className="timeline-toolbar"><div><small>PRODUCTION RUN / 28 DAYS</small><strong>{rangeLabel}</strong></div><span>{layout.matchingCount} 条带 · {layout.unscheduled.length} 待排期</span><nav aria-label="切换时间范围"><button aria-label="前两周" onClick={() => setRangeStart(shiftIsoDate(rangeStart, -14))}><ChevronLeft size={14} /></button><button onClick={() => setRangeStart(startOfWeekIso(todayIso))}>今天</button><button aria-label="后两周" onClick={() => setRangeStart(shiftIsoDate(rangeStart, 14))}><ChevronRight size={14} /></button></nav></header>
+    <header className="timeline-toolbar"><div><small>28 天时间范围</small><strong>{rangeLabel}</strong></div><span>{layout.matchingCount} 条记录 · {layout.unscheduled.length} 待排期</span><nav aria-label="切换时间范围"><button aria-label="前两周" onClick={() => setRangeStart(shiftIsoDate(rangeStart, -14))}><ChevronLeft size={14} /></button><button onClick={() => setRangeStart(startOfWeekIso(todayIso))}>今天</button><button aria-label="后两周" onClick={() => setRangeStart(shiftIsoDate(rangeStart, 14))}><ChevronRight size={14} /></button></nav></header>
     <div className="timeline-scroll">
       <div className="timeline-canvas" style={{ width: 168 + TIMELINE_DAYS * TIMELINE_DAY_WIDTH }}>
         <div className="timeline-scale"><strong>任务 / OWNER</strong><div>{days.map((day) => <time className={`${day.weekday === 0 || day.weekday === 6 ? 'is-weekend' : ''} ${day.date === todayIso ? 'is-today' : ''}`} dateTime={day.date} key={day.date}><b>{day.month}/{day.day}</b><small>{['日', '一', '二', '三', '四', '五', '六'][day.weekday]}</small></time>)}</div></div>
@@ -112,7 +112,7 @@ export function CalendarView({ records, schema, datePropertyId, updateCell }: { 
 
   return <div className="database-calendar">
     <header className="calendar-header">
-      <div><small>DELIVERY WINDOW</small><strong>{monthLabel}</strong></div>
+      <div><small>日历</small><strong>{monthLabel}</strong></div>
       <span>{records.length - grouped.unscheduled.length} 已排期 · {grouped.unscheduled.length} 待排期</span>
       <nav aria-label="切换月份"><button aria-label="上个月" onClick={() => moveMonth(-1)}><ChevronLeft size={14} /></button><button onClick={() => setCursor({ year: today.getFullYear(), month: today.getMonth() })}>今天</button><button aria-label="下个月" onClick={() => moveMonth(1)}><ChevronRight size={14} /></button></nav>
     </header>

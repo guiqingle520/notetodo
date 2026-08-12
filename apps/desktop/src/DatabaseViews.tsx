@@ -144,7 +144,7 @@ export function RecordDetailPanel({ record, schema, relationTargets = {}, onClos
       <header><span><BookOpen size={13} />{schema.name}<i>/</i>{record.id.slice(0, 8)}</span><div><em className={`is-${saveState}`}>{saveState === 'saving' ? '正在保存…' : '已保存到本地'}</em><button aria-label="记录提醒" className={sideMode === 'reminders' ? 'is-active' : ''} onClick={() => setSideMode(sideMode === 'reminders' ? 'properties' : 'reminders')}><Bell size={14} /></button><button aria-label="记录讨论" className={sideMode === 'comments' ? 'is-active' : ''} onClick={() => setSideMode(sideMode === 'comments' ? 'properties' : 'comments')}><MessageSquare size={14} /></button><button aria-label="记录历史" className={sideMode === 'history' ? 'is-active' : ''} onClick={() => sideMode === 'history' ? setSideMode('properties') : void openHistory()}><RotateCcw size={14} /></button><button aria-label="关闭记录详情" onClick={close}><X size={16} /></button></div></header>
       <div className="record-detail-layout">
         <main>
-          <small>DATABASE RECORD / LOCAL-FIRST</small>
+          <small>数据库记录</small>
           <input className="record-detail-title" aria-label="记录标题" placeholder="无标题" value={title} onChange={(event) => titleProperty && onUpdateCell(record.id, titleProperty.id, event.target.value)} />
           <nav className="record-editor-toolbar" aria-label="正文格式">
             <button className={editor?.isActive('bold') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBold().run()}>B</button>
