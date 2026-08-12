@@ -31,25 +31,18 @@ describe('editor page actions', () => {
     expect(onHistory).toHaveBeenCalledOnce()
   })
 
-  it('changes the page icon and exposes page metadata actions', () => {
-    const onIconChange = vi.fn()
+  it('exposes page metadata actions', () => {
     const onCoverRequest = vi.fn()
     const onDescriptionRequest = vi.fn()
     render(
       <PageMetaActions
-        icon="note"
         hasCover={false}
         hasDescription={false}
-        onIconChange={onIconChange}
         onCoverRequest={onCoverRequest}
         onDescriptionRequest={onDescriptionRequest}
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '更改图标' }))
-    fireEvent.click(screen.getByRole('menuitemradio', { name: '知识库图标' }))
-
-    expect(onIconChange).toHaveBeenCalledWith('book')
     fireEvent.click(screen.getByRole('button', { name: '添加封面' }))
     expect(onCoverRequest).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: '添加说明' }))
@@ -71,10 +64,8 @@ describe('editor page actions', () => {
           onArchive={vi.fn()}
         />
         <PageMetaActions
-          icon="note"
           hasCover={false}
           hasDescription={false}
-          onIconChange={vi.fn()}
           onCoverRequest={vi.fn()}
           onDescriptionRequest={vi.fn()}
         />
@@ -85,10 +76,5 @@ describe('editor page actions', () => {
     fireEvent.click(screen.getByRole('button', { name: '更多页面操作' }))
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('menu', { name: '更多页面操作' })).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '更改图标' }))
-    expect(screen.getByRole('menu', { name: '选择页面图标' })).toBeInTheDocument()
-    fireEvent.pointerDown(screen.getByRole('button', { name: '菜单外部' }))
-    expect(screen.queryByRole('menu', { name: '选择页面图标' })).not.toBeInTheDocument()
   })
 })

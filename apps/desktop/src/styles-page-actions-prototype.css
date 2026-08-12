@@ -20,7 +20,7 @@
 }
 
 .page-more-wrap,
-.page-icon-wrap {
+.page-icon-picker {
   position: relative;
 }
 
@@ -97,8 +97,13 @@
 .page-cover-actions button:hover { background: #fff; }
 .page-cover-fallback { height: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--notion-muted); font-size: 12px; }
 
+.page-icon-picker { position: relative; width: fit-content; margin: 0 0 5px; z-index: 2; }
+.document:has(.page-cover) .page-icon-picker { margin-top: -55px; }
+.page-icon-trigger { width: 52px; height: 52px; display: grid; place-items: center; padding: 0; color: var(--notion-text); border: 0; border-radius: 5px; background: #fff; box-shadow: 0 0 0 1px rgba(15,15,15,.08); }
+.page-icon-trigger:hover, .page-icon-trigger[aria-expanded='true'] { background: var(--notion-hover); }
+
 .page-icon-menu {
-  top: 28px;
+  top: 57px;
   left: 0;
   width: 174px;
   display: grid;

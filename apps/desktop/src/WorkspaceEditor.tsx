@@ -18,6 +18,7 @@ import { EditorPageProperties } from './EditorPageProperties'
 import { PageHeaderActions, PageMetaActions } from './EditorPageActions'
 import { AttachmentProgress, BlockToolbar, EditorDropGuide, PageMentionMenu, SlashCommandMenu, type AttachmentProgressState, type EditorMenuState } from './EditorFloatingSurfaces'
 import { PageCover } from './PageCover'
+import { PageIcon } from './PageIcon'
 
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
 
@@ -29,7 +30,6 @@ export function WorkspaceEditor(props: { onEditorReady: (editor: Editor | null) 
   }
   return <WorkspaceEditorContent {...props} page={page} />
 }
-
 function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { page: WorkspacePage; onEditorReady: (editor: Editor | null) => void; onSelectionChange: (selection: SelectionContext | null) => void }) {
   const { pages, updatePage, toggleFavorite, archivePage, setActivePage } = useWorkspace()
   const breadcrumbs = useMemo(() => pageBreadcrumbs(pages, page.id), [pages, page.id])
@@ -400,12 +400,11 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
         <article className={`document ${isDatabasePage ? 'is-database-page' : ''}`}>
           {!isDatabasePage && page.cover && <PageCover source={page.cover} onChange={() => void pickPageCover()} onRemove={() => updatePage(page.id, { cover: '' })} />}
           <div className="document-kicker"><span>NT / {page.id.slice(0, 4).toUpperCase()}</span><span>{new Date(page.updatedAt).toLocaleDateString('zh-CN')}</span></div>
+          {!isDatabasePage && <PageIcon icon={page.icon} onChange={(icon) => updatePage(page.id, { icon })} />}
           {!isDatabasePage && (
             <PageMetaActions
-              icon={page.icon}
               hasCover={Boolean(page.cover)}
               hasDescription={Boolean(page.description)}
-              onIconChange={(icon) => updatePage(page.id, { icon })}
               onCoverRequest={() => void pickPageCover()}
               onDescriptionRequest={openDescription}
             />

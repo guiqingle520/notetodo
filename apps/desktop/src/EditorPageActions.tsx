@@ -1,7 +1,5 @@
 import { Archive, History, MessageSquare, MoreHorizontal, Star, Users } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { iconMap } from './AppSidebar'
-import type { PageIcon } from './domain'
 import type { RemoteCursor } from './data/remote-cursors'
 
 interface PageHeaderActionsProps {
@@ -15,14 +13,6 @@ interface PageHeaderActionsProps {
   onToggleFavorite: () => void
   onArchive: () => void
 }
-
-const iconChoices: Array<{ id: PageIcon; label: string }> = [
-  { id: 'note', label: '文档' },
-  { id: 'spark', label: '灵感' },
-  { id: 'check', label: '任务' },
-  { id: 'book', label: '知识库' },
-  { id: 'grid', label: '数据库' },
-]
 
 /** Gives compact page menus one predictable dismissal contract. */
 function useDismissibleMenu(
@@ -156,57 +146,18 @@ export function PageHeaderActions({
 }
 
 export function PageMetaActions({
-  icon,
   hasCover,
   hasDescription,
-  onIconChange,
   onCoverRequest,
   onDescriptionRequest,
 }: {
-  icon: PageIcon
   hasCover: boolean
   hasDescription: boolean
-  onIconChange: (icon: PageIcon) => void
   onCoverRequest: () => void
   onDescriptionRequest: () => void
 }) {
-  const [iconMenuOpen, setIconMenuOpen] = useState(false)
-  const iconMenuRef = useDismissibleMenu(iconMenuOpen, () => setIconMenuOpen(false))
-
   return (
     <div className="page-meta-actions">
-      <div className="page-icon-wrap" ref={iconMenuRef}>
-        <button
-          aria-haspopup="menu"
-          aria-expanded={iconMenuOpen}
-          onClick={() => setIconMenuOpen((current) => !current)}
-        >
-          更改图标
-        </button>
-        {iconMenuOpen && (
-          <div className="page-icon-menu" role="menu" aria-label="选择页面图标">
-            {iconChoices.map((choice) => {
-              const Icon = iconMap[choice.id]
-              return (
-                <button
-                  className={icon === choice.id ? 'is-selected' : ''}
-                  role="menuitemradio"
-                  aria-checked={icon === choice.id}
-                  aria-label={`${choice.label}图标`}
-                  key={choice.id}
-                  onClick={() => {
-                    onIconChange(choice.id)
-                    setIconMenuOpen(false)
-                  }}
-                >
-                  <Icon size={16} />
-                  <span>{choice.label}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
       {!hasCover && <button onClick={onCoverRequest}>添加封面</button>}
       <button onClick={onDescriptionRequest}>{hasDescription ? '编辑说明' : '添加说明'}</button>
     </div>
