@@ -2,18 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Command, Menu, PanelRightOpen, Sparkles } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 import { useWorkspace } from './store'
-import {
-  ArchivePanel,
-  ImportPanel,
-  ModelSettingsPanel,
-  NotificationPanel,
-  SearchPalette,
-} from './AppPanels'
+import { ArchivePanel, ImportPanel, ModelSettingsPanel, NotificationPanel } from './AppPanels'
 import { AIPanel, type AIPatchProposal, type SelectionContext } from './AppAIPanel'
 import { Sidebar } from './AppSidebar'
 import { WorkspaceEditor } from './WorkspaceEditor'
 import { WorkspaceHome } from './WorkspaceHome'
 import { WorkspacePageList } from './WorkspacePageList'
+import { WorkspaceSearchPalette } from './WorkspaceSearchPalette'
 
 type AppSurface = 'home' | 'pages' | 'editor'
 
@@ -143,7 +138,9 @@ export function App() {
               <Sparkles size={14} />
             </button>
           ))}
-        {searchOpen && <SearchPalette onClose={() => setSearchOpen(false)} />}
+        {searchOpen && (
+          <WorkspaceSearchPalette onClose={() => setSearchOpen(false)} onOpenPage={openPage} />
+        )}
         {archiveOpen && <ArchivePanel onClose={() => setArchiveOpen(false)} />}
         {settingsOpen && <ModelSettingsPanel onClose={() => setSettingsOpen(false)} />}
         {notificationsOpen && (
