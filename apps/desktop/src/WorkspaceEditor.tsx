@@ -418,7 +418,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
           )}
           <PageDatabaseMount pageId={page.id} pageTitle={page.title} canEdit={Boolean(editor?.isEditable)} fullPage={isDatabasePage} />
           {!isDatabasePage && slashMenu && (
-            <div className="slash-menu" style={{ left: slashMenu.left, top: slashMenu.top }}>
+            <div className="slash-menu" style={{ left: slashMenu.left, top: slashMenu.top }} role="menu" aria-label="插入内容块">
               <header><span>插入内容块</span><kbd>/</kbd></header>
               <div>
                 {filteredSlashCommands.map((command, index) => {
@@ -427,7 +427,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
                     <button
                       className={index === slashMenu.index ? 'is-selected' : ''}
                       key={command.label}
-                      onMouseDown={(event) => { event.preventDefault(); runSlashCommand(command) }}
+                      onMouseDown={(event) => { event.preventDefault(); runSlashCommand(command) }} role="menuitem"
                     >
                       <span><Icon size={16} /></span>
                       <span><strong>{command.label}</strong><small>{command.hint}</small></span>
@@ -440,7 +440,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
             </div>
           )}
           {!isDatabasePage && pageMentionMenu && (
-            <div className="page-mention-menu" style={{ left: pageMentionMenu.left, top: pageMentionMenu.top }}>
+            <div className="page-mention-menu" style={{ left: pageMentionMenu.left, top: pageMentionMenu.top }} role="menu" aria-label="链接到页面">
               <header><span>链接到页面</span><kbd>@</kbd></header>
               <div>
                 {mentionedPages.map((mentionedPage, index) => {
@@ -449,7 +449,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
                     <button
                       className={index === pageMentionMenu.index ? 'is-selected' : ''}
                       key={mentionedPage.id}
-                      onMouseDown={(event) => { event.preventDefault(); insertPageMention(mentionedPage) }}
+                      onMouseDown={(event) => { event.preventDefault(); insertPageMention(mentionedPage) }} role="menuitem"
                     >
                       <span><MentionIcon size={15} /></span>
                       <span><strong>{mentionedPage.title}</strong><small>{pageBreadcrumbs(pages, mentionedPage.id).map((crumb) => crumb.title).join(' / ')}</small></span>
