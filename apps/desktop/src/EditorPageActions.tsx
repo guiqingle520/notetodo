@@ -1,5 +1,5 @@
 import { Archive, History, MessageSquare, MoreHorizontal, Star, Users } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { iconMap } from './AppSidebar'
 import type { PageIcon } from './domain'
 import type { RemoteCursor } from './data/remote-cursors'
@@ -23,6 +23,32 @@ const iconChoices: Array<{ id: PageIcon; label: string }> = [
   { id: 'book', label: '知识库' },
   { id: 'grid', label: '数据库' },
 ]
+
+/** Gives compact page menus one predictable dismissal contract. */
+function useDismissibleMenu(
+  open: boolean,
+  close: () => void,
+): React.RefObject<HTMLDivElement | null> {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) close()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('pointerdown', closeOnOutsidePress)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('pointerdown', closeOnOutsidePress)
+    }
+  }, [close, open])
+
+  return containerRef
+}
 
 function syncLabel(state: PageHeaderActionsProps['syncState']) {
   if (state === 'loading') return '正在恢复'
@@ -50,15 +76,7 @@ export function PageHeaderActions({
   onArchive,
 }: PageHeaderActionsProps) {
   const [menuOpen, setMenuOpen] = useState(false)
-
-  useEffect(() => {
-    if (!menuOpen) return
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false)
-    }
-    window.addEventListener('keydown', close)
-    return () => window.removeEventListener('keydown', close)
-  }, [menuOpen])
+  const menuRef = useDismissibleMenu(menuOpen, () => setMenuOpen(false))
 
   const runMenuAction = (action: () => void) => {
     setMenuOpen(false)
@@ -107,7 +125,7 @@ export function PageHeaderActions({
       >
         <Star size={17} fill={favorite ? 'currentColor' : 'none'} />
       </button>
-      <div className="page-more-wrap">
+      <div className="page-more-wrap" ref={menuRef}>
         <button
           aria-label="更多页面操作"
           aria-haspopup="menu"
@@ -145,10 +163,11 @@ export function PageMetaActions({
   onIconChange: (icon: PageIcon) => void
 }) {
   const [iconMenuOpen, setIconMenuOpen] = useState(false)
+  const iconMenuRef = useDismissibleMenu(iconMenuOpen, () => setIconMenuOpen(false))
 
   return (
     <div className="page-meta-actions">
-      <div className="page-icon-wrap">
+      <div className="page-icon-wrap" ref={iconMenuRef}>
         <button
           aria-haspopup="menu"
           aria-expanded={iconMenuOpen}

@@ -42,4 +42,33 @@ describe('editor page actions', () => {
     expect(screen.getByRole('button', { name: '添加封面' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '添加说明' })).toBeDisabled()
   })
+
+  it('dismisses page menus with Escape and an outside pointer press', () => {
+    render(
+      <div>
+        <PageHeaderActions
+          syncState="ready"
+          collaborationState="local"
+          collaborators={[]}
+          favorite={false}
+          onComments={vi.fn()}
+          onHistory={vi.fn()}
+          onShare={vi.fn()}
+          onToggleFavorite={vi.fn()}
+          onArchive={vi.fn()}
+        />
+        <PageMetaActions icon="note" onIconChange={vi.fn()} />
+        <button>菜单外部</button>
+      </div>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '更多页面操作' }))
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('menu', { name: '更多页面操作' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '更改图标' }))
+    expect(screen.getByRole('menu', { name: '选择页面图标' })).toBeInTheDocument()
+    fireEvent.pointerDown(screen.getByRole('button', { name: '菜单外部' }))
+    expect(screen.queryByRole('menu', { name: '选择页面图标' })).not.toBeInTheDocument()
+  })
 })
