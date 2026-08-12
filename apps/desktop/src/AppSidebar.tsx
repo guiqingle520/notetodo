@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import {
   Archive,
   Bell,
@@ -139,6 +139,13 @@ export function Sidebar({
   const topLevel = pages.filter((page) => page.parentId === null && !page.archivedAt)
   const favorites = pages.filter((page) => page.favorite && !page.archivedAt)
 
+  useEffect(() => {
+    if (!templateMenuOpen) return
+    const closeMenu = (event: KeyboardEvent) => { if (event.key === 'Escape') setTemplateMenuOpen(false) }
+    window.addEventListener('keydown', closeMenu)
+    return () => window.removeEventListener('keydown', closeMenu)
+  }, [templateMenuOpen])
+
   if (collapsed) {
     return (
       <aside className="sidebar sidebar-collapsed">
@@ -191,17 +198,19 @@ export function Sidebar({
             <span>私有</span>
             <button
               aria-label="从模板新建页面"
+              aria-expanded={templateMenuOpen}
+              aria-controls="sidebar-template-menu"
               onClick={() => setTemplateMenuOpen((value) => !value)}
             >
               <Plus size={14} />
             </button>
           </div>
           {templateMenuOpen && (
-            <div className="template-quick-menu">
+            <div className="template-quick-menu" id="sidebar-template-menu" role="dialog" aria-label="选择页面模板">
               <header>
                 <LayoutTemplate size={13} />
                 <span>选择起点</span>
-                <small>LOCAL TEMPLATES</small>
+                <small>本地模板</small>
               </header>
               {pageTemplates.map((template) => {
                 const TemplateIcon = iconMap[template.icon]

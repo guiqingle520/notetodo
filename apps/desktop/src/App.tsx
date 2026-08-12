@@ -110,7 +110,7 @@ export function App() {
           onPageOpen={() => setSurface('editor')}
         />
         {sidebarCollapsed && (
-          <button className="floating-menu" onClick={() => setSidebarCollapsed(false)}>
+          <button className="floating-menu" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧栏">
             <Menu size={17} />
           </button>
         )}
@@ -133,7 +133,7 @@ export function App() {
               onUndoPatch={() => activeEditorRef.current?.commands.undo()}
             />
           ) : (
-            <button className="open-ai" onClick={() => setAiOpen(true)}>
+            <button className="open-ai" onClick={() => setAiOpen(true)} aria-label="打开 AI 助手">
               <PanelRightOpen size={17} />
               <Sparkles size={14} />
             </button>

@@ -55,4 +55,18 @@ describe('Sidebar', () => {
     expect(props.onSearch).toHaveBeenCalledOnce()
     expect(props.onNotifications).toHaveBeenCalledOnce()
   })
+
+  it('opens templates as an anchored dialog and closes it with Escape', () => {
+    renderSidebar()
+    const trigger = screen.getByRole('button', { name: '从模板新建页面' })
+
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('dialog', { name: '选择页面模板' })).toBeInTheDocument()
+    expect(screen.getByText('本地模板')).toBeInTheDocument()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: '选择页面模板' })).not.toBeInTheDocument()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
 })
