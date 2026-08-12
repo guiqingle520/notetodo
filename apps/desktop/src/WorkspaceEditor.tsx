@@ -410,7 +410,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
               onDescriptionRequest={openDescription}
             />
           )}
-          <PageTitle value={page.title} onChange={(title) => updatePage(page.id, { title })} />
+          <PageTitle value={page.title} onChange={(title) => updatePage(page.id, { title })} onSubmit={() => editor?.chain().focus('start').run()} />
           {!isDatabasePage && descriptionOpen && <textarea ref={descriptionRef} className="page-description" aria-label="页面说明" placeholder="添加页面说明…" maxLength={2_000} rows={1} value={page.description ?? ''} onChange={(event) => updatePage(page.id, { description: event.target.value })} onBlur={() => { if (!page.description?.trim()) setDescriptionOpen(false) }} />}
           {!isDatabasePage && <EditorPageProperties page={page} collaborators={collaborators} />}
           {!isDatabasePage && <div
