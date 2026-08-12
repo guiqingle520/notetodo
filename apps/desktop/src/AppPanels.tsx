@@ -326,9 +326,9 @@ export function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="settings-shell" role="dialog" aria-modal="true" aria-label="模型与 AI 设置">
-      <aside><div className="settings-brand"><span className="brand-mark">N</span><strong>设置</strong></div><nav><button>工作区</button><button className="is-active"><Cpu size={15} />模型与 AI</button><button>连接器</button><button>数据与安全</button></nav><div className="settings-trust"><ShieldCheck size={16} /><span><strong>本地优先</strong><small>密钥不会进入页面内容</small></span></div></aside>
+      <aside><div className="settings-brand"><span className="brand-mark">N</span><strong>设置</strong></div><nav aria-label="设置分类"><button>工作区</button><button className="is-active" aria-current="page"><Cpu size={15} />模型与 AI</button><button>连接器</button><button>数据与安全</button></nav><div className="settings-trust"><ShieldCheck size={16} /><span><strong>本地优先</strong><small>密钥不会进入页面内容</small></span></div></aside>
       <main>
-        <header><div><span>工作区设置</span><h2>模型与 AI</h2><p>选择云端或本地模型。NoteTodo 使用统一网关，不绑定供应商。</p></div><button onClick={onClose}><X size={18} /></button></header>
+        <header><div><span>工作区设置</span><h2>模型与 AI</h2><p>选择云端或本地模型。NoteTodo 使用统一网关，不绑定供应商。</p></div><button onClick={onClose} aria-label="关闭设置"><X size={18} /></button></header>
         <section className="settings-card">
           <div className="settings-card-title"><Cpu size={17} /><span><strong>默认模型</strong><small>用于写作、问答与数据库 AI</small></span><i>工作区</i></div>
           <label><span>供应商协议</span><select value={form.provider} onChange={(event) => setForm({ ...form, provider: event.target.value as ModelForm['provider'] })}><option value="ollama">Ollama</option><option value="lm-studio">LM Studio</option><option value="openai-compatible">OpenAI-compatible</option></select></label>
