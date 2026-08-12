@@ -8,7 +8,10 @@ import { WorkspaceDatabase } from './workspace-db-test-harness'
 
 const require = createRequire(import.meta.url)
 const { restoreUtcTimestampBackup } = require('../../electron/migrations/utc-timestamps.cjs') as {
-  restoreUtcTimestampBackup(database: { prepare(source: string): unknown; exec(source: string): void }): void
+  restoreUtcTimestampBackup(database: {
+    prepare(source: string): unknown
+    exec(source: string): void
+  }): void
 }
 
 let workspace: InstanceType<typeof WorkspaceDatabase> | undefined
@@ -40,20 +43,37 @@ describe('UTC timestamp compatibility migration', () => {
     workspace = new WorkspaceDatabase(databasePath)
     const internal = workspace as unknown as {
       database: {
-        prepare(source: string): { get(...values: unknown[]): Record<string, unknown> | undefined; run(...values: unknown[]): void }
+        prepare(source: string): {
+          get(...values: unknown[]): Record<string, unknown> | undefined
+          run(...values: unknown[]): void
+        }
         exec(source: string): void
       }
     }
-    const version = internal.database.prepare("SELECT value FROM app_meta WHERE key='schema_version'").get()
-    const state = internal.database.prepare('SELECT mode, backfilled_at_ms AS backfilledAtMs FROM timestamp_migration_state').get()
-    const backup = internal.database.prepare("SELECT iso_value AS isoValue, unix_ms AS unixMs FROM timestamp_compat_backup WHERE table_name='pages' AND row_key='welcome' AND column_name='updated_at'").get()
-    expect(version?.value).toBe('19')
+    const version = internal.database
+      .prepare("SELECT value FROM app_meta WHERE key='schema_version'")
+      .get()
+    const state = internal.database
+      .prepare('SELECT mode, backfilled_at_ms AS backfilledAtMs FROM timestamp_migration_state')
+      .get()
+    const backup = internal.database
+      .prepare(
+        "SELECT iso_value AS isoValue, unix_ms AS unixMs FROM timestamp_compat_backup WHERE table_name='pages' AND row_key='welcome' AND column_name='updated_at'",
+      )
+      .get()
+    expect(version?.value).toBe('20')
     expect(state?.mode).toBe('iso-primary')
     expect(Number.isSafeInteger(state?.backfilledAtMs)).toBe(true)
     expect(new Date(Number(backup?.unixMs)).toISOString()).toBe(backup?.isoValue)
 
-    internal.database.prepare("UPDATE pages SET updated_at='2030-01-01T00:00:00.000Z' WHERE id='welcome'").run()
+    internal.database
+      .prepare("UPDATE pages SET updated_at='2030-01-01T00:00:00.000Z' WHERE id='welcome'")
+      .run()
     restoreUtcTimestampBackup(internal.database)
-    expect(internal.database.prepare("SELECT updated_at AS updatedAt FROM pages WHERE id='welcome'").get()?.updatedAt).toBe(backup?.isoValue)
+    expect(
+      internal.database
+        .prepare("SELECT updated_at AS updatedAt FROM pages WHERE id='welcome'")
+        .get()?.updatedAt,
+    ).toBe(backup?.isoValue)
   })
 })

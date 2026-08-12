@@ -81,6 +81,14 @@
   background: transparent;
 }
 
+.page-description {
+  width: 100%; min-height: 30px; resize: none; margin: -4px 0 12px; padding: 0;
+  overflow: hidden; color: var(--notion-muted); border: 0; outline: 0; background: transparent;
+  font: 14px/1.55 var(--font-ui);
+}
+
+.page-description::placeholder { color: var(--notion-faint); }
+
 .page-icon-menu {
   top: 28px;
   left: 0;

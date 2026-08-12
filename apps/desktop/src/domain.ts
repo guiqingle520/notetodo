@@ -3,6 +3,7 @@ export type PageIcon = 'spark' | 'note' | 'check' | 'grid' | 'book'
 export interface WorkspacePage {
   id: string
   title: string
+  description?: string
   icon: PageIcon
   parentId: string | null
   favorite?: boolean
@@ -36,6 +37,7 @@ export function createUntitledPage(parentId: string | null): WorkspacePage {
   return {
     id: crypto.randomUUID(),
     title: '无标题',
+    description: '',
     icon: 'note',
     parentId,
     updatedAt: new Date().toISOString(),

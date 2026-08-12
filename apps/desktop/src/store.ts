@@ -13,7 +13,7 @@ interface WorkspaceActions {
   addPage: (parentId?: string | null, templateId?: PageTemplate['id']) => void
   updatePage: (
     id: string,
-    patch: Partial<Pick<WorkspacePage, 'title' | 'content' | 'favorite' | 'icon'>>,
+    patch: Partial<Pick<WorkspacePage, 'title' | 'description' | 'content' | 'favorite' | 'icon'>>,
   ) => void
   toggleFavorite: (id: string) => void
   archivePage: (id: string) => void

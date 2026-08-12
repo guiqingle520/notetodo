@@ -19,6 +19,7 @@ const { workspaceIpcContracts } = require('../../electron/ipc-workspace-contract
 const page: WorkspacePage = {
   id: 'welcome',
   title: '欢迎',
+  description: '本地优先工作区',
   icon: 'note',
   parentId: null,
   favorite: false,
@@ -42,6 +43,9 @@ describe('workspace IPC contracts', () => {
     expect(() =>
       workspaceIpcContracts.upsertPage.assertRequest([{ ...page, privileged: true }]),
     ).toThrow(/unexpected fields/)
+    expect(() =>
+      workspaceIpcContracts.upsertPage.assertRequest([{ ...page, description: 'x'.repeat(2_001) }]),
+    ).toThrow(/description/)
     expect(() =>
       workspaceIpcContracts.load.assertResponse({ pages: [page], activePageId: 'missing' }),
     ).toThrow(/unarchived page/)

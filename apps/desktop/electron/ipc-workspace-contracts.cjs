@@ -22,6 +22,7 @@ function assertWorkspacePage(value) {
   const allowedFields = new Set([
     'id',
     'title',
+    'description',
     'icon',
     'parentId',
     'favorite',
@@ -37,6 +38,12 @@ function assertWorkspacePage(value) {
   assertId(value.id)
   if (typeof value.title !== 'string' || value.title.length > 1_000) {
     throw new TypeError('Invalid workspace page title.')
+  }
+  if (
+    value.description !== undefined &&
+    (typeof value.description !== 'string' || value.description.length > 2_000)
+  ) {
+    throw new TypeError('Invalid workspace page description.')
   }
   if (!pageIcons.has(value.icon)) throw new TypeError('Invalid workspace page icon.')
   if (value.parentId !== null) assertId(value.parentId, 'parent id')

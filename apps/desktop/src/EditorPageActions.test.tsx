@@ -33,14 +33,23 @@ describe('editor page actions', () => {
 
   it('changes the page icon and marks unavailable actions as disabled', () => {
     const onIconChange = vi.fn()
-    render(<PageMetaActions icon="note" onIconChange={onIconChange} />)
+    const onDescriptionRequest = vi.fn()
+    render(
+      <PageMetaActions
+        icon="note"
+        hasDescription={false}
+        onIconChange={onIconChange}
+        onDescriptionRequest={onDescriptionRequest}
+      />,
+    )
 
     fireEvent.click(screen.getByRole('button', { name: '更改图标' }))
     fireEvent.click(screen.getByRole('menuitemradio', { name: '知识库图标' }))
 
     expect(onIconChange).toHaveBeenCalledWith('book')
     expect(screen.getByRole('button', { name: '添加封面' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '添加说明' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '添加说明' }))
+    expect(onDescriptionRequest).toHaveBeenCalledOnce()
   })
 
   it('dismisses page menus with Escape and an outside pointer press', () => {
@@ -57,7 +66,12 @@ describe('editor page actions', () => {
           onToggleFavorite={vi.fn()}
           onArchive={vi.fn()}
         />
-        <PageMetaActions icon="note" onIconChange={vi.fn()} />
+        <PageMetaActions
+          icon="note"
+          hasDescription={false}
+          onIconChange={vi.fn()}
+          onDescriptionRequest={vi.fn()}
+        />
         <button>菜单外部</button>
       </div>,
     )

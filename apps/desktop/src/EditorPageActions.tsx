@@ -157,10 +157,14 @@ export function PageHeaderActions({
 
 export function PageMetaActions({
   icon,
+  hasDescription,
   onIconChange,
+  onDescriptionRequest,
 }: {
   icon: PageIcon
+  hasDescription: boolean
   onIconChange: (icon: PageIcon) => void
+  onDescriptionRequest: () => void
 }) {
   const [iconMenuOpen, setIconMenuOpen] = useState(false)
   const iconMenuRef = useDismissibleMenu(iconMenuOpen, () => setIconMenuOpen(false))
@@ -202,9 +206,7 @@ export function PageMetaActions({
       <button disabled title="封面功能将在后续版本提供">
         添加封面
       </button>
-      <button disabled title="页面说明功能将在后续版本提供">
-        添加说明
-      </button>
+      <button onClick={onDescriptionRequest}>{hasDescription ? '编辑说明' : '添加说明'}</button>
     </div>
   )
 }

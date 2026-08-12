@@ -54,6 +54,7 @@ class WorkspaceDatabase {
       this.statements.upsertPage.run(
         page.id,
         page.title,
+        page.description ?? '',
         page.icon,
         page.parentId,
         page.favorite ? 1 : 0,
@@ -90,7 +91,7 @@ class WorkspaceDatabase {
     return this.workspaceRepository.transaction(() => {
       for (const page of pages) {
         if (!page.id || page.id.length > 128 || typeof page.content !== 'string' || page.content.length > 20_000_000) throw new TypeError('Imported page exceeds safety limits.')
-        this.statements.upsertPage.run(page.id, String(page.title).slice(0, 1000), page.icon, page.parentId, page.favorite ? 1 : 0, page.content, page.updatedAt, page.lastVisitedAt, page.archivedAt)
+        this.statements.upsertPage.run(page.id, String(page.title).slice(0, 1000), '', page.icon, page.parentId, page.favorite ? 1 : 0, page.content, page.updatedAt, page.lastVisitedAt, page.archivedAt)
         this.indexPageForRetrieval(page.id, page.title, page.content)
       }
       for (const imported of bundle.databases) {
@@ -325,6 +326,7 @@ function mapPageRow(row) {
   return {
     id: row.id,
     title: row.title,
+    description: row.description,
     icon: row.icon,
     parentId: row.parent_id,
     favorite: Boolean(row.favorite),

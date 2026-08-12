@@ -49,10 +49,18 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   const [uploadState, setUploadState] = useState<AttachmentProgressState | null>(null)
   const [dropActive, setDropActive] = useState(false)
   const [blockToolbar, setBlockToolbar] = useState<null | { index: number; top: number }>(null)
+  const [descriptionOpen, setDescriptionOpen] = useState(Boolean(page.description))
+  const descriptionRef = useRef<HTMLTextAreaElement>(null)
   const uploadBusyRef = useRef(false)
   const localEditorRef = useRef<Editor | null>(null)
   slashMenuRef.current = slashMenu
   pageMentionMenuRef.current = pageMentionMenu
+
+  useEffect(() => setDescriptionOpen(Boolean(page.description)), [page.id])
+  const openDescription = () => {
+    setDescriptionOpen(true)
+    requestAnimationFrame(() => descriptionRef.current?.focus())
+  }
 
   const reportAttachmentProgress = (progress: { completed: number; total: number; currentName: string }) => {
     const percent = progress.total ? Math.min(100, Math.round(progress.completed / progress.total * 100)) : 0
@@ -379,7 +387,9 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
           {!isDatabasePage && (
             <PageMetaActions
               icon={page.icon}
+              hasDescription={Boolean(page.description)}
               onIconChange={(icon) => updatePage(page.id, { icon })}
+              onDescriptionRequest={openDescription}
             />
           )}
           <input
@@ -388,6 +398,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
             aria-label="页面标题"
             onChange={(event) => updatePage(page.id, { title: event.target.value })}
           />
+          {!isDatabasePage && descriptionOpen && <textarea ref={descriptionRef} className="page-description" aria-label="页面说明" placeholder="添加页面说明…" maxLength={2_000} rows={1} value={page.description ?? ''} onChange={(event) => updatePage(page.id, { description: event.target.value })} onBlur={() => { if (!page.description?.trim()) setDescriptionOpen(false) }} />}
           {!isDatabasePage && <EditorPageProperties page={page} collaborators={collaborators} />}
           {!isDatabasePage && <div
             className={`editor-stage ${dropActive ? 'is-drop-active' : ''}`}
