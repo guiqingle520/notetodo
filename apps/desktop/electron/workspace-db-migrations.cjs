@@ -1,4 +1,4 @@
-const LATEST_SCHEMA_VERSION = 20
+const LATEST_SCHEMA_VERSION = 21
 const { migrateDatabaseRecords } = require('./migrations/database-records.cjs')
 const { migrateUtcTimestampCompatibility } = require('./migrations/utc-timestamps.cjs')
 const { migratePageMetadata } = require('./migrations/page-metadata.cjs')

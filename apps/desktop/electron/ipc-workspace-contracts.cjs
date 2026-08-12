@@ -14,6 +14,29 @@ function assertTimestamp(value, label) {
   }
 }
 
+function assertCover(value) {
+  if (value === undefined || value === '') return
+  if (typeof value !== 'string' || value.length > 2_048) {
+    throw new TypeError('Invalid workspace page cover.')
+  }
+  try {
+    const url = new URL(value)
+    if (
+      url.protocol !== 'notetodo-asset:' ||
+      !/^[0-9a-f]{64}$/u.test(url.hostname) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname === '/'
+    ) {
+      throw new TypeError('Invalid workspace page cover.')
+    }
+  } catch {
+    throw new TypeError('Invalid workspace page cover.')
+  }
+}
+
 function assertWorkspacePage(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError('A workspace page object is required.')
@@ -23,6 +46,7 @@ function assertWorkspacePage(value) {
     'id',
     'title',
     'description',
+    'cover',
     'icon',
     'parentId',
     'favorite',
@@ -45,6 +69,7 @@ function assertWorkspacePage(value) {
   ) {
     throw new TypeError('Invalid workspace page description.')
   }
+  assertCover(value.cover)
   if (!pageIcons.has(value.icon)) throw new TypeError('Invalid workspace page icon.')
   if (value.parentId !== null) assertId(value.parentId, 'parent id')
   if (value.favorite !== undefined && typeof value.favorite !== 'boolean') {

@@ -95,6 +95,20 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
     }
   }
 
+  const pickPageCover = async () => {
+    if (uploadBusyRef.current || !window.notetodo?.attachments) return
+    uploadBusyRef.current = true
+    setUploadState({ phase: 'working', percent: 0, name: '', message: '等待选择封面图片…' })
+    try {
+      const [cover] = await window.notetodo.attachments.pickAndStore(page.id, 'image', reportAttachmentProgress)
+      if (!cover) return setUploadState(null)
+      updatePage(page.id, { cover: cover.url })
+      setUploadState({ phase: 'complete', percent: 100, name: cover.displayName, message: '页面封面已更新' })
+    } catch (error) {
+      setUploadState({ phase: 'error', percent: 0, name: '', message: error instanceof Error ? error.message.split('Error: ').at(-1) ?? error.message : '封面写入失败。' })
+    } finally { uploadBusyRef.current = false }
+  }
+
   const storeDroppedAttachments = async (activeEditor: Editor, files: File[]) => {
     if (uploadBusyRef.current || !files.length || !window.notetodo?.attachments) { setDropActive(false); return }
     uploadBusyRef.current = true
@@ -383,12 +397,16 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
 
       <div className="editor-scroll">
         <article className={`document ${isDatabasePage ? 'is-database-page' : ''}`}>
+          {!isDatabasePage && page.cover && <div className="page-cover"><img src={page.cover} alt="" /></div>}
           <div className="document-kicker"><span>NT / {page.id.slice(0, 4).toUpperCase()}</span><span>{new Date(page.updatedAt).toLocaleDateString('zh-CN')}</span></div>
           {!isDatabasePage && (
             <PageMetaActions
               icon={page.icon}
+              hasCover={Boolean(page.cover)}
               hasDescription={Boolean(page.description)}
               onIconChange={(icon) => updatePage(page.id, { icon })}
+              onCoverRequest={() => void pickPageCover()}
+              onCoverRemove={() => updatePage(page.id, { cover: '' })}
               onDescriptionRequest={openDescription}
             />
           )}

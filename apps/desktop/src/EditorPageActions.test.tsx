@@ -31,14 +31,18 @@ describe('editor page actions', () => {
     expect(onHistory).toHaveBeenCalledOnce()
   })
 
-  it('changes the page icon and marks unavailable actions as disabled', () => {
+  it('changes the page icon and exposes page metadata actions', () => {
     const onIconChange = vi.fn()
+    const onCoverRequest = vi.fn()
     const onDescriptionRequest = vi.fn()
     render(
       <PageMetaActions
         icon="note"
+        hasCover={false}
         hasDescription={false}
         onIconChange={onIconChange}
+        onCoverRequest={onCoverRequest}
+        onCoverRemove={vi.fn()}
         onDescriptionRequest={onDescriptionRequest}
       />,
     )
@@ -47,7 +51,8 @@ describe('editor page actions', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: '知识库图标' }))
 
     expect(onIconChange).toHaveBeenCalledWith('book')
-    expect(screen.getByRole('button', { name: '添加封面' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '添加封面' }))
+    expect(onCoverRequest).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: '添加说明' }))
     expect(onDescriptionRequest).toHaveBeenCalledOnce()
   })
@@ -68,8 +73,11 @@ describe('editor page actions', () => {
         />
         <PageMetaActions
           icon="note"
+          hasCover={false}
           hasDescription={false}
           onIconChange={vi.fn()}
+          onCoverRequest={vi.fn()}
+          onCoverRemove={vi.fn()}
           onDescriptionRequest={vi.fn()}
         />
         <button>菜单外部</button>

@@ -55,6 +55,7 @@ class WorkspaceDatabase {
         page.id,
         page.title,
         page.description ?? '',
+        page.cover ?? '',
         page.icon,
         page.parentId,
         page.favorite ? 1 : 0,
@@ -63,7 +64,7 @@ class WorkspaceDatabase {
         page.lastVisitedAt,
         page.archivedAt,
       )
-      this.reconcilePageAttachments(page.id, page.content)
+      this.reconcilePageAttachments(page.id, `${page.content}${page.cover ?? ''}`)
       if (retrievalChanged) this.indexPageForRetrieval(page.id, page.title, page.content)
       this.enqueueWebhookEvent(current ? 'page.updated' : 'page.created', page.id, { page: { id: page.id, title: page.title, icon: page.icon, parentId: page.parentId, updatedAt: page.updatedAt, archivedAt: page.archivedAt } }, page.updatedAt)
     })
@@ -91,7 +92,7 @@ class WorkspaceDatabase {
     return this.workspaceRepository.transaction(() => {
       for (const page of pages) {
         if (!page.id || page.id.length > 128 || typeof page.content !== 'string' || page.content.length > 20_000_000) throw new TypeError('Imported page exceeds safety limits.')
-        this.statements.upsertPage.run(page.id, String(page.title).slice(0, 1000), '', page.icon, page.parentId, page.favorite ? 1 : 0, page.content, page.updatedAt, page.lastVisitedAt, page.archivedAt)
+        this.statements.upsertPage.run(page.id, String(page.title).slice(0, 1000), '', '', page.icon, page.parentId, page.favorite ? 1 : 0, page.content, page.updatedAt, page.lastVisitedAt, page.archivedAt)
         this.indexPageForRetrieval(page.id, page.title, page.content)
       }
       for (const imported of bundle.databases) {
@@ -213,7 +214,7 @@ class WorkspaceDatabase {
       this.insertPageVersion({ id: pageId, title: current.title, content: current.content }, 'restore')
       const now = new Date().toISOString()
       this.statements.restorePageContent.run(version.title, version.content, now, pageId)
-      this.reconcilePageAttachments(pageId, version.content)
+      this.reconcilePageAttachments(pageId, `${version.content}${current.cover ?? ''}`)
       this.indexPageForRetrieval(pageId, version.title, version.content)
       this.enqueueWebhookEvent('page.updated', pageId, { page: { id: pageId, title: version.title, updatedAt: now, restoredFromVersionId: versionId } }, now)
       return mapPageRow(this.statements.pageById.get(pageId))
@@ -327,6 +328,7 @@ function mapPageRow(row) {
     id: row.id,
     title: row.title,
     description: row.description,
+    cover: row.cover,
     icon: row.icon,
     parentId: row.parent_id,
     favorite: Boolean(row.favorite),

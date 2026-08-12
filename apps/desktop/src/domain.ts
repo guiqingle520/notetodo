@@ -4,6 +4,7 @@ export interface WorkspacePage {
   id: string
   title: string
   description?: string
+  cover?: string
   icon: PageIcon
   parentId: string | null
   favorite?: boolean
@@ -38,6 +39,7 @@ export function createUntitledPage(parentId: string | null): WorkspacePage {
     id: crypto.randomUUID(),
     title: '无标题',
     description: '',
+    cover: '',
     icon: 'note',
     parentId,
     updatedAt: new Date().toISOString(),

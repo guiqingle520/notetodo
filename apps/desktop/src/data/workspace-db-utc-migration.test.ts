@@ -61,7 +61,7 @@ describe('UTC timestamp compatibility migration', () => {
         "SELECT iso_value AS isoValue, unix_ms AS unixMs FROM timestamp_compat_backup WHERE table_name='pages' AND row_key='welcome' AND column_name='updated_at'",
       )
       .get()
-    expect(version?.value).toBe('20')
+    expect(version?.value).toBe('21')
     expect(state?.mode).toBe('iso-primary')
     expect(Number.isSafeInteger(state?.backfilledAtMs)).toBe(true)
     expect(new Date(Number(backup?.unixMs)).toISOString()).toBe(backup?.isoValue)
