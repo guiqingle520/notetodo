@@ -13,8 +13,9 @@ import { AIPanel, type AIPatchProposal, type SelectionContext } from './AppAIPan
 import { Sidebar } from './AppSidebar'
 import { WorkspaceEditor } from './WorkspaceEditor'
 import { WorkspaceHome } from './WorkspaceHome'
+import { WorkspacePageList } from './WorkspacePageList'
 
-type AppSurface = 'home' | 'editor'
+type AppSurface = 'home' | 'pages' | 'editor'
 
 export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -110,6 +111,7 @@ export function App() {
           notificationCount={notificationCount}
           activeSurface={surface}
           onHome={() => setSurface('home')}
+          onAllPages={() => setSurface('pages')}
           onPageOpen={() => setSurface('editor')}
         />
         {sidebarCollapsed && (
@@ -117,9 +119,11 @@ export function App() {
             <Menu size={17} />
           </button>
         )}
-        {surface === 'home' ? (
-          <WorkspaceHome onOpenPage={openPage} onCreatePage={createPage} />
-        ) : (
+        {surface === 'home' && <WorkspaceHome onOpenPage={openPage} onCreatePage={createPage} />}
+        {surface === 'pages' && (
+          <WorkspacePageList onOpenPage={openPage} onCreatePage={() => createPage('blank')} />
+        )}
+        {surface === 'editor' && (
           <WorkspaceEditor
             onEditorReady={setActiveEditor}
             onSelectionChange={setSelectionContext}

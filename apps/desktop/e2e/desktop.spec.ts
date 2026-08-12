@@ -22,7 +22,9 @@ test('edits and restores a page through the sandboxed Electron application', asy
     const window = await application.firstWindow()
     await expect(window.locator('.sidebar')).toBeVisible()
     await expect(window.getByRole('heading', { name: '早上好，Ming' })).toBeVisible()
-    await window.locator('.page-row').first().click()
+    await window.getByRole('button', { name: '所有页面' }).click()
+    await expect(window.getByRole('heading', { name: '所有页面' })).toBeVisible()
+    await window.getByRole('button', { name: '打开页面：产品路线' }).click()
     await expect(window.getByLabel('页面标题')).toHaveValue(/\S+/u)
 
     const security = await window.evaluate(async () => ({

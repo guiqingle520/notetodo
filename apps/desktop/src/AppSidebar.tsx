@@ -9,6 +9,7 @@ import {
   ChevronsLeft,
   CircleHelp,
   FileText,
+  Files,
   Grid2X2,
   Home,
   Inbox,
@@ -117,6 +118,7 @@ export function Sidebar({
   notificationCount,
   activeSurface,
   onHome,
+  onAllPages,
   onPageOpen,
 }: {
   collapsed: boolean
@@ -127,8 +129,9 @@ export function Sidebar({
   onNotifications: () => void
   onImport: () => void
   notificationCount: number
-  activeSurface: 'home' | 'editor'
+  activeSurface: 'home' | 'pages' | 'editor'
   onHome: () => void
+  onAllPages: () => void
   onPageOpen: () => void
 }) {
   const { pages, addPage, setActivePage } = useWorkspace()
@@ -174,6 +177,10 @@ export function Sidebar({
         <button className={activeSurface === 'home' ? 'is-active' : ''} onClick={onHome}>
           <Home size={16} />
           <span>主页</span>
+        </button>
+        <button className={activeSurface === 'pages' ? 'is-active' : ''} onClick={onAllPages}>
+          <Files size={16} />
+          <span>所有页面</span>
         </button>
         <button onClick={onNotifications}>
           <Inbox size={16} />
