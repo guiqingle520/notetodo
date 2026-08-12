@@ -1,0 +1,357 @@
+/* Database configuration surfaces share the same restrained Notion dialog language. */
+.schema-panel-backdrop,
+.view-rules-backdrop,
+.automation-backdrop,
+.record-detail-backdrop,
+.record-trash-backdrop {
+  inset: 31px 0 0;
+  padding: 24px;
+  background: rgba(15, 15, 15, 0.32);
+  backdrop-filter: none;
+}
+
+.schema-panel,
+.view-rules-panel,
+.automation-panel {
+  overflow: hidden;
+  color: #37352f;
+  border: 1px solid rgba(55, 53, 47, 0.16);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow:
+    0 14px 42px rgba(15, 15, 15, 0.2),
+    0 2px 7px rgba(15, 15, 15, 0.08);
+}
+
+.schema-panel {
+  width: min(760px, calc(100vw - 56px));
+  height: min(600px, calc(100vh - 88px));
+  grid-template-rows: 56px minmax(0, 1fr) 70px;
+}
+
+.schema-panel.is-configuring {
+  width: min(980px, calc(100vw - 56px));
+}
+
+.view-rules-panel {
+  width: min(760px, calc(100vw - 56px));
+  height: min(580px, calc(100vh - 88px));
+  grid-template-rows: 56px 40px minmax(0, 1fr) 54px;
+}
+
+.automation-panel {
+  width: min(940px, calc(100vw - 56px));
+  height: min(650px, calc(100vh - 88px));
+  grid-template-rows: 56px 40px minmax(0, 1fr);
+}
+
+.schema-panel > header,
+.view-rules-panel > header,
+.automation-panel > header {
+  min-height: 56px;
+  padding: 8px 12px 8px 16px;
+  color: #37352f;
+  border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+  background: #fff;
+}
+
+.schema-panel > header div,
+.view-rules-panel > header div,
+.automation-panel > header div div {
+  gap: 1px;
+}
+
+.schema-panel > header small,
+.view-rules-panel > header small,
+.automation-panel > header small {
+  color: #9b9a97;
+  font: 11px/1.3 inherit;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.schema-panel > header strong,
+.view-rules-panel > header strong,
+.automation-panel > header strong {
+  color: #37352f;
+  font: 600 15px/1.3 inherit;
+}
+
+.schema-panel > header button,
+.view-rules-panel > header button,
+.automation-panel > header button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #787774;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.schema-panel > header button:hover,
+.view-rules-panel > header button:hover,
+.automation-panel > header button:hover {
+  color: #37352f;
+  background: rgba(55, 53, 47, 0.08);
+}
+
+.schema-panel > main,
+.view-rules-panel > main {
+  background: #fff;
+  background-image: none;
+}
+
+.schema-panel > main:not(.schema-workbench) {
+  padding: 8px 14px 14px;
+}
+
+.schema-ledger-head {
+  height: 30px;
+  color: #9b9a97;
+  border-color: rgba(55, 53, 47, 0.09);
+  font: 10px/1.2 inherit;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.schema-ledger-row {
+  min-height: 46px;
+  border-color: rgba(55, 53, 47, 0.07);
+}
+
+.schema-ledger-row:hover,
+.schema-ledger-row.is-selected {
+  background: rgba(55, 53, 47, 0.04);
+}
+
+.schema-ledger-row > em,
+.schema-ledger-row > small {
+  color: #9b9a97;
+  font: normal 10px/1.2 inherit;
+}
+
+.schema-ledger-row > input {
+  height: 30px;
+  color: #37352f;
+  border-radius: 4px;
+  font: 500 13px/1.2 inherit;
+}
+
+.schema-ledger-row > input:hover,
+.schema-ledger-row > input:focus {
+  border-color: rgba(55, 53, 47, 0.16);
+  background: #fff;
+}
+
+.schema-ledger-row > input:focus {
+  border-color: #2383e2;
+  box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.12);
+}
+
+.schema-ledger-row > span {
+  color: #787774;
+  font: 12px/1.2 inherit;
+}
+
+.schema-ledger-row > span i {
+  width: 25px;
+  height: 25px;
+  color: #787774;
+  border-radius: 4px;
+  background: #f1f1ef;
+  font: normal 10px/1 inherit;
+}
+
+.schema-ledger-row > button,
+.schema-ledger-row > div > button {
+  color: #9b9a97;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.schema-ledger-row > button:hover,
+.schema-ledger-row > div > button:hover {
+  color: #37352f;
+  background: rgba(55, 53, 47, 0.08);
+}
+
+.schema-panel > footer,
+.view-rules-panel > footer {
+  border-top: 1px solid rgba(55, 53, 47, 0.09);
+  background: #f7f7f5;
+}
+
+.schema-panel > footer {
+  gap: 6px;
+  padding: 8px 14px;
+}
+
+.schema-panel > footer > div {
+  grid-template-columns: minmax(0, 1fr) 132px 106px;
+  gap: 7px;
+}
+
+.schema-panel > footer input,
+.schema-panel > footer select,
+.filter-rule input,
+.filter-rule select,
+.sort-rule select,
+.group-rule select {
+  height: 32px;
+  color: #37352f;
+  border: 1px solid rgba(55, 53, 47, 0.16);
+  border-radius: 4px;
+  background: #fff;
+  outline: none;
+  font: 12px/1.2 inherit;
+}
+
+.schema-panel > footer input:focus,
+.schema-panel > footer select:focus,
+.filter-rule input:focus,
+.filter-rule select:focus,
+.sort-rule select:focus,
+.group-rule select:focus {
+  border-color: #2383e2;
+  box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.12);
+}
+
+.schema-panel > footer button,
+.view-rules-panel > footer button:last-child {
+  color: #fff;
+  border: 1px solid #2383e2;
+  border-radius: 4px;
+  background: #2383e2;
+  font: 12px/1.2 inherit;
+}
+
+.schema-panel > footer > span,
+.view-rules-panel > footer > span {
+  color: #9b9a97;
+  font: 10px/1.3 inherit;
+  letter-spacing: 0;
+}
+
+.view-rules-panel > nav,
+.automation-panel > nav {
+  min-height: 40px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+  background: #fff;
+}
+
+.view-rules-panel > nav button,
+.automation-panel > nav button {
+  min-width: 92px;
+  height: 39px;
+  padding: 0 10px;
+  color: #787774;
+  border: 0;
+  background: transparent;
+  font: 12px/1.2 inherit;
+}
+
+.view-rules-panel > nav button.is-active,
+.automation-panel > nav button.is-active {
+  color: #37352f;
+  background: transparent;
+  box-shadow: inset 0 -2px #37352f;
+  font-weight: 500;
+}
+
+.view-rules-panel > main {
+  padding: 16px;
+}
+
+.rule-logic,
+.filter-rule,
+.sort-rule,
+.group-rule,
+.rule-empty {
+  border-color: rgba(55, 53, 47, 0.12);
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.rule-logic {
+  background: #f7f7f5;
+}
+
+.rule-logic > span,
+.rule-logic button,
+.filter-rule > em,
+.sort-rule > em,
+.rule-intro span,
+.group-rule small,
+.group-rule p {
+  color: #787774;
+  font: 11px/1.4 inherit;
+}
+
+.rule-logic button.is-active {
+  color: #37352f;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.08);
+}
+
+.rule-add {
+  height: 32px;
+  color: #787774;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: 12px/1.2 inherit;
+}
+
+.rule-add:hover {
+  color: #37352f;
+  background: rgba(55, 53, 47, 0.08);
+}
+
+.view-rules-panel > footer button:first-child {
+  height: 32px;
+  color: #37352f;
+  border: 1px solid rgba(55, 53, 47, 0.16);
+  border-radius: 4px;
+  background: #fff;
+  font: 12px/1.2 inherit;
+}
+
+.property-config-editor {
+  border-left: 1px solid rgba(55, 53, 47, 0.09);
+  background: #fff;
+}
+
+.property-config-editor > header {
+  border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+  background: #fff;
+}
+
+.property-config-editor > footer {
+  border-top: 1px solid rgba(55, 53, 47, 0.09);
+  background: #f7f7f5;
+}
+
+.property-config-editor > footer button:last-child {
+  color: #fff;
+  border-color: #2383e2;
+  background: #2383e2;
+}
+
+@media (max-width: 820px) {
+  .schema-panel.is-configuring > main.schema-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .property-config-editor {
+    position: absolute;
+    inset: 56px 0 70px;
+    z-index: 2;
+  }
+}
