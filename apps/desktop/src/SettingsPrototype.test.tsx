@@ -15,6 +15,9 @@ describe('settings prototype surface', () => {
       'aria-current',
       'page',
     )
+    fireEvent.click(screen.getByRole('button', { name: 'API 访问' }))
+    expect(screen.getByRole('button', { name: 'API 访问' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: '模型与 AI' })).not.toHaveAttribute('aria-current')
     fireEvent.click(screen.getByRole('button', { name: '关闭设置' }))
     expect(onClose).toHaveBeenCalledOnce()
   })
@@ -24,6 +27,8 @@ describe('settings prototype surface', () => {
 
     expect(screen.getByRole('combobox', { name: '供应商协议' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '模型名称' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '令牌名称' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Webhook 地址' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '签发令牌' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '添加端点' })).toBeDisabled()
   })

@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, CircleHelp, Copy, Cpu, FileArchive, FileText, Grid2X2, KeyRound, Plus, ShieldCheck, Trash2, Upload, Webhook as WebhookIcon, Wifi, X } from 'lucide-react'
-import type { ApiScope } from '@notetodo/auth-core'
-import type { WebhookEvent } from '@notetodo/webhook-core'
+import { AlertTriangle, CheckCircle2, FileArchive, FileText, Grid2X2, ShieldCheck, Upload, X } from 'lucide-react'
 
 type ImportInspection = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['pickAndInspect']>>>
 type ImportJob = Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['listJobs']>>[number]
 export { ArchivePanel, CommentsPanel, NotificationPanel, SharePanel } from './AppCollaborationPanels'
 export { PageHistoryPanel } from './AppHistoryPanel'
+export { ModelSettingsPanel } from './AppSettingsPanel'
 
 export function ImportPanel({ onClose, onImported }: { onClose: () => void; onImported: () => Promise<void> }) {
   const [inspection, setInspection] = useState<ImportInspection | null>(null)
@@ -140,138 +139,3 @@ export function ImportPanel({ onClose, onImported }: { onClose: () => void; onIm
 }
 
 function LayersIcon() { return <span className="layers-icon" aria-hidden="true">×</span> }
-
-type ModelForm = { provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; apiKey: string; hasApiKey: boolean }
-type PlatformToken = { id: string; name: string; prefix: string; scopes: ApiScope[]; revokedAt: string | null; lastUsedAt: string | null; createdAt: string }
-const platformScopes: Array<{ id: ApiScope; label: string }> = [
-  { id: 'pages:read', label: '页面读取' }, { id: 'pages:write', label: '页面写入' },
-  { id: 'databases:read', label: '数据库读取' }, { id: 'databases:write', label: '数据库写入' },
-  { id: 'webhooks:manage', label: 'Webhook 管理' }, { id: 'automations:manage', label: '自动化管理' },
-]
-type WebhookEndpoint = { id: string; name: string; url: string; events: WebhookEvent[]; active: boolean; pendingCount: number; deadCount: number }
-const webhookEvents: Array<{ id: WebhookEvent; label: string }> = [
-  { id: 'page.created', label: '页面创建' }, { id: 'page.updated', label: '页面更新' }, { id: 'page.archived', label: '页面归档' },
-  { id: 'database.record.created', label: '记录创建' }, { id: 'database.record.updated', label: '记录更新' },
-]
-
-export function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState<ModelForm>({ provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b', apiKey: '', hasApiKey: false })
-  const [state, setState] = useState<'idle' | 'saving' | 'testing' | 'success' | 'error'>('idle')
-  const [message, setMessage] = useState('')
-  const [tokens, setTokens] = useState<PlatformToken[]>([])
-  const [tokenName, setTokenName] = useState('本地集成')
-  const [tokenScopes, setTokenScopes] = useState<ApiScope[]>(['pages:read'])
-  const [issuedSecret, setIssuedSecret] = useState('')
-  const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([])
-  const [webhookName, setWebhookName] = useState('产品事件')
-  const [webhookUrl, setWebhookUrl] = useState('')
-  const [selectedEvents, setSelectedEvents] = useState<WebhookEvent[]>(['page.updated'])
-  const [issuedWebhookSecret, setIssuedWebhookSecret] = useState('')
-
-  useEffect(() => {
-    if (window.notetodo?.model) {
-      void window.notetodo.model.getConfig().then((config) => setForm({ ...config, apiKey: '' }))
-    }
-    if (window.notetodo?.platform) void window.notetodo.platform.listTokens().then(setTokens)
-    if (window.notetodo?.webhooks) void window.notetodo.webhooks.list().then(setWebhooks)
-  }, [])
-
-  const issueToken = async () => {
-    if (!tokenName.trim() || !tokenScopes.length) return
-    if (!window.notetodo?.platform) { setMessage('访问令牌需要在桌面应用中签发。'); setState('error'); return }
-    try {
-      const issued = await window.notetodo.platform.issueToken(tokenName.trim(), tokenScopes)
-      setIssuedSecret(issued.rawToken)
-      setTokens(await window.notetodo.platform.listTokens())
-      setState('success'); setMessage('令牌已签发。请现在复制，关闭后无法再查看明文。')
-    } catch (error) { setState('error'); setMessage(error instanceof Error ? error.message : '令牌签发失败。') }
-  }
-
-  const revokeToken = async (id: string) => {
-    if (!window.notetodo?.platform) return
-    await window.notetodo.platform.revokeToken(id)
-    setTokens(await window.notetodo.platform.listTokens())
-  }
-
-  const createWebhook = async () => {
-    if (!window.notetodo?.webhooks || !webhookName.trim() || !webhookUrl.trim() || !selectedEvents.length) return
-    try {
-      const endpoint = await window.notetodo.webhooks.create(webhookName.trim(), webhookUrl.trim(), selectedEvents)
-      setIssuedWebhookSecret(endpoint.secret)
-      setWebhookUrl('')
-      setWebhooks(await window.notetodo.webhooks.list())
-      setState('success'); setMessage('Webhook 已启用。签名密钥只显示这一次。')
-    } catch (error) { setState('error'); setMessage(error instanceof Error ? error.message : 'Webhook 创建失败。') }
-  }
-
-  const toggleWebhook = async (endpoint: WebhookEndpoint) => {
-    if (!window.notetodo?.webhooks) return
-    await window.notetodo.webhooks.setActive(endpoint.id, !endpoint.active)
-    setWebhooks(await window.notetodo.webhooks.list())
-  }
-
-  const save = async () => {
-    setState('saving')
-    try {
-      if (window.notetodo?.model) {
-        const saved = await window.notetodo.model.saveConfig({ provider: form.provider, baseUrl: form.baseUrl, model: form.model, ...(form.apiKey ? { apiKey: form.apiKey } : {}) })
-        setForm((current) => ({ ...current, ...saved, apiKey: '' }))
-      }
-      setMessage('配置已保存，密钥由操作系统加密。')
-      setState('success')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '无法保存模型配置。')
-      setState('error')
-    }
-  }
-
-  const test = async () => {
-    if (!window.notetodo?.model) {
-      setMessage('浏览器预览不执行本机模型连接；桌面应用中可用。')
-      setState('success')
-      return
-    }
-    setState('testing')
-    try {
-      const result = await window.notetodo.model.testConnection()
-      setMessage(`连接成功：${result.endpoint}`)
-      setState('success')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '模型连接失败。')
-      setState('error')
-    }
-  }
-
-  return (
-    <div className="settings-shell" role="dialog" aria-modal="true" aria-label="模型与 AI 设置">
-      <aside><div className="settings-brand"><span className="brand-mark">N</span><strong>设置</strong></div><nav aria-label="设置分类"><button>工作区</button><button className="is-active" aria-current="page"><Cpu size={15} />模型与 AI</button><button>连接器</button><button>数据与安全</button></nav><div className="settings-trust"><ShieldCheck size={16} /><span><strong>本地优先</strong><small>密钥不会进入页面内容</small></span></div></aside>
-      <main>
-        <header><div><span>工作区设置</span><h2>模型与 AI</h2><p>选择云端或本地模型。NoteTodo 使用统一网关，不绑定供应商。</p></div><button onClick={onClose} aria-label="关闭设置"><X size={18} /></button></header>
-        <section className="settings-card">
-          <div className="settings-card-title"><Cpu size={17} /><span><strong>默认模型</strong><small>用于写作、问答与数据库 AI</small></span><i>工作区</i></div>
-          <label><span>供应商协议</span><select value={form.provider} onChange={(event) => setForm({ ...form, provider: event.target.value as ModelForm['provider'] })}><option value="ollama">Ollama</option><option value="lm-studio">LM Studio</option><option value="openai-compatible">OpenAI-compatible</option></select></label>
-          <label><span>Base URL</span><input value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} placeholder="http://127.0.0.1:11434/v1" /></label>
-          <label><span>模型名称</span><input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} placeholder="qwen3:8b" /></label>
-          <label><span>API Key <small>{form.hasApiKey ? '已有加密密钥' : '本地模型可留空'}</small></span><div className="secret-input"><KeyRound size={14} /><input type="password" value={form.apiKey} onChange={(event) => setForm({ ...form, apiKey: event.target.value })} placeholder={form.hasApiKey ? '输入新值以替换现有密钥' : 'sk-…'} /></div></label>
-          <footer><button className="test-model" onClick={() => void test()} disabled={state === 'testing'}><Wifi size={14} />{state === 'testing' ? '连接中…' : '测试连接'}</button><button className="save-model" onClick={() => void save()} disabled={state === 'saving'}>{state === 'saving' ? '保存中…' : '保存配置'}</button></footer>
-        </section>
-        <section className="settings-card platform-token-card">
-          <div className="settings-card-title"><KeyRound size={17} /><span><strong>API 访问令牌</strong><small>为 REST API、MCP 与本地集成授权</small></span><i>本地 API</i></div>
-          <div className="token-issuer"><input value={tokenName} maxLength={100} onChange={(event) => setTokenName(event.target.value)} placeholder="令牌名称" /><button disabled={!tokenName.trim() || !tokenScopes.length} onClick={() => void issueToken()}><Plus size={13} />签发令牌</button></div>
-          <div className="token-scopes">{platformScopes.map((scope) => <label key={scope.id}><input type="checkbox" checked={tokenScopes.includes(scope.id)} onChange={(event) => setTokenScopes((current) => event.target.checked ? [...current, scope.id] : current.filter((item) => item !== scope.id))} /><span>{scope.label}</span><code>{scope.id}</code></label>)}</div>
-          {issuedSecret && <div className="issued-token"><span><small>仅显示一次</small><code>{issuedSecret}</code></span><button onClick={() => void navigator.clipboard.writeText(issuedSecret)}><Copy size={13} />复制</button><button onClick={() => setIssuedSecret('')}><X size={13} /></button></div>}
-          <div className="token-ledger">{tokens.map((token) => <div className={token.revokedAt ? 'is-revoked' : ''} key={token.id}><i>{token.name.slice(0, 1).toLocaleUpperCase()}</i><span><strong>{token.name}</strong><code>{token.prefix}</code><small>{token.lastUsedAt ? `最近使用 ${new Date(token.lastUsedAt).toLocaleString('zh-CN')}` : '尚未使用'} · {token.scopes.length} 项权限</small></span>{token.revokedAt ? <em>已撤销</em> : <button aria-label={`撤销 ${token.name}`} onClick={() => void revokeToken(token.id)}><Trash2 size={13} /></button>}</div>)}{!tokens.length && <p>尚未签发任何访问令牌。</p>}</div>
-        </section>
-        <section className="settings-card webhook-card">
-          <div className="settings-card-title"><WebhookIcon size={17} /><span><strong>Webhook 投递台</strong><small>签名事件、退避重试与死信监控</small></span><i>发件箱</i></div>
-          <div className="webhook-compose"><input value={webhookName} maxLength={100} onChange={(event) => setWebhookName(event.target.value)} placeholder="端点名称" /><input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://hooks.example.com/notetodo" /><button disabled={!webhookName.trim() || !webhookUrl.trim() || !selectedEvents.length || !window.notetodo?.webhooks} onClick={() => void createWebhook()}><Plus size={13} />添加端点</button></div>
-          <div className="webhook-events">{webhookEvents.map((event) => <label key={event.id}><input type="checkbox" checked={selectedEvents.includes(event.id)} onChange={(change) => setSelectedEvents((current) => change.target.checked ? [...current, event.id] : current.filter((item) => item !== event.id))} /><span>{event.label}</span><code>{event.id}</code></label>)}</div>
-          {issuedWebhookSecret && <div className="issued-token"><span><small>签名密钥 · 仅显示一次</small><code>{issuedWebhookSecret}</code></span><button onClick={() => void navigator.clipboard.writeText(issuedWebhookSecret)}><Copy size={13} />复制</button><button onClick={() => setIssuedWebhookSecret('')}><X size={13} /></button></div>}
-          <div className="webhook-ledger">{webhooks.map((endpoint) => <article className={!endpoint.active ? 'is-paused' : ''} key={endpoint.id}><i><WebhookIcon size={14} /></i><span><strong>{endpoint.name}<em>{endpoint.active ? 'LIVE' : 'PAUSED'}</em></strong><code>{endpoint.url}</code><small>{endpoint.events.length} 类事件 · {endpoint.pendingCount} 待投递 {endpoint.deadCount > 0 && `· ${endpoint.deadCount} 死信`}</small></span><button onClick={() => void toggleWebhook(endpoint)}>{endpoint.active ? '暂停' : '启用'}</button></article>)}{!webhooks.length && <p>尚无投递端点。桌面应用会加密保存签名密钥。</p>}</div>
-        </section>
-        {message && <div className={`settings-message is-${state}`}>{state === 'success' ? <CheckCircle2 size={15} /> : <CircleHelp size={15} />}{message}</div>}
-        <div className="privacy-note"><ShieldCheck size={18} /><div><strong>密钥安全边界</strong><p>桌面端使用 Windows DPAPI / macOS Keychain 对密钥加密。Renderer、页面数据库、日志和错误报告都不会取得明文密钥。</p></div></div>
-      </main>
-    </div>
-  )
-}
