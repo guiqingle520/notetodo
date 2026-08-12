@@ -449,8 +449,8 @@ export function RecordTrashPanel({ records, onClose, onRestore, onDeletePermanen
     if (confirmId !== id) { setConfirmId(id); return }
     setBusyId(id); try { await onDeletePermanently([id]); setConfirmId(null) } finally { setBusyId(null) }
   }
-  return <div className="record-trash-backdrop" onMouseDown={onClose}><section className="record-trash-panel" role="dialog" aria-modal="true" aria-label="数据库记录回收站" onMouseDown={(event) => event.stopPropagation()}>
-    <header><span><Trash2 size={15} /><div><small>DATABASE TRASH</small><strong>记录回收站</strong></div></span><button aria-label="关闭记录回收站" onClick={onClose}><X size={15} /></button></header>
+  return <div className="record-trash-backdrop" role="presentation" onMouseDown={onClose}><section className="record-trash-panel" role="dialog" aria-modal="true" aria-label="数据库记录回收站" onMouseDown={(event) => event.stopPropagation()}>
+    <header><span><Trash2 size={15} /><div><small>数据库记录</small><strong>记录回收站</strong></div></span><button aria-label="关闭记录回收站" onClick={onClose}><X size={15} /></button></header>
     <main>{records.map((record) => <article key={record.id}><span><strong>{record.title || '无标题'}</strong><small>删除于 {new Date(record.trashedAt).toLocaleString('zh-CN')}</small></span><button disabled={busyId !== null} onClick={() => void restore(record.id)}><RotateCcw size={12} />恢复</button><button className={confirmId === record.id ? 'is-confirm' : ''} disabled={busyId !== null} onClick={() => void remove(record.id)}><Trash2 size={12} />{confirmId === record.id ? '确认永久删除' : '永久删除'}</button></article>)}{!records.length && <div className="record-trash-empty"><Trash2 size={20} /><strong>回收站是空的</strong><span>删除的数据库记录会保留在这里，直到永久删除。</span></div>}</main>
     <footer><span>{records.length} 条已删除记录</span><button onClick={onClose}>完成</button></footer>
   </section></div>

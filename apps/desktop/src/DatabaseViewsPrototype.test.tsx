@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { DatabaseRecord, DatabaseSchema } from '@notetodo/database-core'
 import { GalleryView, RecordDetailPanel } from './DatabaseBlock'
@@ -43,5 +43,10 @@ describe('database prototype views', () => {
     expect(screen.getByRole('dialog', { name: '记录详情：桌面端体验' })).toBeInTheDocument()
     expect(screen.getByText('数据库记录')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '记录标题' })).toHaveValue('桌面端体验')
+    const discussion = screen.getByRole('button', { name: '记录讨论' })
+    expect(discussion).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(discussion)
+    expect(discussion).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('还没有讨论')).toBeInTheDocument()
   })
 })
