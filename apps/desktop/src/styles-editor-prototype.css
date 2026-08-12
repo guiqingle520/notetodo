@@ -1,0 +1,179 @@
+/* Stitch editor prototype: quiet document chrome with compact, inline properties. */
+.workspace > .topbar {
+  border-bottom: 1px solid #e9e9e7;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.workspace > .topbar .breadcrumbs {
+  gap: 2px;
+}
+
+.workspace > .topbar .breadcrumbs span {
+  overflow: hidden;
+  max-width: 210px;
+  color: #787774;
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace > .topbar .breadcrumbs span:last-child {
+  color: #37352f;
+  font-weight: 500;
+}
+
+.workspace > .topbar .top-actions {
+  gap: 1px;
+}
+
+.workspace > .topbar .top-actions button {
+  height: 28px;
+  padding: 0 7px;
+  border-radius: 4px;
+  color: #37352f;
+  font-size: 12px;
+}
+
+.workspace > .topbar .save-state {
+  margin-right: 7px;
+  color: #9b9a97;
+  font-size: 10px;
+}
+
+.workspace .editor-scroll {
+  scrollbar-color: rgba(55, 53, 47, 0.22) transparent;
+  scrollbar-width: thin;
+}
+
+.workspace .document:not(.is-database-page) {
+  width: min(900px, calc(100% - 72px));
+  margin-top: 46px;
+  padding: 0 64px 100px;
+}
+
+.workspace .page-meta-actions {
+  min-height: 24px;
+  margin-bottom: 3px;
+  gap: 5px;
+}
+
+.workspace .page-meta-actions button {
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.workspace .page-title {
+  padding: 2px 0 9px;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.editor-page-properties {
+  width: 100%;
+  margin: 4px 0 23px;
+  padding: 4px 0 9px;
+  border-bottom: 1px solid #efefed;
+}
+
+.editor-property-row {
+  display: grid;
+  min-height: 34px;
+  grid-template-columns: 126px minmax(0, 1fr);
+  align-items: center;
+}
+
+.editor-property-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #787774;
+  font-size: 12px;
+}
+
+.editor-property-name svg {
+  color: #9b9a97;
+}
+
+.editor-property-value {
+  color: #37352f;
+  font-size: 12px;
+}
+
+.editor-property-people {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.editor-property-people > span {
+  max-width: 160px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: #f1f1ef;
+  color: #5f5e5b;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-property-people > button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9b9a97;
+  cursor: pointer;
+}
+
+.editor-property-people > button:hover {
+  background: #efefed;
+  color: #37352f;
+}
+
+.workspace .editor-content .tiptap {
+  line-height: 1.58;
+}
+
+.workspace .editor-content .tiptap > h2 {
+  margin-top: 1.45em;
+  font-size: 22px;
+}
+
+.workspace .editor-content .tiptap > p,
+.workspace .editor-content .tiptap > ul,
+.workspace .editor-content .tiptap > ol {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.workspace .block-toolbar {
+  left: 25px;
+  padding: 2px;
+  border: 1px solid #e2e2df;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15, 15, 15, 0.12);
+}
+
+.workspace .block-toolbar > span,
+.workspace .block-toolbar > button {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 1080px) {
+  .workspace .document:not(.is-database-page) {
+    width: min(820px, calc(100% - 48px));
+    padding-right: 42px;
+    padding-left: 42px;
+  }
+}

@@ -15,6 +15,7 @@ import { applyBlockAction, type BlockAction } from './editor/block-actions'
 import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
 import { iconMap } from './AppSidebar'
+import { EditorPageProperties } from './EditorPageProperties'
 
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
 type EditorMenuState = { from: number; left: number; top: number; query: string; index: number }
@@ -384,6 +385,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
             aria-label="页面标题"
             onChange={(event) => updatePage(page.id, { title: event.target.value })}
           />
+          {!isDatabasePage && <EditorPageProperties page={page} collaborators={collaborators} />}
           {!isDatabasePage && <div
             className={`editor-stage ${dropActive ? 'is-drop-active' : ''}`}
             onMouseMove={trackHoveredBlock}
@@ -476,4 +478,3 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
     </main>
   )
 }
-
