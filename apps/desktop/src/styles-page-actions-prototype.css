@@ -89,8 +89,13 @@
 
 .page-description::placeholder { color: var(--notion-faint); }
 
-.page-cover { height: 190px; margin: -46px -64px 28px; overflow: hidden; background: var(--notion-sidebar); }
-.page-cover img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.page-cover { position: relative; height: 190px; margin: -46px -64px 28px; overflow: hidden; background: var(--notion-sidebar); }
+.page-cover > img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.page-cover-actions { position: absolute; right: 12px; bottom: 10px; display: flex; gap: 4px; opacity: 0; transition: opacity .12s ease; }
+.page-cover:hover .page-cover-actions, .page-cover:focus-within .page-cover-actions, .page-cover.is-error .page-cover-actions { opacity: 1; }
+.page-cover-actions button { height: 27px; padding: 0 8px; color: var(--notion-text); border: 1px solid rgba(15,15,15,.12); border-radius: 4px; background: rgba(255,255,255,.94); box-shadow: 0 1px 3px rgba(15,15,15,.12); font: 11px var(--font-ui); }
+.page-cover-actions button:hover { background: #fff; }
+.page-cover-fallback { height: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--notion-muted); font-size: 12px; }
 
 .page-icon-menu {
   top: 28px;

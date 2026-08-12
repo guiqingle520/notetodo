@@ -42,7 +42,6 @@ describe('editor page actions', () => {
         hasDescription={false}
         onIconChange={onIconChange}
         onCoverRequest={onCoverRequest}
-        onCoverRemove={vi.fn()}
         onDescriptionRequest={onDescriptionRequest}
       />,
     )
@@ -77,7 +76,6 @@ describe('editor page actions', () => {
           hasDescription={false}
           onIconChange={vi.fn()}
           onCoverRequest={vi.fn()}
-          onCoverRemove={vi.fn()}
           onDescriptionRequest={vi.fn()}
         />
         <button>菜单外部</button>

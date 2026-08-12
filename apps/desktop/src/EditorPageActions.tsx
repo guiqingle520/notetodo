@@ -161,7 +161,6 @@ export function PageMetaActions({
   hasDescription,
   onIconChange,
   onCoverRequest,
-  onCoverRemove,
   onDescriptionRequest,
 }: {
   icon: PageIcon
@@ -169,7 +168,6 @@ export function PageMetaActions({
   hasDescription: boolean
   onIconChange: (icon: PageIcon) => void
   onCoverRequest: () => void
-  onCoverRemove: () => void
   onDescriptionRequest: () => void
 }) {
   const [iconMenuOpen, setIconMenuOpen] = useState(false)
@@ -209,8 +207,7 @@ export function PageMetaActions({
           </div>
         )}
       </div>
-      <button onClick={onCoverRequest}>{hasCover ? '更改封面' : '添加封面'}</button>
-      {hasCover && <button onClick={onCoverRemove}>移除封面</button>}
+      {!hasCover && <button onClick={onCoverRequest}>添加封面</button>}
       <button onClick={onDescriptionRequest}>{hasDescription ? '编辑说明' : '添加说明'}</button>
     </div>
   )

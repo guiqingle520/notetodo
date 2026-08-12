@@ -17,6 +17,7 @@ import type { SelectionContext } from './AppAIPanel'
 import { EditorPageProperties } from './EditorPageProperties'
 import { PageHeaderActions, PageMetaActions } from './EditorPageActions'
 import { AttachmentProgress, BlockToolbar, EditorDropGuide, PageMentionMenu, SlashCommandMenu, type AttachmentProgressState, type EditorMenuState } from './EditorFloatingSurfaces'
+import { PageCover } from './PageCover'
 
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
 
@@ -397,7 +398,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
 
       <div className="editor-scroll">
         <article className={`document ${isDatabasePage ? 'is-database-page' : ''}`}>
-          {!isDatabasePage && page.cover && <div className="page-cover"><img src={page.cover} alt="" /></div>}
+          {!isDatabasePage && page.cover && <PageCover source={page.cover} onChange={() => void pickPageCover()} onRemove={() => updatePage(page.id, { cover: '' })} />}
           <div className="document-kicker"><span>NT / {page.id.slice(0, 4).toUpperCase()}</span><span>{new Date(page.updatedAt).toLocaleDateString('zh-CN')}</span></div>
           {!isDatabasePage && (
             <PageMetaActions
@@ -406,7 +407,6 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
               hasDescription={Boolean(page.description)}
               onIconChange={(icon) => updatePage(page.id, { icon })}
               onCoverRequest={() => void pickPageCover()}
-              onCoverRemove={() => updatePage(page.id, { cover: '' })}
               onDescriptionRequest={openDescription}
             />
           )}
