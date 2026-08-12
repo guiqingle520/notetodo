@@ -347,7 +347,7 @@ export function TemplateEditorPanel({ schema, template, onClose, onSave }: {
   const [busy, setBusy] = useState(false)
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [busy, onClose])
   return <div className="schema-panel-backdrop template-editor-backdrop" onMouseDown={onClose}><section className="template-editor-panel" role="dialog" aria-modal="true" aria-label="编辑数据库模板" onMouseDown={(event) => event.stopPropagation()}>
-    <header><div><span className="template-editor-icon"><LayoutTemplate size={18} /></span><span><small>{template ? 'EDIT DATABASE TEMPLATE' : 'NEW DATABASE TEMPLATE'}</small><strong>{template ? '编辑记录模板' : '创建记录模板'}</strong></span></div><button aria-label="关闭模板编辑器" onClick={onClose}><X size={15} /></button></header>
+    <header><div><span className="template-editor-icon"><LayoutTemplate size={18} /></span><span><small>{template ? '数据库模板' : '新建模板'}</small><strong>{template ? '编辑记录模板' : '创建记录模板'}</strong></span></div><button aria-label="关闭模板编辑器" onClick={onClose}><X size={15} /></button></header>
     <main>
       <label className="template-name-field"><span>模板名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>
       <section className="template-property-section"><div><strong>属性预设</strong><small>使用模板新建记录时自动填入</small></div>{properties.map((property) => <label key={property.id}><span><i>{propertyTypeLabel(property.type)}</i>{property.name}</span><TemplateValueInput property={property} value={values[property.id] ?? null} onChange={(value) => setValues((current) => ({ ...current, [property.id]: value }))} /></label>)}</section>
@@ -383,6 +383,7 @@ export function CsvImportPanel({ schema, onClose, onImport }: {
   const [mappings, setMappings] = useState<Array<string | null>>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [busy, onClose])
   const choose = async (file?: File) => {
     if (!file) return
     setError('')
@@ -403,9 +404,9 @@ export function CsvImportPanel({ schema, onClose, onImport }: {
     try { await onImport(rows) } catch (reason) { setError(reason instanceof Error ? reason.message.split('Error: ').at(-1) ?? reason.message : '导入失败。'); setBusy(false) }
   }
   return <div className="schema-panel-backdrop csv-import-backdrop" onMouseDown={onClose}><section className="csv-import-panel" role="dialog" aria-modal="true" aria-label="导入 CSV" onMouseDown={(event) => event.stopPropagation()}>
-    <header><div><span><FileUp size={18} /></span><div><small>IMPORT / CSV</small><strong>把表格带进数据库</strong></div></div><button aria-label="关闭 CSV 导入" onClick={onClose}><X size={15} /></button></header>
+    <header><div><span><FileUp size={18} /></span><div><small>从文件导入</small><strong>把表格带进数据库</strong></div></div><button aria-label="关闭 CSV 导入" onClick={onClose}><X size={15} /></button></header>
     <main>
-      <label className={`csv-dropzone ${parsed ? 'has-file' : ''}`}><input type="file" accept=".csv,text/csv" onChange={(event) => void choose(event.target.files?.[0])} /><span>{parsed ? <CheckCircle2 size={20} /> : <FileUp size={20} />}</span><strong>{parsed ? fileName : '选择 CSV 文件'}</strong><small>{parsed ? `${parsed.rows.length} 行 · ${parsed.headers.length} 列${parsed.truncated ? ' · 已截取前 10,000 行' : ''}` : '支持 Excel、Numbers 与 Notion 导出的 UTF-8 CSV，最大 10 MB'}</small></label>
+      <label className={`csv-dropzone ${parsed ? 'has-file' : ''}`}><input aria-label="选择 CSV 文件" type="file" accept=".csv,text/csv" onChange={(event) => void choose(event.target.files?.[0])} /><span>{parsed ? <CheckCircle2 size={20} /> : <FileUp size={20} />}</span><strong>{parsed ? fileName : '选择 CSV 文件'}</strong><small>{parsed ? `${parsed.rows.length} 行 · ${parsed.headers.length} 列${parsed.truncated ? ' · 已截取前 10,000 行' : ''}` : '支持 Excel、Numbers 与 Notion 导出的 UTF-8 CSV，最大 10 MB'}</small></label>
       {parsed && <><section className="csv-mapping"><div className="csv-mapping-head"><span>CSV 列</span><span>示例</span><span>数据库属性</span></div>{parsed.headers.map((header, index) => <label key={`${header}-${index}`}><strong>{header}</strong><span>{parsed.rows[0]?.[index] || '—'}</span><select aria-label={`${header} 映射属性`} value={mappings[index] ?? ''} onChange={(event) => setMappings((current) => current.map((value, candidate) => candidate === index ? event.target.value || null : value))}><option value="">不导入</option>{writable.map((property) => <option key={property.id} value={property.id}>{property.name} · {propertyTypeName(property.type)}</option>)}</select></label>)}</section><div className="csv-import-note"><CircleAlert size={14} /><span>导入会新增 {parsed.rows.length} 条记录，不覆盖已有内容。全部写入在一个本地事务中完成。</span></div></>}
       {error && <p className="csv-import-error">{error}</p>}
     </main>

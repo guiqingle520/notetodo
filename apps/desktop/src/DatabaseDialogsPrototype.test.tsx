@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { DatabaseSchema } from '@notetodo/database-core'
-import { SchemaPanel, ViewRulesPanel } from './DatabaseBlock'
+import { CsvImportPanel, SchemaPanel, TemplateEditorPanel, ViewRulesPanel } from './DatabaseBlock'
 
 const schema: DatabaseSchema = {
   id: 'product-db',
@@ -51,5 +51,29 @@ describe('database prototype dialogs', () => {
     expect(screen.getByRole('button', { name: '筛选 0' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '排序 0' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '分组' })).toBeInTheDocument()
+  })
+
+  it('keeps template and CSV authoring dialogs labelled and dismissible', () => {
+    const closeTemplate = vi.fn()
+    const template = render(
+      <TemplateEditorPanel
+        schema={schema}
+        template={null}
+        onClose={closeTemplate}
+        onSave={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('dialog', { name: '编辑数据库模板' })).toBeInTheDocument()
+    expect(screen.getByText('新建模板')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(closeTemplate).toHaveBeenCalledOnce()
+    template.unmount()
+
+    const closeCsv = vi.fn()
+    render(<CsvImportPanel schema={schema} onClose={closeCsv} onImport={vi.fn()} />)
+    expect(screen.getByRole('dialog', { name: '导入 CSV' })).toBeInTheDocument()
+    expect(screen.getByLabelText('选择 CSV 文件')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(closeCsv).toHaveBeenCalledOnce()
   })
 })

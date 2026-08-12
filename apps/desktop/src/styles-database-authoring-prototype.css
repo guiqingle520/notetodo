@@ -1,0 +1,297 @@
+/* Database authoring dialogs: templates and CSV import use one restrained system. */
+.template-editor-backdrop,
+.csv-import-backdrop {
+  z-index: 120;
+  inset: 31px 0 0;
+  padding: 24px;
+  background: rgba(15, 15, 15, 0.32);
+}
+.template-editor-panel,
+.csv-import-panel {
+  width: min(680px, calc(100vw - 56px));
+  max-height: min(720px, calc(100vh - 80px));
+  color: var(--notion-text);
+  border: 1px solid rgba(15, 15, 15, 0.1);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 44px rgba(15, 15, 15, 0.2);
+  font-family: var(--font-ui);
+  animation-duration: 0.12s;
+}
+.csv-import-panel {
+  width: min(760px, calc(100vw - 56px));
+}
+.template-editor-panel > header,
+.csv-import-panel > header {
+  min-height: 56px;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid var(--notion-divider);
+}
+.template-editor-panel > header > div,
+.csv-import-panel > header > div {
+  gap: 10px;
+}
+.template-editor-icon,
+.csv-import-panel > header > div > span {
+  width: 32px;
+  height: 32px;
+  color: var(--notion-muted);
+  border-radius: 5px;
+  background: var(--notion-sidebar);
+}
+.template-editor-panel header small,
+.csv-import-panel header small {
+  color: var(--notion-faint);
+  font: 9px/1.3 var(--font-ui);
+  letter-spacing: 0;
+}
+.template-editor-panel header strong,
+.csv-import-panel header strong {
+  color: var(--notion-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.template-editor-panel header button,
+.csv-import-panel header button {
+  color: var(--notion-muted);
+}
+.template-editor-panel header button:hover,
+.csv-import-panel header button:hover {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
+.template-editor-panel > main,
+.csv-import-panel > main {
+  padding: 16px;
+  scrollbar-width: thin;
+}
+
+.template-name-field {
+  min-height: 42px;
+  grid-template-columns: 128px minmax(0, 1fr);
+  border-bottom: 1px solid var(--notion-divider);
+}
+.template-name-field > span,
+.template-property-section label > span {
+  color: var(--notion-muted);
+  font-size: 11px;
+}
+.template-name-field input,
+.template-property-section input:not([type='checkbox']),
+.template-property-section select {
+  height: 31px;
+  padding: 0 7px;
+  color: var(--notion-text);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font: 11px var(--font-ui);
+}
+.template-name-field input:hover,
+.template-property-section input:not([type='checkbox']):hover,
+.template-property-section select:hover {
+  background: var(--notion-sidebar);
+}
+.template-name-field input:focus,
+.template-property-section input:focus,
+.template-property-section select:focus {
+  border-color: var(--notion-blue);
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--notion-blue);
+}
+.template-property-section {
+  padding-top: 16px;
+}
+.template-property-section > div {
+  margin-bottom: 7px;
+}
+.template-property-section > div strong,
+.template-content-field strong {
+  color: var(--notion-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.template-property-section > div small,
+.template-content-field small {
+  color: var(--notion-faint);
+  font-size: 10px;
+}
+.template-property-section label {
+  min-height: 38px;
+  grid-template-columns: 128px minmax(0, 1fr);
+  border-top: 1px solid var(--notion-divider);
+}
+.template-property-section label i {
+  min-width: 22px;
+  color: var(--notion-faint);
+  font: normal 9px var(--font-ui);
+}
+.template-property-section input[type='checkbox'] {
+  accent-color: var(--notion-blue);
+}
+.template-content-field {
+  gap: 8px;
+  margin-top: 18px;
+}
+.template-rich-editor {
+  min-height: 164px;
+  padding: 11px 13px;
+  border: 1px solid var(--notion-border);
+  border-radius: 5px;
+}
+.template-rich-editor:focus-within {
+  border-color: var(--notion-blue);
+  box-shadow: 0 0 0 1px var(--notion-blue);
+}
+.template-rich-editor .tiptap {
+  min-height: 140px;
+  color: var(--notion-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.template-editor-panel > footer,
+.csv-import-panel > footer {
+  min-height: 54px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--notion-divider);
+  background: var(--notion-sidebar);
+}
+.template-editor-panel > footer > span,
+.csv-import-panel > footer > span {
+  color: var(--notion-faint);
+  font-size: 10px;
+}
+.template-editor-panel > footer button,
+.csv-import-panel > footer button {
+  height: 30px;
+  padding: 0 11px;
+  color: var(--notion-text);
+  border: 1px solid var(--notion-border);
+  border-radius: 4px;
+  background: #fff;
+  font-size: 11px;
+}
+.template-editor-panel > footer button:hover:not(:disabled),
+.csv-import-panel > footer button:hover:not(:disabled) {
+  background: var(--notion-hover);
+}
+.template-editor-panel > footer button:last-child,
+.csv-import-panel > footer button:last-child {
+  color: #fff;
+  border-color: var(--notion-blue);
+  background: var(--notion-blue);
+}
+.template-editor-panel > footer button:last-child:hover:not(:disabled),
+.csv-import-panel > footer button:last-child:hover:not(:disabled) {
+  background: var(--notion-blue-hover);
+}
+
+.csv-dropzone {
+  min-height: 108px;
+  gap: 4px;
+  color: var(--notion-text);
+  border: 1px dashed var(--notion-border);
+  border-radius: 6px;
+  background: var(--notion-sidebar);
+}
+.csv-dropzone:hover {
+  border-color: var(--notion-blue);
+  background: rgba(35, 131, 226, 0.04);
+}
+.csv-dropzone:focus-within {
+  border-color: var(--notion-blue);
+  box-shadow: 0 0 0 1px var(--notion-blue);
+}
+.csv-dropzone.has-file {
+  border-style: solid;
+  border-color: rgba(68, 131, 97, 0.24);
+  background: rgba(68, 131, 97, 0.06);
+}
+.csv-dropzone > span {
+  color: var(--notion-muted);
+}
+.csv-dropzone.has-file > span {
+  color: #448361;
+}
+.csv-dropzone strong {
+  color: var(--notion-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.csv-dropzone small {
+  color: var(--notion-faint);
+  font-size: 10px;
+}
+.csv-mapping {
+  margin-top: 16px;
+  border: 1px solid var(--notion-divider);
+  border-radius: 5px;
+}
+.csv-mapping-head,
+.csv-mapping label {
+  min-height: 40px;
+  gap: 10px;
+  padding: 0 10px;
+}
+.csv-mapping-head {
+  min-height: 29px;
+  color: var(--notion-faint);
+  background: var(--notion-sidebar);
+  font-size: 9px;
+}
+.csv-mapping label {
+  border-top: 1px solid var(--notion-divider);
+}
+.csv-mapping label:hover {
+  background: rgba(55, 53, 47, 0.025);
+}
+.csv-mapping label strong {
+  color: var(--notion-text);
+  font-size: 11px;
+  font-weight: 500;
+}
+.csv-mapping label > span {
+  color: var(--notion-faint);
+  font-size: 10px;
+}
+.csv-mapping select {
+  height: 28px;
+  color: var(--notion-text);
+  border: 1px solid var(--notion-border);
+  border-radius: 4px;
+  background: #fff;
+  font: 10px var(--font-ui);
+}
+.csv-mapping select:focus {
+  border-color: var(--notion-blue);
+  outline: 0;
+  box-shadow: 0 0 0 1px var(--notion-blue);
+}
+.csv-import-note {
+  color: var(--notion-muted);
+  background: var(--notion-sidebar);
+  font-size: 10px;
+}
+.csv-import-error {
+  padding: 8px 10px;
+  color: #eb5757;
+  border-radius: 4px;
+  background: rgba(235, 87, 87, 0.08);
+  font-size: 10px;
+}
+
+@media (max-width: 720px) {
+  .template-editor-backdrop,
+  .csv-import-backdrop {
+    padding: 12px;
+  }
+  .template-editor-panel,
+  .csv-import-panel {
+    width: calc(100vw - 24px);
+  }
+  .csv-mapping-head,
+  .csv-mapping label {
+    grid-template-columns: minmax(90px, 0.8fr) minmax(100px, 1fr) minmax(140px, 1.1fr);
+  }
+}
