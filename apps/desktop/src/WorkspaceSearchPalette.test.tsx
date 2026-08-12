@@ -20,14 +20,18 @@ describe('WorkspaceSearchPalette', () => {
     render(<WorkspaceSearchPalette onClose={vi.fn()} onOpenPage={vi.fn()} />)
 
     expect(screen.getByText('最近访问')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '打开搜索结果：从这里开始' })).toBeInTheDocument()
+    expect(screen.getByRole('listbox', { name: '最近访问' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '打开搜索结果：从这里开始' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
   })
 
   it('opens the active result with keyboard navigation', () => {
     const onClose = vi.fn()
     const onOpenPage = vi.fn()
     render(<WorkspaceSearchPalette onClose={onClose} onOpenPage={onOpenPage} />)
-    const input = screen.getByRole('textbox', { name: '搜索页面与内容' })
+    const input = screen.getByRole('combobox', { name: '搜索页面与内容' })
 
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
@@ -40,7 +44,22 @@ describe('WorkspaceSearchPalette', () => {
     const onOpenPage = vi.fn()
     render(<WorkspaceSearchPalette onClose={vi.fn()} onOpenPage={onOpenPage} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '打开搜索结果：知识库' }))
+    fireEvent.click(screen.getByRole('option', { name: '打开搜索结果：知识库' }))
     expect(onOpenPage).toHaveBeenCalledWith('knowledge')
+  })
+
+  it('closes with Escape and follows the hovered result', () => {
+    const onClose = vi.fn()
+    const onOpenPage = vi.fn()
+    render(<WorkspaceSearchPalette onClose={onClose} onOpenPage={onOpenPage} />)
+    const input = screen.getByRole('combobox', { name: '搜索页面与内容' })
+    const knowledge = screen.getByRole('option', { name: '打开搜索结果：知识库' })
+
+    fireEvent.mouseEnter(knowledge)
+    expect(knowledge).toHaveAttribute('aria-selected', 'true')
+    expect(input).toHaveAttribute('aria-activedescendant', knowledge.id)
+
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
   })
 })

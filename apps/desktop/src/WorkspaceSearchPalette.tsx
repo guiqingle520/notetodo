@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, CornerDownLeft, Database, FileText, Search } from 'lucide-react'
+import { CornerDownLeft, Database, FileText, Search } from 'lucide-react'
 import { iconMap } from './AppSidebar'
 import { pageBreadcrumbs, type WorkspacePage } from './domain'
 import { useWorkspace } from './store'
@@ -23,19 +23,27 @@ function SearchResultRow({
   page,
   pages,
   active,
+  optionId,
+  onActivate,
   onOpen,
 }: {
   page: WorkspacePage
   pages: WorkspacePage[]
   active: boolean
+  optionId: string
+  onActivate: () => void
   onOpen: () => void
 }) {
   const Icon = iconMap[page.icon]
   return (
     <button
+      id={optionId}
+      role="option"
+      aria-selected={active}
       className={`workspace-search-result ${active ? 'is-active' : ''}`}
       aria-label={`打开搜索结果：${page.title}`}
       onMouseDown={(event) => event.preventDefault()}
+      onMouseEnter={onActivate}
       onClick={onOpen}
     >
       <span className="workspace-search-result-icon">
@@ -82,9 +90,12 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'ArrowDown') {
+    if (event.key === 'Escape') {
       event.preventDefault()
-      setActiveIndex((current) => Math.min(results.length - 1, current + 1))
+      onClose()
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveIndex((current) => (results.length ? Math.min(results.length - 1, current + 1) : 0))
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
       setActiveIndex((current) => Math.max(0, current - 1))
@@ -113,6 +124,15 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
             ref={inputRef}
             autoFocus
             aria-label="搜索页面与内容"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="true"
+            aria-controls="workspace-search-results"
+            aria-activedescendant={
+              results[activeIndex]
+                ? `workspace-search-option-${results[activeIndex].id}`
+                : undefined
+            }
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
@@ -126,13 +146,20 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
           <span>{results.length} 项</span>
         </div>
 
-        <div className="workspace-search-results">
+        <div
+          id="workspace-search-results"
+          className="workspace-search-results"
+          role="listbox"
+          aria-label={query.trim() ? '搜索结果' : '最近访问'}
+        >
           {results.map((page, index) => (
             <SearchResultRow
               key={page.id}
               page={page}
               pages={pages}
               active={index === activeIndex}
+              optionId={`workspace-search-option-${page.id}`}
+              onActivate={() => setActiveIndex(index)}
               onOpen={() => openResult(page)}
             />
           ))}
@@ -159,9 +186,7 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
           <span>
             <Database size={12} /> 数据库
           </span>
-          <button onClick={() => inputRef.current?.focus()}>
-            搜索帮助 <ChevronRight size={12} />
-          </button>
+          <span className="workspace-search-index">本机全文索引</span>
         </footer>
       </section>
     </div>

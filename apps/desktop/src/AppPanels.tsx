@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, BookOpen, CheckCircle2, CheckSquare2, ChevronRight, CircleHelp, Clock3, Copy, Cpu, FileArchive, FileText, Grid2X2, History as HistoryIcon, KeyRound, Plus, RotateCcw, Search, ShieldCheck, Sparkles, Trash2, Upload, Webhook as WebhookIcon, Wifi, X } from 'lucide-react'
-import type { PageIcon, WorkspacePage } from './domain'
-import { useWorkspace } from './store'
+import { AlertTriangle, CheckCircle2, CircleHelp, Clock3, Copy, Cpu, FileArchive, FileText, Grid2X2, History as HistoryIcon, KeyRound, Plus, RotateCcw, ShieldCheck, Trash2, Upload, Webhook as WebhookIcon, Wifi, X } from 'lucide-react'
+import type { WorkspacePage } from './domain'
 import { diffHistoryHtml, historyTextLines } from './data/page-history'
 import type { ApiScope } from '@notetodo/auth-core'
 import type { WebhookEvent } from '@notetodo/webhook-core'
@@ -10,8 +9,6 @@ type ImportInspection = NonNullable<Awaited<ReturnType<NonNullable<typeof window
 type ImportJob = Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['listJobs']>>[number]
 type PageVersionSummary = Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['list']>>[number]
 type PageVersionDetail = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['history']['get']>>>
-
-const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = { spark: Sparkles, note: FileText, check: CheckSquare2, grid: Grid2X2, book: BookOpen }
 
 export { ArchivePanel, CommentsPanel, NotificationPanel, SharePanel } from './AppCollaborationPanels'
 
@@ -147,44 +144,6 @@ export function ImportPanel({ onClose, onImported }: { onClose: () => void; onIm
 }
 
 function LayersIcon() { return <span className="layers-icon" aria-hidden="true">×</span> }
-
-export function SearchPalette({ onClose }: { onClose: () => void }) {
-  const { searchResults, search, setActivePage } = useWorkspace()
-  const [query, setQuery] = useState('')
-
-  useEffect(() => {
-    // Short debounce avoids searching SQLite for every IME composition update.
-    const timer = setTimeout(() => void search(query), 90)
-    return () => clearTimeout(timer)
-  }, [query, search])
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="command-palette" role="dialog" aria-modal="true" aria-label="搜索工作区" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="command-search">
-          <Search size={18} />
-          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索页面与内容…" />
-          <kbd>ESC</kbd>
-        </div>
-        <div className="command-caption"><span>{query ? '搜索结果' : '最近访问'}</span><span>{searchResults.length} 项</span></div>
-        <div className="search-results">
-          {searchResults.map((page) => {
-            const Icon = iconMap[page.icon]
-            return (
-              <button key={page.id} onClick={() => { setActivePage(page.id); onClose() }}>
-                <span className="result-icon"><Icon size={16} /></span>
-                <span><strong>{page.title || '无标题'}</strong><small>{new Date(page.updatedAt).toLocaleString('zh-CN')}</small></span>
-                <ChevronRight size={15} />
-              </button>
-            )
-          })}
-          {!searchResults.length && <div className="empty-state"><Search size={24} /><strong>没有找到内容</strong><span>换一个关键词，或直接创建新页面。</span></div>}
-        </div>
-        <footer><span><kbd>↑↓</kbd> 选择</span><span><kbd>Enter</kbd> 打开</span><span>本机全文索引</span></footer>
-      </section>
-    </div>
-  )
-}
 
 type ModelForm = { provider: 'openai-compatible' | 'ollama' | 'lm-studio'; baseUrl: string; model: string; apiKey: string; hasApiKey: boolean }
 type PlatformToken = { id: string; name: string; prefix: string; scopes: ApiScope[]; revokedAt: string | null; lastUsedAt: string | null; createdAt: string }

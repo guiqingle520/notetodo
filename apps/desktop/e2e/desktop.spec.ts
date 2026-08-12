@@ -24,7 +24,7 @@ test('edits and restores a page through the sandboxed Electron application', asy
     await expect(window.getByRole('heading', { name: '早上好，Ming' })).toBeVisible()
     await window.getByRole('button', { name: /搜索 Ctrl K/ }).click()
     await expect(window.getByRole('dialog', { name: '搜索工作区' })).toBeVisible()
-    await window.getByRole('button', { name: '打开搜索结果：从这里开始' }).click()
+    await window.getByRole('option', { name: '打开搜索结果：从这里开始' }).click()
     await expect(window.getByLabel('页面标题')).toHaveValue('从这里开始')
     await expect(window.getByLabel('页面属性')).toContainText('日期')
     await expect(window.getByLabel('页面属性')).toContainText('参与者')
