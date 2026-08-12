@@ -32,7 +32,17 @@ export const iconMap: Record<PageIcon, ComponentType<{ size?: number }>> = {
   book: BookOpen,
 }
 
-function PageRow({ page, depth = 0 }: { page: WorkspacePage; depth?: number }) {
+function PageRow({
+  page,
+  depth = 0,
+  isEditorSurface,
+  onPageOpen,
+}: {
+  page: WorkspacePage
+  depth?: number
+  isEditorSurface: boolean
+  onPageOpen: () => void
+}) {
   const { pages, activePageId, setActivePage, addPage } = useWorkspace()
   const [open, setOpen] = useState(true)
   const children = pages.filter(
@@ -43,9 +53,12 @@ function PageRow({ page, depth = 0 }: { page: WorkspacePage; depth?: number }) {
   return (
     <>
       <div
-        className={`page-row ${activePageId === page.id ? 'is-active' : ''}`}
+        className={`page-row ${isEditorSurface && activePageId === page.id ? 'is-active' : ''}`}
         style={{ paddingLeft: 10 + depth * 15 }}
-        onClick={() => setActivePage(page.id)}
+        onClick={() => {
+          setActivePage(page.id)
+          onPageOpen()
+        }}
       >
         <button
           className="row-disclosure"
@@ -73,12 +86,22 @@ function PageRow({ page, depth = 0 }: { page: WorkspacePage; depth?: number }) {
           onClick={(event) => {
             event.stopPropagation()
             addPage(page.id)
+            onPageOpen()
           }}
         >
           <Plus size={13} />
         </button>
       </div>
-      {open && children.map((child) => <PageRow key={child.id} page={child} depth={depth + 1} />)}
+      {open &&
+        children.map((child) => (
+          <PageRow
+            key={child.id}
+            page={child}
+            depth={depth + 1}
+            isEditorSurface={isEditorSurface}
+            onPageOpen={onPageOpen}
+          />
+        ))}
     </>
   )
 }
@@ -92,6 +115,9 @@ export function Sidebar({
   onNotifications,
   onImport,
   notificationCount,
+  activeSurface,
+  onHome,
+  onPageOpen,
 }: {
   collapsed: boolean
   onToggle: () => void
@@ -101,6 +127,9 @@ export function Sidebar({
   onNotifications: () => void
   onImport: () => void
   notificationCount: number
+  activeSurface: 'home' | 'editor'
+  onHome: () => void
+  onPageOpen: () => void
 }) {
   const { pages, addPage, setActivePage } = useWorkspace()
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
@@ -142,7 +171,7 @@ export function Sidebar({
           <span>搜索</span>
           <kbd>Ctrl K</kbd>
         </button>
-        <button>
+        <button className={activeSurface === 'home' ? 'is-active' : ''} onClick={onHome}>
           <Home size={16} />
           <span>主页</span>
         </button>
@@ -166,7 +195,14 @@ export function Sidebar({
         {favorites.map((page) => {
           const Icon = iconMap[page.icon]
           return (
-            <button className="simple-row" key={page.id} onClick={() => setActivePage(page.id)}>
+            <button
+              className="simple-row"
+              key={page.id}
+              onClick={() => {
+                setActivePage(page.id)
+                onPageOpen()
+              }}
+            >
               <Icon size={15} />
               <span>{page.title}</span>
             </button>
@@ -199,6 +235,7 @@ export function Sidebar({
                   onClick={() => {
                     addPage(null, template.id)
                     setTemplateMenuOpen(false)
+                    onPageOpen()
                   }}
                 >
                   <TemplateIcon size={14} />
@@ -213,7 +250,12 @@ export function Sidebar({
         )}
         <div className="page-tree">
           {topLevel.map((page) => (
-            <PageRow key={page.id} page={page} />
+            <PageRow
+              key={page.id}
+              page={page}
+              isEditorSurface={activeSurface === 'editor'}
+              onPageOpen={onPageOpen}
+            />
           ))}
         </div>
       </div>

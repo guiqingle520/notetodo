@@ -21,6 +21,8 @@ test('edits and restores a page through the sandboxed Electron application', asy
   try {
     const window = await application.firstWindow()
     await expect(window.locator('.sidebar')).toBeVisible()
+    await expect(window.getByRole('heading', { name: '早上好，Ming' })).toBeVisible()
+    await window.locator('.page-row').first().click()
     await expect(window.getByLabel('页面标题')).toHaveValue(/\S+/u)
 
     const security = await window.evaluate(async () => ({
@@ -44,6 +46,7 @@ test('edits and restores a page through the sandboxed Electron application', asy
     await window.waitForTimeout(700)
     await window.reload()
 
+    await window.locator('.page-row').filter({ hasText: 'Playwright 恢复旅程' }).click()
     await expect(window.getByLabel('页面标题')).toHaveValue('Playwright 恢复旅程')
     await expect(window.locator('.editor-content .ProseMirror')).toContainText('发布门禁持久化内容')
   } finally {
