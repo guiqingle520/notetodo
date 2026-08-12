@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -16,7 +16,7 @@ import { iconMap } from './AppSidebar'
 import { useWorkspace } from './store'
 
 type PageListFilter = 'all' | 'mine' | 'recent'
-type PageGroupId = 'workspace' | 'shared' | 'private'
+type PageGroupId = 'workspace' | 'favorites' | 'nested'
 
 interface WorkspacePageListProps {
   onOpenPage: (pageId: string) => void
@@ -66,7 +66,7 @@ function PageTableGroup({
   const GroupIcon = group.icon
   return (
     <section className="page-list-group">
-      <button className="page-list-group-heading" onClick={onToggle}>
+      <button className="page-list-group-heading" aria-expanded={open} onClick={onToggle}>
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <GroupIcon size={15} />
         <strong>{group.label}</strong>
@@ -95,7 +95,7 @@ function PageTableGroup({
                   <i>我</i>
                   <span>Ming</span>
                 </span>
-                <MoreHorizontal className="page-list-more" size={15} />
+                <ChevronRight className="page-list-more" size={15} />
               </button>
             )
           })}
@@ -110,9 +110,19 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
   const pages = useWorkspace((state) => state.pages)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<PageListFilter>('all')
+  const [pageMenuOpen, setPageMenuOpen] = useState(false)
   const [openGroups, setOpenGroups] = useState<Set<PageGroupId>>(
-    () => new Set(['workspace', 'shared', 'private']),
+    () => new Set(['workspace', 'favorites', 'nested']),
   )
+
+  useEffect(() => {
+    if (!pageMenuOpen) return
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPageMenuOpen(false)
+    }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [pageMenuOpen])
 
   const filteredPages = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -127,13 +137,13 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
   }, [filter, pages, query])
 
   const groups = useMemo<PageGroup[]>(() => {
-    const shared = filteredPages.filter((page) => page.favorite)
+    const favorites = filteredPages.filter((page) => page.favorite)
     const workspace = filteredPages.filter((page) => page.parentId === null && !page.favorite)
-    const privatePages = filteredPages.filter((page) => page.parentId !== null && !page.favorite)
+    const nested = filteredPages.filter((page) => page.parentId !== null && !page.favorite)
     return [
       { id: 'workspace', label: '工作区', icon: Folder, pages: workspace },
-      { id: 'shared', label: '共享', icon: Share2, pages: shared },
-      { id: 'private', label: '私人', icon: Star, pages: privatePages },
+      { id: 'favorites', label: '收藏', icon: Star, pages: favorites },
+      { id: 'nested', label: '子页面', icon: Share2, pages: nested },
     ]
   }, [filteredPages])
 
@@ -154,9 +164,50 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
           <ChevronRight size={13} />
           <span>页面</span>
         </div>
-        <button aria-label="页面操作">
-          <MoreHorizontal size={16} />
-        </button>
+        <div className="page-list-menu-wrap">
+          <button
+            aria-label="页面列表操作"
+            aria-haspopup="menu"
+            aria-expanded={pageMenuOpen}
+            onClick={() => setPageMenuOpen((current) => !current)}
+          >
+            <MoreHorizontal size={16} />
+          </button>
+          {pageMenuOpen && (
+            <div className="page-list-menu" role="menu" aria-label="页面列表操作">
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setPageMenuOpen(false)
+                  onCreatePage()
+                }}
+              >
+                <Plus size={14} />
+                新建页面
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setFilter('all')
+                  setPageMenuOpen(false)
+                }}
+              >
+                <FileStack size={14} />
+                显示全部页面
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setFilter('recent')
+                  setPageMenuOpen(false)
+                }}
+              >
+                <Clock3 size={14} />
+                按最近编辑筛选
+              </button>
+            </div>
+          )}
+        </div>
       </header>
       <div className="page-list-scroll">
         <div className="page-list-canvas">
@@ -188,6 +239,7 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
               {filters.map((item) => (
                 <button
                   className={filter === item.id ? 'is-active' : ''}
+                  aria-pressed={filter === item.id}
                   key={item.id}
                   onClick={() => setFilter(item.id)}
                 >

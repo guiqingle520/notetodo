@@ -1,0 +1,80 @@
+/* Final all-pages interactions: truthful grouping and a compact Notion action menu. */
+.page-list-topbar {
+  overflow: visible;
+}
+
+.page-list-menu-wrap {
+  position: relative;
+}
+
+.page-list-menu-wrap > button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--notion-muted);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.page-list-menu-wrap > button:hover,
+.page-list-menu-wrap > button[aria-expanded='true'] {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
+
+.page-list-menu {
+  position: absolute;
+  z-index: 60;
+  top: 32px;
+  right: 0;
+  width: 200px;
+  padding: 4px;
+  border: 1px solid rgba(15, 15, 15, 0.08);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow:
+    0 8px 24px rgba(15, 15, 15, 0.14),
+    0 2px 5px rgba(15, 15, 15, 0.08);
+}
+
+.page-list-menu > button {
+  width: 100%;
+  min-height: 31px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  color: var(--notion-text);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: 12px/1.3 var(--font-ui);
+  text-align: left;
+}
+
+.page-list-menu > button:hover {
+  background: var(--notion-hover);
+}
+
+.page-list-group-heading[aria-expanded='false'] {
+  border-bottom: 0;
+}
+
+.page-list-filters button[aria-pressed='true'] {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+  font-weight: 550;
+}
+
+.page-list-more {
+  opacity: 0.45;
+  transition: opacity 0.12s ease;
+}
+
+.page-list-row:hover .page-list-more,
+.page-list-row:focus-visible .page-list-more {
+  opacity: 1;
+}

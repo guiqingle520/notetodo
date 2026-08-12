@@ -21,8 +21,8 @@ describe('WorkspacePageList', () => {
 
     expect(screen.getByRole('heading', { name: '所有页面' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /工作区/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /共享/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /私人/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /收藏/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /子页面/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '打开页面：产品路线' })).toBeInTheDocument()
   })
 
@@ -44,5 +44,15 @@ describe('WorkspacePageList', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '新建页面' }))
     expect(onCreatePage).toHaveBeenCalledOnce()
+  })
+
+  it('provides real list actions and pressed filter states', () => {
+    render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: '页面列表操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '按最近编辑筛选' }))
+
+    expect(screen.getByRole('button', { name: '最近编辑' })).toHaveAttribute('aria-pressed', 'true')
   })
 })
