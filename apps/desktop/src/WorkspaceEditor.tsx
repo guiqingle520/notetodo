@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, ChevronRight, Copy, Grid2X2, GripVertical, History as HistoryIcon, Image as ImageIcon, MessageSquare, MoreHorizontal, Paperclip, Star, Trash2, Users, Upload } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronRight, Copy, Grid2X2, GripVertical, Image as ImageIcon, Paperclip, Trash2, Upload } from 'lucide-react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -16,6 +16,7 @@ import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
 import { iconMap } from './AppSidebar'
 import { EditorPageProperties } from './EditorPageProperties'
+import { PageHeaderActions, PageMetaActions } from './EditorPageActions'
 
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
 type EditorMenuState = { from: number; left: number; top: number; query: string; index: number }
@@ -360,25 +361,28 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
         <div className="breadcrumbs">
           {breadcrumbs.map((crumb, index) => <span key={crumb.id}>{index > 0 && <ChevronRight size={13} />}{crumb.title}</span>)}
         </div>
-        <div className="top-actions">
-          <span className={`save-state is-${syncState}`}><i />{syncState === 'loading' ? '正在恢复' : syncState === 'saving' ? '正在保存' : syncState === 'error' ? '同步异常' : '本机 CRDT 已同步'}</span>
-          <div className={`collaboration-presence is-${collaborationState}`} title={collaborationState === 'online' ? '实时协作已连接' : collaborationState === 'offline' ? '离线编辑，恢复后自动同步' : '本机模式'}>
-            <span className="presence-state"><Users size={13} />{collaborationState === 'online' ? '实时' : collaborationState === 'offline' ? '离线' : collaborationState === 'connecting' ? '连接中' : '本机'}</span>
-            <span className="presence-avatars">{collaborators.slice(0, 3).map((person) => <i key={person.clientId} style={{ background: person.color }} title={person.name}>{person.name.slice(0, 1)}</i>)}</span>
-          </div>
-          <button onClick={() => setCommentsOpen(true)} aria-label="页面评论"><MessageSquare size={15} /></button>
-          <button onClick={() => setHistoryOpen(true)} aria-label="页面历史"><HistoryIcon size={15} /></button>
-          <button onClick={() => setShareOpen(true)}>分享</button>
-          <button className={page.favorite ? 'is-starred' : ''} onClick={() => toggleFavorite(page.id)}><Star size={17} fill={page.favorite ? 'currentColor' : 'none'} /></button>
-          <button aria-label="归档当前页面" onClick={() => archivePage(page.id)}><Trash2 size={16} /></button>
-          <button><MoreHorizontal size={18} /></button>
-        </div>
+        <PageHeaderActions
+          syncState={syncState}
+          collaborationState={collaborationState}
+          collaborators={collaborators}
+          favorite={Boolean(page.favorite)}
+          onComments={() => setCommentsOpen(true)}
+          onHistory={() => setHistoryOpen(true)}
+          onShare={() => setShareOpen(true)}
+          onToggleFavorite={() => toggleFavorite(page.id)}
+          onArchive={() => archivePage(page.id)}
+        />
       </header>
 
       <div className="editor-scroll">
         <article className={`document ${isDatabasePage ? 'is-database-page' : ''}`}>
           <div className="document-kicker"><span>NT / {page.id.slice(0, 4).toUpperCase()}</span><span>{new Date(page.updatedAt).toLocaleDateString('zh-CN')}</span></div>
-          {!isDatabasePage && <div className="page-meta-actions"><button>添加图标</button><button>添加封面</button><button>添加说明</button></div>}
+          {!isDatabasePage && (
+            <PageMetaActions
+              icon={page.icon}
+              onIconChange={(icon) => updatePage(page.id, { icon })}
+            />
+          )}
           <input
             className="page-title"
             value={page.title}

@@ -11,7 +11,10 @@ interface WorkspaceActions {
   hydrate: () => Promise<void>
   setActivePage: (id: string) => void
   addPage: (parentId?: string | null, templateId?: PageTemplate['id']) => void
-  updatePage: (id: string, patch: Partial<Pick<WorkspacePage, 'title' | 'content' | 'favorite'>>) => void
+  updatePage: (
+    id: string,
+    patch: Partial<Pick<WorkspacePage, 'title' | 'content' | 'favorite' | 'icon'>>,
+  ) => void
   toggleFavorite: (id: string) => void
   archivePage: (id: string) => void
   restorePage: (id: string) => void
@@ -19,7 +22,9 @@ interface WorkspaceActions {
 }
 
 // The scheduler is outside React state: pending writes do not trigger renders.
-const saveScheduler = new SaveScheduler<WorkspacePage>((page) => workspaceRepository.upsertPage(page))
+const saveScheduler = new SaveScheduler<WorkspacePage>((page) =>
+  workspaceRepository.upsertPage(page),
+)
 
 export const useWorkspace = create<WorkspaceSnapshot & WorkspaceActions>((set, get) => ({
   ...(structuredClone(seedWorkspace) as WorkspaceSnapshot),
@@ -35,13 +40,18 @@ export const useWorkspace = create<WorkspaceSnapshot & WorkspaceActions>((set, g
     const now = new Date().toISOString()
     set({
       activePageId,
-      pages: get().pages.map((page) => page.id === activePageId ? { ...page, lastVisitedAt: now } : page),
+      pages: get().pages.map((page) =>
+        page.id === activePageId ? { ...page, lastVisitedAt: now } : page,
+      ),
     })
     void workspaceRepository.setActivePage(activePageId)
   },
 
   addPage: (parentId = null, templateId = 'blank') => {
-    const page = templateId === 'blank' ? createUntitledPage(parentId) : createPageFromTemplate(parentId, templateId)
+    const page =
+      templateId === 'blank'
+        ? createUntitledPage(parentId)
+        : createPageFromTemplate(parentId, templateId)
     set({ pages: [...get().pages, page], activePageId: page.id })
     void workspaceRepository.upsertPage(page)
     void workspaceRepository.setActivePage(page.id)
@@ -63,7 +73,9 @@ export const useWorkspace = create<WorkspaceSnapshot & WorkspaceActions>((set, g
 
   archivePage: (id) => {
     const now = new Date().toISOString()
-    const pages = get().pages.map((page) => page.id === id ? { ...page, archivedAt: now, updatedAt: now } : page)
+    const pages = get().pages.map((page) =>
+      page.id === id ? { ...page, archivedAt: now, updatedAt: now } : page,
+    )
     const nextPage = pages.find((page) => !page.archivedAt)
     set({ pages, activePageId: nextPage?.id ?? '' })
     void workspaceRepository.archivePage(id)
@@ -73,7 +85,9 @@ export const useWorkspace = create<WorkspaceSnapshot & WorkspaceActions>((set, g
   restorePage: (id) => {
     const now = new Date().toISOString()
     set({
-      pages: get().pages.map((page) => page.id === id ? { ...page, archivedAt: null, updatedAt: now } : page),
+      pages: get().pages.map((page) =>
+        page.id === id ? { ...page, archivedAt: null, updatedAt: now } : page,
+      ),
     })
     void workspaceRepository.restorePage(id)
   },

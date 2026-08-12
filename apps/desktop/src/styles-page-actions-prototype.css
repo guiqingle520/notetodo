@@ -1,0 +1,117 @@
+/* Final page chrome: truthful actions, compact menus and Notion interaction density. */
+.top-actions {
+  position: relative;
+}
+
+.top-actions > button,
+.page-more-wrap > button {
+  color: var(--notion-muted);
+}
+
+.top-actions > button:hover,
+.page-more-wrap > button:hover,
+.page-more-wrap > button[aria-expanded='true'] {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
+
+.top-actions > button.is-starred {
+  color: #d6a43a;
+}
+
+.page-more-wrap,
+.page-icon-wrap {
+  position: relative;
+}
+
+.page-more-menu,
+.page-icon-menu {
+  position: absolute;
+  z-index: 60;
+  padding: 4px;
+  border: 1px solid rgba(15, 15, 15, 0.08);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow:
+    0 8px 24px rgba(15, 15, 15, 0.14),
+    0 2px 5px rgba(15, 15, 15, 0.08);
+}
+
+.page-more-menu {
+  top: 32px;
+  right: 0;
+  width: 190px;
+}
+
+.page-more-menu > button {
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  color: var(--notion-text);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: 12px/1.3 var(--font-ui);
+  text-align: left;
+}
+
+.page-more-menu > button:hover {
+  background: var(--notion-hover);
+}
+
+.page-more-menu > button.is-danger {
+  color: #eb5757;
+}
+
+.page-meta-actions {
+  align-items: center;
+}
+
+.page-meta-actions > button:disabled {
+  color: var(--notion-faint);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.page-meta-actions > button:disabled:hover {
+  color: var(--notion-faint);
+  background: transparent;
+}
+
+.page-icon-menu {
+  top: 28px;
+  left: 0;
+  width: 174px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+}
+
+.page-icon-menu > button {
+  min-width: 0;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--notion-muted);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.page-icon-menu > button span {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip: rect(0 0 0 0);
+}
+
+.page-icon-menu > button:hover,
+.page-icon-menu > button.is-selected {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
