@@ -201,7 +201,7 @@ export function AIPanel({
   }
 
   return (
-    <aside className="ai-panel">
+    <aside className="ai-panel" aria-label="工作副驾驶">
       <div className="ai-panel-head">
         <div>
           <span className="ai-orbit">
@@ -209,7 +209,7 @@ export function AIPanel({
           </span>
           <strong>工作副驾驶</strong>
         </div>
-        <button className="icon-button" onClick={onClose}>
+        <button className="icon-button" onClick={onClose} aria-label="收起工作副驾驶">
           <PanelRightClose size={17} />
         </button>
       </div>
@@ -360,6 +360,7 @@ export function AIPanel({
         }}
       >
         <textarea
+          aria-label="向工作副驾驶提问"
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           placeholder="询问、改写，或交给 AI 执行…"
@@ -379,7 +380,7 @@ export function AIPanel({
               <X size={14} />
             </button>
           ) : (
-            <button className="send-button" disabled={!prompt.trim()}>
+            <button className="send-button" disabled={!prompt.trim()} aria-label="发送消息">
               <ChevronRight size={17} />
             </button>
           )}
