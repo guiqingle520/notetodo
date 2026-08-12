@@ -23,6 +23,8 @@ describe('editor interaction surfaces', () => {
 
     expect(screen.getByRole('dialog', { name: '页面讨论' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '评论内容' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('还没有讨论')
+    expect(screen.getByRole('button', { name: '发布评论' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: '关闭页面讨论' }))
     expect(onClose).toHaveBeenCalledOnce()
   })

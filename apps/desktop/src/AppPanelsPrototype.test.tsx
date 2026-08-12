@@ -21,7 +21,7 @@ describe('prototype modal surfaces', () => {
     render(<ArchivePanel onClose={onClose} />)
 
     expect(screen.getByRole('dialog', { name: '归档与回收站' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭归档与回收站' }))
     expect(onClose).toHaveBeenCalledOnce()
   })
 
@@ -34,5 +34,8 @@ describe('prototype modal surfaces', () => {
     render(<SharePanel pageId="welcome" onClose={vi.fn()} />)
     expect(screen.getByRole('dialog', { name: '共享此页面' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '关闭共享' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '受邀成员' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '访问权限' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '邀请' })).toBeDisabled()
   })
 })

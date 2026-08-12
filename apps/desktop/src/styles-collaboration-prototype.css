@@ -1,0 +1,174 @@
+/* Final collaboration surfaces: one restrained Notion visual contract. */
+.share-panel,
+.notification-panel,
+.archive-panel {
+  width: min(500px, calc(100vw - 48px));
+}
+
+.share-invite {
+  padding: 14px 16px 12px;
+}
+
+.share-invite input,
+.share-invite select {
+  height: 34px;
+  border-radius: 4px;
+}
+
+.share-invite > button {
+  min-width: 60px;
+  border-radius: 4px;
+}
+
+.share-invite > button:disabled {
+  color: rgba(55, 53, 47, 0.38);
+  border-color: transparent;
+  background: rgba(55, 53, 47, 0.08);
+}
+
+.permission-list {
+  padding-bottom: 12px;
+}
+
+.permission-list > div {
+  min-height: 50px;
+  padding-block: 7px;
+}
+
+.permission-list > div:first-of-type {
+  border-top: 0;
+}
+
+.permission-list i,
+.notification-list > button > i {
+  border-radius: 4px;
+}
+
+.permission-list > div > button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: var(--notion-muted);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.permission-list > div > button:hover {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
+
+.notification-list {
+  min-height: 230px;
+  padding: 6px;
+}
+
+.notification-list > button {
+  min-height: 62px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 5px;
+}
+
+.notification-list > button + button {
+  margin-top: 2px;
+}
+
+.notification-list > button.is-read {
+  opacity: 0.66;
+}
+
+.notification-list > button em {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 999px;
+}
+
+.archive-list {
+  min-height: 230px;
+  padding: 8px;
+}
+
+.archive-list > div:not(.empty-state) {
+  min-height: 52px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 5px;
+}
+
+.archive-list > div:not(.empty-state):hover {
+  background: var(--notion-hover);
+}
+
+.archive-list > div > button {
+  height: 28px;
+  padding: 0 8px;
+  color: var(--notion-muted);
+  border: 1px solid var(--notion-border);
+  border-radius: 4px;
+  background: #fff;
+  font: 11px var(--font-ui);
+}
+
+.archive-list > div > button:hover {
+  color: var(--notion-text);
+  border-color: var(--notion-border);
+  background: var(--notion-hover);
+}
+
+.comments-panel {
+  width: 360px;
+}
+
+.comment-composer {
+  padding: 12px 14px;
+}
+
+.comment-composer textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+.comment-composer > button {
+  min-width: 72px;
+  float: right;
+}
+
+.comment-composer::after {
+  display: block;
+  clear: both;
+  content: '';
+}
+
+.comment-list {
+  padding: 7px 8px 16px;
+}
+
+.comment-list article {
+  border-radius: 6px;
+}
+
+.comment-list article button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.comment-list article button:hover {
+  background: var(--notion-hover);
+}
+
+.comment-empty {
+  min-height: 210px;
+}
+
+@media (max-width: 820px) {
+  .comments-panel {
+    width: min(360px, calc(100vw - 48px));
+  }
+}
