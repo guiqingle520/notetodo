@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import seedWorkspace from '../shared/seed-workspace.json'
 import type { WorkspaceSnapshot } from './domain'
-import { ArchivePanel, NotificationPanel, SharePanel } from './AppPanels'
+import { ArchivePanel, ImportPanel, NotificationPanel, SharePanel } from './AppPanels'
 import { useWorkspace } from './store'
 
 beforeEach(() => {
@@ -37,5 +37,17 @@ describe('prototype modal surfaces', () => {
     expect(screen.getByRole('textbox', { name: '受邀成员' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: '访问权限' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '邀请' })).toBeDisabled()
+  })
+
+  it('presents workspace import as a local preflight dialog', () => {
+    const onClose = vi.fn()
+    render(<ImportPanel onClose={onClose} onImported={vi.fn()} />)
+
+    expect(screen.getByRole('dialog', { name: '导入工作区' })).toBeInTheDocument()
+    expect(screen.getByText('Notion 导出包 · 本地安全预检')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '选择 Notion 导出包' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭导入工作区' }))
+    expect(onClose).toHaveBeenCalledOnce()
   })
 })

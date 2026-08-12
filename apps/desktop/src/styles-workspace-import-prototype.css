@@ -1,0 +1,218 @@
+/* Final workspace-import layer: compact, local-first and visually consistent with Notion. */
+.import-backdrop {
+  padding-top: min(8vh, 72px);
+}
+
+.import-panel {
+  width: min(680px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 88px));
+  border-radius: 8px;
+  background: #fff;
+}
+
+.import-panel > header {
+  position: sticky;
+  top: 0;
+  height: 54px;
+  padding: 0 10px 0 16px;
+  border-radius: 8px 8px 0 0;
+  background: #fff;
+}
+
+.import-panel > header > div > svg {
+  color: var(--notion-muted);
+}
+
+.import-panel > header strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.import-panel > header small {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.import-landing {
+  min-height: 440px;
+  padding: 52px 72px 40px;
+  background: #fff;
+}
+
+.import-seal {
+  width: 58px;
+  height: 58px;
+  color: var(--notion-text);
+  border-radius: 6px;
+  background: var(--notion-sidebar);
+}
+
+.import-seal span {
+  bottom: 5px;
+  color: var(--notion-muted);
+  font-size: 8px;
+}
+
+.import-kicker {
+  margin: 24px 0 7px;
+  color: var(--notion-muted);
+  font-size: 11px;
+}
+
+.import-landing h2 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.import-landing > p:not(.import-kicker) {
+  margin: 12px 0 22px;
+  color: var(--notion-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.import-primary,
+.import-secondary,
+.import-error button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 4px;
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.import-footnote {
+  margin-top: 18px;
+  color: var(--notion-faint);
+  font-size: 10px;
+}
+
+.import-ledger {
+  margin-top: 26px;
+  border-color: var(--notion-divider);
+}
+
+.import-ledger > header {
+  height: 34px;
+  color: var(--notion-muted);
+  font-size: 10px;
+}
+
+.import-ledger > div {
+  height: 42px;
+  border-color: var(--notion-divider);
+}
+
+.import-ledger > div strong {
+  color: var(--notion-text);
+  font-size: 11px;
+}
+
+.import-ledger > div small,
+.import-ledger em {
+  color: var(--notion-faint);
+  font-size: 9px;
+}
+
+.import-report {
+  padding: 24px;
+}
+
+.import-report-title h2 {
+  font-size: 22px;
+}
+
+.import-report-title > span {
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.import-metrics {
+  margin: 20px 0 18px;
+  border-color: var(--notion-divider);
+}
+
+.import-metrics > div {
+  min-height: 68px;
+  padding: 12px;
+  border-color: var(--notion-divider);
+}
+
+.import-metrics strong {
+  font-size: 18px;
+}
+
+.import-metrics span:not(.layers-icon) {
+  color: var(--notion-muted);
+  font-size: 10px;
+}
+
+.import-file-sample,
+.import-report > footer {
+  border-color: var(--notion-divider);
+}
+
+.import-file-sample > div {
+  border-color: var(--notion-divider);
+}
+
+.import-running,
+.import-complete {
+  min-height: 440px;
+  padding: 48px 72px;
+}
+
+.import-orbit {
+  width: 64px;
+  height: 64px;
+  color: var(--notion-text);
+  background: var(--notion-sidebar);
+}
+
+.import-running p,
+.import-complete p {
+  margin: 24px 0 7px;
+  color: var(--notion-muted);
+  font-size: 11px;
+  text-transform: none;
+}
+
+.import-running h2,
+.import-complete h2 {
+  font-size: 23px;
+  font-weight: 600;
+}
+
+.import-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(55, 53, 47, 0.1);
+}
+
+.import-progress span {
+  border-radius: inherit;
+}
+
+.import-complete > div {
+  border-color: var(--notion-divider);
+  background: var(--notion-divider);
+}
+
+.import-complete > div span {
+  color: var(--notion-muted);
+  background: #fff;
+  font-size: 10px;
+}
+
+.import-complete > div strong {
+  color: var(--notion-text);
+  font-size: 19px;
+}
+
+@media (max-width: 760px) {
+  .import-landing,
+  .import-running,
+  .import-complete {
+    padding-inline: 28px;
+  }
+}
