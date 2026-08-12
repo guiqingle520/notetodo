@@ -1,0 +1,79 @@
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { FileText } from 'lucide-react'
+import {
+  AttachmentProgress,
+  BlockToolbar,
+  PageMentionMenu,
+  SlashCommandMenu,
+  type EditorMenuState,
+} from './EditorFloatingSurfaces'
+import type { WorkspacePage } from './domain'
+
+afterEach(cleanup)
+
+const menuState: EditorMenuState = { from: 1, left: 10, top: 20, query: '', index: 0 }
+
+describe('EditorFloatingSurfaces', () => {
+  it('renders progress and dispatches available block actions', () => {
+    const onAction = vi.fn()
+    render(
+      <>
+        <AttachmentProgress
+          state={{ phase: 'working', percent: 42, name: 'brief.pdf', message: '正在写入' }}
+        />
+        <BlockToolbar top={12} index={0} childCount={2} onAction={onAction} />
+      </>,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('正在写入brief.pdf42%')
+    expect(screen.getByRole('button', { name: '上移内容块' })).toBeDisabled()
+    fireEvent.mouseDown(screen.getByRole('button', { name: '复制内容块' }))
+    expect(onAction).toHaveBeenCalledWith('duplicate')
+  })
+
+  it('renders slash commands and preserves pointer selection', () => {
+    const onSelect = vi.fn()
+    const command = {
+      label: '文本',
+      hint: '插入普通文本',
+      keywords: 'text',
+      icon: FileText,
+      run: vi.fn(),
+    }
+    render(<SlashCommandMenu state={menuState} commands={[command]} onSelect={onSelect} />)
+
+    fireEvent.mouseDown(screen.getByRole('menuitem', { name: /文本/u }))
+    expect(onSelect).toHaveBeenCalledWith(command)
+  })
+
+  it('shows page breadcrumbs in the mention menu', () => {
+    const pages: WorkspacePage[] = [
+      {
+        id: 'root',
+        title: '知识库',
+        icon: 'book',
+        parentId: null,
+        updatedAt: '2026-08-12T00:00:00.000Z',
+        lastVisitedAt: '2026-08-12T00:00:00.000Z',
+        archivedAt: null,
+        content: '',
+      },
+      {
+        id: 'child',
+        title: '规范',
+        icon: 'note',
+        parentId: 'root',
+        updatedAt: '2026-08-12T00:00:00.000Z',
+        lastVisitedAt: '2026-08-12T00:00:00.000Z',
+        archivedAt: null,
+        content: '',
+      },
+    ]
+    render(
+      <PageMentionMenu state={menuState} pages={[pages[1]!]} allPages={pages} onSelect={vi.fn()} />,
+    )
+
+    expect(screen.getByText('知识库 / 规范')).toBeInTheDocument()
+  })
+})

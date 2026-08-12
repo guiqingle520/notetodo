@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, ChevronRight, Copy, Grid2X2, GripVertical, Image as ImageIcon, Paperclip, Trash2, Upload } from 'lucide-react'
+import { ChevronRight, Grid2X2, Image as ImageIcon, Paperclip } from 'lucide-react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -14,12 +14,11 @@ import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/re
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
 import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
-import { iconMap } from './AppSidebar'
 import { EditorPageProperties } from './EditorPageProperties'
 import { PageHeaderActions, PageMetaActions } from './EditorPageActions'
+import { AttachmentProgress, BlockToolbar, EditorDropGuide, PageMentionMenu, SlashCommandMenu, type AttachmentProgressState, type EditorMenuState } from './EditorFloatingSurfaces'
 
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
-type EditorMenuState = { from: number; left: number; top: number; query: string; index: number }
 
 export function WorkspaceEditor(props: { onEditorReady: (editor: Editor | null) => void; onSelectionChange: (selection: SelectionContext | null) => void }) {
   const { pages, activePageId } = useWorkspace()
@@ -47,7 +46,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [pageRole, setPageRole] = useState<'viewer' | 'commenter' | 'editor' | 'owner'>('owner')
-  const [uploadState, setUploadState] = useState<null | { phase: 'working' | 'complete' | 'error'; percent: number; name: string; message: string }>(null)
+  const [uploadState, setUploadState] = useState<AttachmentProgressState | null>(null)
   const [dropActive, setDropActive] = useState(false)
   const [blockToolbar, setBlockToolbar] = useState<null | { index: number; top: number }>(null)
   const uploadBusyRef = useRef(false)
@@ -398,72 +397,20 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
             onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false) }}
           >
             <EditorContent editor={editor} className="editor-content" />
-            {dropActive && <div className="editor-drop-guide" aria-hidden="true"><Upload size={18} /><strong>放入工作页</strong><span>图片显示为画面，其他内容成为文件卡片</span></div>}
+            {dropActive && <EditorDropGuide />}
           </div>}
           {!isDatabasePage && blockToolbar && editor?.isEditable && (
-            <div className="block-toolbar" style={{ top: blockToolbar.top }} role="toolbar" aria-label="内容块工具栏">
-              <span title="内容块"><GripVertical size={14} /></span>
-              <button onMouseDown={(event) => { event.preventDefault(); runBlockAction('move-up') }} disabled={blockToolbar.index === 0} aria-label="上移内容块"><ArrowUp size={13} /></button>
-              <button onMouseDown={(event) => { event.preventDefault(); runBlockAction('move-down') }} disabled={blockToolbar.index >= editor.state.doc.childCount - 1} aria-label="下移内容块"><ArrowDown size={13} /></button>
-              <button onMouseDown={(event) => { event.preventDefault(); runBlockAction('duplicate') }} aria-label="复制内容块"><Copy size={13} /></button>
-              <button className="is-danger" onMouseDown={(event) => { event.preventDefault(); runBlockAction('delete') }} aria-label="删除内容块"><Trash2 size={13} /></button>
-            </div>
+            <BlockToolbar top={blockToolbar.top} index={blockToolbar.index} childCount={editor.state.doc.childCount} onAction={runBlockAction} />
           )}
           {uploadState && (
-            <div className={`asset-progress is-${uploadState.phase}`} role="status" aria-live="polite">
-              <span className="asset-progress-mark">{uploadState.phase === 'complete' ? '✓' : uploadState.phase === 'error' ? '!' : <Upload size={13} />}</span>
-              <span className="asset-progress-copy">
-                <strong>{uploadState.message}</strong>
-                {uploadState.name && <small>{uploadState.name}</small>}
-              </span>
-              {uploadState.phase === 'working' && <em>{uploadState.percent}%</em>}
-              <i style={{ width: `${uploadState.percent}%` }} />
-            </div>
+            <AttachmentProgress state={uploadState} />
           )}
           <PageDatabaseMount pageId={page.id} pageTitle={page.title} canEdit={Boolean(editor?.isEditable)} fullPage={isDatabasePage} />
           {!isDatabasePage && slashMenu && (
-            <div className="slash-menu" style={{ left: slashMenu.left, top: slashMenu.top }} role="menu" aria-label="插入内容块">
-              <header><span>插入内容块</span><kbd>/</kbd></header>
-              <div>
-                {filteredSlashCommands.map((command, index) => {
-                  const Icon = command.icon
-                  return (
-                    <button
-                      className={index === slashMenu.index ? 'is-selected' : ''}
-                      key={command.label}
-                      onMouseDown={(event) => { event.preventDefault(); runSlashCommand(command) }} role="menuitem"
-                    >
-                      <span><Icon size={16} /></span>
-                      <span><strong>{command.label}</strong><small>{command.hint}</small></span>
-                    </button>
-                  )
-                })}
-                {!filteredSlashCommands.length && <div className="slash-empty">没有匹配的内容块</div>}
-              </div>
-              <footer><span><kbd>↑↓</kbd> 选择</span><span><kbd>Enter</kbd> 插入</span></footer>
-            </div>
+            <SlashCommandMenu state={slashMenu} commands={filteredSlashCommands} onSelect={runSlashCommand} />
           )}
           {!isDatabasePage && pageMentionMenu && (
-            <div className="page-mention-menu" style={{ left: pageMentionMenu.left, top: pageMentionMenu.top }} role="menu" aria-label="链接到页面">
-              <header><span>链接到页面</span><kbd>@</kbd></header>
-              <div>
-                {mentionedPages.map((mentionedPage, index) => {
-                  const MentionIcon = iconMap[mentionedPage.icon]
-                  return (
-                    <button
-                      className={index === pageMentionMenu.index ? 'is-selected' : ''}
-                      key={mentionedPage.id}
-                      onMouseDown={(event) => { event.preventDefault(); insertPageMention(mentionedPage) }} role="menuitem"
-                    >
-                      <span><MentionIcon size={15} /></span>
-                      <span><strong>{mentionedPage.title}</strong><small>{pageBreadcrumbs(pages, mentionedPage.id).map((crumb) => crumb.title).join(' / ')}</small></span>
-                    </button>
-                  )
-                })}
-                {!mentionedPages.length && <div className="slash-empty">没有匹配的页面</div>}
-              </div>
-              <footer><span><kbd>↑↓</kbd> 选择</span><span><kbd>Enter</kbd> 链接</span></footer>
-            </div>
+            <PageMentionMenu state={pageMentionMenu} pages={mentionedPages} allPages={pages} onSelect={insertPageMention} />
           )}
           {!isDatabasePage && <div className="document-end"><span />END OF PAGE<span /></div>}
         </article>
