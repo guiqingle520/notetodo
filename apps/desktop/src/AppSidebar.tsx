@@ -1,6 +1,7 @@
 import { useState, type ComponentType } from 'react'
 import {
   Archive,
+  Bell,
   BookOpen,
   Bot,
   CheckSquare2,
@@ -12,7 +13,6 @@ import {
   Files,
   Grid2X2,
   Home,
-  Inbox,
   LayoutTemplate,
   MoreHorizontal,
   Plus,
@@ -145,11 +145,11 @@ export function Sidebar({
         <button className="icon-button brand-mark" onClick={onToggle} aria-label="展开侧栏">
           N
         </button>
-        <button className="icon-button" onClick={onSearch}>
+        <button className="icon-button" onClick={onSearch} aria-label="搜索">
           <Search size={17} />
         </button>
-        <button className="icon-button" onClick={onNotifications}>
-          <Inbox size={17} />
+        <button className="icon-button" onClick={onNotifications} aria-label="更新">
+          <Bell size={17} />
         </button>
       </aside>
     )
@@ -163,7 +163,7 @@ export function Sidebar({
           <strong>NoteTodo</strong>
           <span>个人工作区</span>
         </div>
-        <button className="icon-button" onClick={onToggle}>
+        <button className="icon-button" onClick={onToggle} aria-label="收起侧栏">
           <ChevronsLeft size={16} />
         </button>
       </div>
@@ -174,100 +174,129 @@ export function Sidebar({
           <span>搜索</span>
           <kbd>Ctrl K</kbd>
         </button>
-        <button className={activeSurface === 'home' ? 'is-active' : ''} onClick={onHome}>
-          <Home size={16} />
-          <span>主页</span>
-        </button>
-        <button className={activeSurface === 'pages' ? 'is-active' : ''} onClick={onAllPages}>
-          <Files size={16} />
-          <span>所有页面</span>
-        </button>
         <button onClick={onNotifications}>
-          <Inbox size={16} />
-          <span>收件箱</span>
+          <Bell size={16} />
+          <span>更新</span>
           {notificationCount > 0 && <em>{notificationCount}</em>}
         </button>
-        <button>
-          <Bot size={16} />
-          <span>AI 工作台</span>
-          <i>Beta</i>
+        <button onClick={onSettings}>
+          <Settings size={16} />
+          <span>设置</span>
         </button>
       </nav>
 
-      <div className="sidebar-section">
-        <div className="section-label">
-          <span>收藏</span>
-          <MoreHorizontal size={14} />
-        </div>
-        {favorites.map((page) => {
-          const Icon = iconMap[page.icon]
-          return (
+      <div className="sidebar-scroll-area">
+        <div className="sidebar-section page-section">
+          <div className="section-label">
+            <span>私有</span>
             <button
-              className="simple-row"
-              key={page.id}
-              onClick={() => {
-                setActivePage(page.id)
-                onPageOpen()
-              }}
+              aria-label="从模板新建页面"
+              onClick={() => setTemplateMenuOpen((value) => !value)}
             >
-              <Icon size={15} />
-              <span>{page.title}</span>
+              <Plus size={14} />
             </button>
-          )
-        })}
-      </div>
-
-      <div className="sidebar-section page-section">
-        <div className="section-label">
-          <span>私有</span>
-          <button
-            aria-label="从模板新建页面"
-            onClick={() => setTemplateMenuOpen((value) => !value)}
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-        {templateMenuOpen && (
-          <div className="template-quick-menu">
-            <header>
-              <LayoutTemplate size={13} />
-              <span>选择起点</span>
-              <small>LOCAL TEMPLATES</small>
-            </header>
-            {pageTemplates.map((template) => {
-              const TemplateIcon = iconMap[template.icon]
-              return (
-                <button
-                  key={template.id}
-                  onClick={() => {
-                    addPage(null, template.id)
-                    setTemplateMenuOpen(false)
-                    onPageOpen()
-                  }}
-                >
-                  <TemplateIcon size={14} />
-                  <span>
-                    <strong>{template.name}</strong>
-                    <small>{template.description}</small>
-                  </span>
-                </button>
-              )
-            })}
           </div>
-        )}
-        <div className="page-tree">
-          {topLevel.map((page) => (
-            <PageRow
-              key={page.id}
-              page={page}
-              isEditorSurface={activeSurface === 'editor'}
-              onPageOpen={onPageOpen}
-            />
-          ))}
+          {templateMenuOpen && (
+            <div className="template-quick-menu">
+              <header>
+                <LayoutTemplate size={13} />
+                <span>选择起点</span>
+                <small>LOCAL TEMPLATES</small>
+              </header>
+              {pageTemplates.map((template) => {
+                const TemplateIcon = iconMap[template.icon]
+                return (
+                  <button
+                    key={template.id}
+                    onClick={() => {
+                      addPage(null, template.id)
+                      setTemplateMenuOpen(false)
+                      onPageOpen()
+                    }}
+                  >
+                    <TemplateIcon size={14} />
+                    <span>
+                      <strong>{template.name}</strong>
+                      <small>{template.description}</small>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          <div className="page-tree">
+            {topLevel.map((page) => (
+              <PageRow
+                key={page.id}
+                page={page}
+                isEditorSurface={activeSurface === 'editor'}
+                onPageOpen={onPageOpen}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="sidebar-section">
+          <div className="section-label">
+            <span>共享</span>
+            <MoreHorizontal size={14} />
+          </div>
+          <p className="sidebar-section-empty">共享给你的页面会显示在这里</p>
+        </div>
+
+        <div className="sidebar-section">
+          <div className="section-label">
+            <span>工作区</span>
+            <MoreHorizontal size={14} />
+          </div>
+          <button
+            className={`simple-row ${activeSurface === 'home' ? 'is-active' : ''}`}
+            onClick={onHome}
+          >
+            <Home size={15} />
+            <span>主页</span>
+          </button>
+          <button
+            className={`simple-row ${activeSurface === 'pages' ? 'is-active' : ''}`}
+            onClick={onAllPages}
+          >
+            <Files size={15} />
+            <span>所有页面</span>
+          </button>
+          <button className="simple-row">
+            <Bot size={15} />
+            <span>AI 工作台</span>
+            <i>Beta</i>
+          </button>
+          {favorites.map((page) => {
+            const Icon = iconMap[page.icon]
+            return (
+              <button
+                className="simple-row"
+                key={page.id}
+                onClick={() => {
+                  setActivePage(page.id)
+                  onPageOpen()
+                }}
+              >
+                <Icon size={15} />
+                <span>{page.title}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
       <nav className="secondary-nav">
+        <button
+          onClick={() => {
+            addPage(null)
+            onPageOpen()
+          }}
+        >
+          <Plus size={16} />
+          <span>新建页面</span>
+        </button>
         <button onClick={onImport}>
           <Upload size={16} />
           <span>导入工作区</span>
@@ -275,10 +304,6 @@ export function Sidebar({
         <button onClick={onArchive}>
           <Archive size={16} />
           <span>归档与回收站</span>
-        </button>
-        <button onClick={onSettings}>
-          <Settings size={16} />
-          <span>设置</span>
         </button>
         <button>
           <CircleHelp size={16} />

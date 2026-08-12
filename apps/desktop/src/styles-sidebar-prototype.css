@@ -1,0 +1,146 @@
+/* Stitch prototype sidebar: quiet hierarchy, compact navigation and a stable footer. */
+.sidebar {
+  width: 244px;
+  flex-basis: 244px;
+  background: #f7f7f5;
+}
+
+.workspace-switcher {
+  height: 50px;
+  padding: 0 10px;
+  gap: 8px;
+}
+
+.workspace-switcher:hover {
+  background: rgba(55, 53, 47, 0.055);
+}
+
+.workspace-name strong {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.workspace-name span {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.primary-nav {
+  padding: 3px 8px 8px;
+}
+
+.primary-nav button,
+.secondary-nav button,
+.simple-row,
+.page-row {
+  min-height: 28px;
+  height: 28px;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.primary-nav button,
+.secondary-nav button,
+.simple-row {
+  padding-inline: 7px;
+}
+
+.primary-nav button > svg,
+.secondary-nav button > svg,
+.simple-row > svg,
+.page-row > svg {
+  flex: 0 0 auto;
+  color: #787774;
+  stroke-width: 1.8;
+}
+
+.primary-nav button.is-active,
+.simple-row.is-active,
+.page-row.is-active {
+  background: rgba(55, 53, 47, 0.08);
+  color: #37352f;
+  font-weight: 500;
+}
+
+.sidebar-scroll-area {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(55, 53, 47, 0.2) transparent;
+}
+
+.sidebar-scroll-area .page-section {
+  min-height: auto;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.sidebar-section {
+  padding: 8px 8px 2px;
+}
+
+.section-label {
+  height: 26px;
+  padding: 0 7px;
+  color: #91918e;
+  font-size: 12px;
+}
+
+.section-label > svg,
+.section-label > button {
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+
+.sidebar-section:hover .section-label > svg,
+.sidebar-section:hover .section-label > button,
+.section-label > button:focus-visible {
+  opacity: 1;
+}
+
+.sidebar-section-empty {
+  margin: 1px 7px 3px;
+  color: #a4a4a1;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.page-row {
+  gap: 6px;
+  padding-right: 6px;
+}
+
+.row-disclosure {
+  color: #9b9a97;
+}
+
+.simple-row i {
+  color: #9b9a97;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.secondary-nav {
+  padding: 6px 8px 8px;
+  border-top-color: rgba(55, 53, 47, 0.07);
+  background: #f7f7f5;
+}
+
+.secondary-nav button:first-child {
+  color: #37352f;
+  font-weight: 500;
+}
+
+.sidebar-collapsed {
+  width: 52px;
+  flex-basis: 52px;
+  padding-top: 10px;
+}
+
+@media (max-width: 1180px) {
+  .sidebar {
+    width: 228px;
+    flex-basis: 228px;
+  }
+}
