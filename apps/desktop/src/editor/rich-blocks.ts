@@ -204,7 +204,7 @@ export const ColumnLayoutBlock = Node.create({
       const controls = document.createElement('div')
       controls.className = 'column-layout-controls'
       controls.contentEditable = 'false'
-      controls.setAttribute('aria-label', '分栏宽度')
+      controls.setAttribute('role', 'toolbar'); controls.setAttribute('aria-label', '分栏宽度')
       const contentDOM = document.createElement('div')
       contentDOM.className = 'column-layout-content'
       dom.append(controls, contentDOM)
@@ -319,13 +319,13 @@ export const FileBlock = Node.create({
       href: src,
       target: '_blank',
       rel: 'noreferrer',
-    }), ['span', { class: 'file-monogram' }, 'FILE'], ['span', { class: 'file-copy' }, ['strong', {}, name], ['small', {}, formatFileMeta(mimeType, size)]]]
+    }), ['span', { class: 'file-monogram' }, '文件'], ['span', { class: 'file-copy' }, ['strong', {}, name], ['small', {}, formatFileMeta(mimeType, size)]]]
   },
   addNodeView() {
     return ({ node }) => {
       const dom = document.createElement('article')
       dom.className = 'rich-file'
-      const monogram = document.createElement('span'); monogram.className = 'file-monogram'; monogram.textContent = 'FILE'
+      const monogram = document.createElement('span'); monogram.className = 'file-monogram'; monogram.textContent = '文件'
       const copy = document.createElement('span'); copy.className = 'file-copy'
       const title = document.createElement('strong')
       const meta = document.createElement('small')
