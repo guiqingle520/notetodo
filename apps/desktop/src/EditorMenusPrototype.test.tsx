@@ -36,7 +36,9 @@ describe('editor interaction surfaces', () => {
     )
 
     expect(screen.getByRole('dialog', { name: '页面历史' })).toBeInTheDocument()
+    expect(screen.getByText('页面历史')).toBeInTheDocument()
     expect(screen.getByText('产品路线图 · 最多保留 200 版')).toBeInTheDocument()
+    expect(screen.getByText(/正在加载历史版本|还没有历史版本/u)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '关闭页面历史' }))
     expect(onClose).toHaveBeenCalledOnce()
   })

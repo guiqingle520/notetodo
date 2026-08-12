@@ -1,0 +1,160 @@
+/* Final page-history layer: compact Notion timeline and readable version diff. */
+.history-backdrop {
+  padding-top: min(7vh, 64px);
+}
+
+.history-panel {
+  width: min(980px, calc(100vw - 48px));
+  height: min(680px, calc(100vh - 88px));
+  border-radius: 8px;
+  background: #fff;
+}
+
+.history-panel > header {
+  height: 52px;
+  border-radius: 8px 8px 0 0;
+}
+
+.history-panel > header strong {
+  font-size: 14px;
+}
+
+.history-layout {
+  height: calc(100% - 52px);
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+.history-timeline {
+  border-color: var(--notion-divider);
+  background: var(--notion-sidebar);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(55, 53, 47, 0.18) transparent;
+}
+
+.history-timeline > div:first-child {
+  height: 34px;
+  background: rgba(247, 247, 245, 0.96);
+}
+
+.history-timeline > button {
+  min-height: 64px;
+  border: 0;
+  border-radius: 0;
+}
+
+.history-timeline > button + button {
+  border-top: 1px solid rgba(55, 53, 47, 0.06);
+}
+
+.history-timeline > button:hover,
+.history-timeline > button.is-selected {
+  background: rgba(55, 53, 47, 0.08);
+}
+
+.history-timeline > button.is-selected {
+  box-shadow: inset 2px 0 var(--notion-text);
+}
+
+.history-timeline > button > i,
+.history-timeline > button.is-selected > i {
+  color: var(--notion-muted);
+  border-radius: 4px;
+  background: rgba(55, 53, 47, 0.08);
+}
+
+.history-empty {
+  min-height: 220px;
+  padding: 24px;
+  color: var(--notion-faint);
+  font: 11px/1.5 var(--font-ui);
+}
+
+.history-empty strong {
+  color: var(--notion-text);
+  font-size: 12px;
+}
+
+.history-empty span {
+  color: var(--notion-muted);
+  font-size: 11px;
+}
+
+.history-proof {
+  background: #fff;
+}
+
+.history-proof-head {
+  min-height: 62px;
+  padding: 11px 18px;
+  border-color: var(--notion-divider);
+}
+
+.history-proof-head small {
+  color: var(--notion-faint);
+}
+
+.history-proof-head strong {
+  font-size: 17px;
+}
+
+.history-proof-head em {
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.history-title-diff {
+  border-color: var(--notion-divider);
+  background: var(--notion-divider);
+}
+
+.history-diff {
+  padding: 14px 18px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(55, 53, 47, 0.18) transparent;
+}
+
+.history-diff > div:not(.history-no-change) {
+  min-height: 28px;
+  border-color: rgba(55, 53, 47, 0.05);
+}
+
+.history-diff > div > span {
+  font: 12px/1.55 var(--font-ui);
+}
+
+.history-no-change,
+.history-loading {
+  color: var(--notion-faint);
+  font: 12px/1.5 var(--font-ui);
+}
+
+.history-proof > footer {
+  min-height: 52px;
+  padding: 9px 14px;
+  border-color: var(--notion-divider);
+}
+
+.history-proof > footer button {
+  min-height: 30px;
+  border-radius: 4px;
+}
+
+.history-error {
+  right: 14px;
+  bottom: 60px;
+  padding: 8px 10px;
+  border: 1px solid rgba(235, 87, 87, 0.2);
+  border-radius: 4px;
+  background: #fff1f0;
+  font: 11px/1.4 var(--font-ui);
+}
+
+@media (max-width: 820px) {
+  .history-panel {
+    width: calc(100vw - 32px);
+  }
+
+  .history-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
