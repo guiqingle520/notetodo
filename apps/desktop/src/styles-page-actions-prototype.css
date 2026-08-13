@@ -3,6 +3,15 @@
   position: relative;
 }
 
+.breadcrumbs .breadcrumb-item { min-width: 0; gap: 2px; }
+.breadcrumbs .breadcrumb-item > button,
+.breadcrumbs .breadcrumb-current { overflow: hidden; max-width: 210px; padding: 3px 5px; color: var(--notion-muted); border: 0; border-radius: 4px; background: transparent; font: 12px/1.4 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.breadcrumbs .breadcrumb-item > button { cursor: pointer; }
+.breadcrumbs .breadcrumb-item > button:hover { color: var(--notion-text); background: var(--notion-hover); }
+.breadcrumbs .breadcrumb-item > button:focus-visible { outline: 2px solid var(--notion-blue); outline-offset: 1px; }
+.breadcrumbs .breadcrumb-current { color: var(--notion-text); font-weight: 500; }
+.breadcrumbs .breadcrumb-separator { flex: 0 0 auto; color: var(--notion-faint); }
+
 .top-actions > button,
 .page-more-wrap > button {
   color: var(--notion-muted);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, Grid2X2, Image as ImageIcon, Paperclip } from 'lucide-react'
+import { Grid2X2, Image as ImageIcon, Paperclip } from 'lucide-react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -21,6 +21,7 @@ import { PageCover } from './PageCover'
 import { PageIcon } from './PageIcon'
 import { PageTitle } from './PageTitle'
 import { PageDescription } from './PageDescription'
+import { PageBreadcrumbs } from './PageBreadcrumbs'
 
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
 
@@ -382,9 +383,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   return (
     <main className="workspace">
       <header className="topbar">
-        <div className="breadcrumbs">
-          {breadcrumbs.map((crumb, index) => <span key={crumb.id}>{index > 0 && <ChevronRight size={13} />}{crumb.title}</span>)}
-        </div>
+        <PageBreadcrumbs pages={breadcrumbs} onNavigate={setActivePage} />
         <PageHeaderActions
           syncState={syncState}
           collaborationState={collaborationState}
