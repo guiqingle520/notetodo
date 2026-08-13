@@ -18,4 +18,25 @@ describe('useEditorMenuDismissal', () => {
     expect(onDismiss).toHaveBeenCalledOnce()
     unmount()
   })
+
+  it('dismisses external interactions but preserves pointer activity inside the menu', async () => {
+    const onDismiss = vi.fn()
+    const menu = document.createElement('div')
+    const item = document.createElement('button')
+    menu.className = 'slash-menu'
+    menu.append(item)
+    document.body.append(menu)
+    const { unmount } = renderHook(() => useEditorMenuDismissal(true, onDismiss))
+
+    await act(() => item.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect(onDismiss).not.toHaveBeenCalled()
+
+    await act(() => document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect(onDismiss).toHaveBeenCalledOnce()
+    await act(() => window.dispatchEvent(new Event('blur')))
+    expect(onDismiss).toHaveBeenCalledTimes(2)
+
+    unmount()
+    menu.remove()
+  })
 })
