@@ -414,7 +414,13 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
             <PageTitle value={page.title} onChange={(title) => updatePage(page.id, { title })} onSubmit={() => editor?.chain().focus('start').run()} />
             {!isDatabasePage && descriptionOpen && <PageDescription value={page.description ?? ''} focusRequest={descriptionFocusRequest} onChange={(description) => updatePage(page.id, { description })} onEmptyBlur={() => setDescriptionOpen(false)} onSubmit={() => editor?.chain().focus('start').run()} />}
           </header>
-          {!isDatabasePage && <EditorPageProperties page={page} collaborators={collaborators} />}
+          {!isDatabasePage && (
+            <EditorPageProperties
+              page={page}
+              collaborators={collaborators}
+              onAddParticipant={() => setShareOpen(true)}
+            />
+          )}
           {!isDatabasePage && <div
             className={`editor-stage ${dropActive ? 'is-drop-active' : ''}`}
             onMouseMove={trackHoveredBlock}

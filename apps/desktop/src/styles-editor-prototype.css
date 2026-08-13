@@ -122,6 +122,13 @@
   white-space: nowrap;
 }
 
+.editor-property-people > .editor-property-empty {
+  padding-right: 0;
+  padding-left: 0;
+  background: transparent;
+  color: var(--notion-faint);
+}
+
 .editor-property-people > button {
   display: grid;
   width: 24px;
@@ -137,6 +144,18 @@
 .editor-property-people > button:hover {
   background: #efefed;
   color: #37352f;
+}
+
+.editor-property-people > button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 1px;
+  background: var(--notion-hover);
+}
+
+@media (max-width: 760px) {
+  .editor-property-row {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
 }
 
 .workspace .editor-content .tiptap {

@@ -5,6 +5,7 @@ import type { RemoteCursor } from './data/remote-cursors'
 interface EditorPagePropertiesProps {
   page: WorkspacePage
   collaborators: RemoteCursor[]
+  onAddParticipant: () => void
 }
 
 function formatPageDate(value: string) {
@@ -17,10 +18,10 @@ function formatPageDate(value: string) {
   }).format(date)
 }
 
-export function EditorPageProperties({ page, collaborators }: EditorPagePropertiesProps) {
-  const participants = collaborators.length
-    ? collaborators.slice(0, 4).map((person) => ({ id: person.clientId, name: person.name }))
-    : [{ id: 'local-user', name: 'Ming' }]
+export function EditorPageProperties({ page, collaborators, onAddParticipant }: EditorPagePropertiesProps) {
+  const participants = collaborators
+    .slice(0, 4)
+    .map((person) => ({ id: person.clientId, name: person.name }))
 
   return (
     <section className="editor-page-properties" aria-label="页面属性">
@@ -37,10 +38,10 @@ export function EditorPageProperties({ page, collaborators }: EditorPageProperti
           参与者
         </span>
         <span className="editor-property-people">
-          {participants.map((person) => (
-            <span key={person.id}>@{person.name}</span>
-          ))}
-          <button aria-label="添加参与者">
+          {participants.length
+            ? participants.map((person) => <span key={person.id}>@{person.name}</span>)
+            : <span className="editor-property-empty">未添加参与者</span>}
+          <button aria-label="添加参与者" onClick={onAddParticipant}>
             <Plus size={13} />
           </button>
         </span>
