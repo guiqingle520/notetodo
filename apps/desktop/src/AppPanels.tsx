@@ -68,7 +68,7 @@ export function ImportPanel({ onClose, onImported }: { onClose: () => void; onIm
 
   return (
     <div className="modal-backdrop import-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="import-panel" role="dialog" aria-modal="true" aria-label="导入工作区" onMouseDown={(event) => event.stopPropagation()}>
+      <section className="import-panel" role="dialog" aria-modal="true" aria-label="导入工作区" aria-busy={status === 'loading' || status === 'importing'} onMouseDown={(event) => event.stopPropagation()}>
         <header>
           <div><FileArchive size={19} /><span><strong>导入工作区</strong><small>Notion 导出包 · 本地安全预检</small></span></div>
           <button className="icon-button" onClick={onClose} aria-label="关闭导入工作区"><X size={16} /></button>
@@ -89,7 +89,7 @@ export function ImportPanel({ onClose, onImported }: { onClose: () => void; onIm
         )}
 
         {status === 'error' && (
-          <div className="import-error"><AlertTriangle size={24} /><strong>无法完成预检</strong><p>{error}</p><button onClick={() => void pickArchive()}>重新选择</button></div>
+          <div className="import-error" role="alert"><AlertTriangle size={24} /><strong>无法完成预检</strong><p>{error}</p><button onClick={() => void pickArchive()}>重新选择</button></div>
         )}
 
         {inspection && !['error', 'importing', 'done'].includes(status) && (

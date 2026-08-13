@@ -6,8 +6,19 @@
 .import-panel {
   width: min(680px, calc(100vw - 48px));
   max-height: min(720px, calc(100vh - 88px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 8px;
   background: #fff;
+}
+
+.import-panel > :not(header) {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(55, 53, 47, 0.18) transparent;
 }
 
 .import-panel > header {
@@ -31,6 +42,14 @@
 .import-panel > header small {
   margin-top: 2px;
   font-size: 10px;
+}
+
+.import-panel > header button:focus-visible,
+.import-panel .import-primary:focus-visible,
+.import-panel .import-secondary:focus-visible,
+.import-error button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 2px;
 }
 
 .import-landing {
@@ -122,6 +141,10 @@
   font-size: 22px;
 }
 
+.import-report-title {
+  padding-right: 0;
+}
+
 .import-report-title > span {
   border-radius: 3px;
   font-size: 10px;
@@ -154,6 +177,11 @@
 
 .import-file-sample > div {
   border-color: var(--notion-divider);
+}
+
+.import-issues p > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .import-running,
@@ -210,9 +238,95 @@
 }
 
 @media (max-width: 760px) {
+  .import-backdrop {
+    padding-top: 32px;
+  }
+
+  .import-panel {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 64px);
+  }
+
   .import-landing,
   .import-running,
   .import-complete {
     padding-inline: 28px;
+  }
+
+  .import-report {
+    padding: 20px;
+  }
+
+  .import-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .import-metrics > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .import-metrics > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--notion-divider);
+  }
+
+  .import-report > footer {
+    flex-wrap: wrap;
+  }
+
+  .import-report > footer span {
+    min-width: 100%;
+    order: -1;
+    text-align: left;
+  }
+
+  .import-complete > div {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .import-complete > div span {
+    min-width: 0;
+    padding-inline: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .import-backdrop {
+    padding: 8px;
+  }
+
+  .import-panel {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+  }
+
+  .import-landing,
+  .import-running,
+  .import-complete,
+  .import-error {
+    min-height: 360px;
+    padding: 32px 18px;
+  }
+
+  .import-report {
+    padding: 16px;
+  }
+
+  .import-report > footer .import-primary,
+  .import-report > footer .import-secondary {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .import-panel,
+  .import-orbit i {
+    animation: none;
+  }
+
+  .import-progress span {
+    transition: none;
   }
 }

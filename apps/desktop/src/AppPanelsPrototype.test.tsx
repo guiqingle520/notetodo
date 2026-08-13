@@ -44,6 +44,10 @@ describe('prototype modal surfaces', () => {
     render(<ImportPanel onClose={onClose} onImported={vi.fn()} />)
 
     expect(screen.getByRole('dialog', { name: '导入工作区' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '导入工作区' })).toHaveAttribute(
+      'aria-busy',
+      'false',
+    )
     expect(screen.getByText('Notion 导出包 · 本地安全预检')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '选择 Notion 导出包' })).toBeInTheDocument()
 
