@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 const MAX_PAGE_DESCRIPTION_LENGTH = 2_000
 
 /** Keeps optional page context readable without coupling its layout to the editor document. */
-export function PageDescription({ value, focusRequest, onChange, onEmptyBlur }: { value: string; focusRequest: number; onChange: (value: string) => void; onEmptyBlur: () => void }) {
+export function PageDescription({ value, focusRequest, onChange, onEmptyBlur, onSubmit }: { value: string; focusRequest: number; onChange: (value: string) => void; onEmptyBlur: () => void; onSubmit: () => void }) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useLayoutEffect(() => {
@@ -27,6 +27,11 @@ export function PageDescription({ value, focusRequest, onChange, onEmptyBlur }: 
       rows={1}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey) || event.nativeEvent.isComposing || event.keyCode === 229) return
+        event.preventDefault()
+        onSubmit()
+      }}
       onBlur={(event) => {
         if (!event.currentTarget.value.trim()) onEmptyBlur()
       }}
