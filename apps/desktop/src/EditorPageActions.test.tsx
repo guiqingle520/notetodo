@@ -87,4 +87,24 @@ describe('editor page actions', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('menu', { name: '更多页面操作' })).not.toBeInTheDocument()
   })
+
+  it('cycles through the page menu with the keyboard and restores trigger focus', () => {
+    render(
+      <PageHeaderActions syncState="ready" collaborationState="local" collaborators={[]} favorite={false} onComments={vi.fn()} onHistory={vi.fn()} onShare={vi.fn()} onToggleFavorite={vi.fn()} onArchive={vi.fn()} />,
+    )
+    const trigger = screen.getByRole('button', { name: '更多页面操作' })
+    fireEvent.click(trigger)
+    const items = screen.getAllByRole('menuitem')
+
+    expect(items[0]).toHaveFocus()
+    fireEvent.keyDown(items[0]!, { key: 'ArrowDown' })
+    expect(items[1]).toHaveFocus()
+    fireEvent.keyDown(items[1]!, { key: 'End' })
+    expect(items.at(-1)).toHaveFocus()
+    fireEvent.keyDown(items.at(-1)!, { key: 'ArrowDown' })
+    expect(items[0]).toHaveFocus()
+    fireEvent.keyDown(items[0]!, { key: 'Escape' })
+    expect(screen.queryByRole('menu', { name: '更多页面操作' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
 })

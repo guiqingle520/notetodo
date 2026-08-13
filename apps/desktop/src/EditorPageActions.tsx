@@ -54,6 +54,27 @@ function presenceLabel(state: PageHeaderActionsProps['collaborationState']) {
   return '本机'
 }
 
+/** Implements the standard keyboard loop shared by compact application menus. */
+function navigateMenu(event: React.KeyboardEvent<HTMLDivElement>, onEscape: () => void) {
+  const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)'))
+  const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
+  let nextIndex: number | null = null
+  if (event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % items.length
+  if (event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + items.length) % items.length
+  if (event.key === 'Home') nextIndex = 0
+  if (event.key === 'End') nextIndex = items.length - 1
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    onEscape()
+    return
+  }
+  const nextItem = nextIndex === null ? undefined : items[nextIndex]
+  if (!nextItem) return
+  event.preventDefault()
+  nextItem.focus()
+}
+
 export function PageHeaderActions({
   syncState,
   collaborationState,
@@ -67,6 +88,11 @@ export function PageHeaderActions({
 }: PageHeaderActionsProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useDismissibleMenu(menuOpen, () => setMenuOpen(false))
+  const menuTriggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (menuOpen) menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus()
+  }, [menuOpen, menuRef])
 
   const runMenuAction = (action: () => void) => {
     setMenuOpen(false)
@@ -117,6 +143,7 @@ export function PageHeaderActions({
       </button>
       <div className="page-more-wrap" ref={menuRef}>
         <button
+          ref={menuTriggerRef}
           aria-label="更多页面操作"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
@@ -125,7 +152,7 @@ export function PageHeaderActions({
           <MoreHorizontal size={18} />
         </button>
         {menuOpen && (
-          <div className="page-more-menu" role="menu" aria-label="更多页面操作">
+          <div className="page-more-menu" role="menu" aria-label="更多页面操作" onKeyDown={(event) => navigateMenu(event, () => { setMenuOpen(false); menuTriggerRef.current?.focus() })}>
             <button role="menuitem" onClick={() => runMenuAction(onToggleFavorite)}>
               <Star size={14} />
               {favorite ? '取消收藏' : '添加到收藏'}
