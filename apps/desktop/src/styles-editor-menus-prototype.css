@@ -93,8 +93,12 @@
 }
 .slash-empty {
   min-height: 64px;
+  display: grid;
+  place-items: center;
+  padding: 18px 12px;
   color: var(--notion-faint);
-  font: 11px var(--font-ui);
+  font: 11px/1.45 var(--font-ui);
+  text-align: center;
 }
 
 .slash-menu footer,

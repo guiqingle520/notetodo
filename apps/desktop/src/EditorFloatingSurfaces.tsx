@@ -116,11 +116,13 @@ function MenuFrame({
   label,
   trigger,
   actionLabel,
+  hasResults,
   children,
 }: {
   label: string
   trigger: string
   actionLabel: string
+  hasResults: boolean
   children: ReactNode
 }) {
   return (
@@ -131,12 +133,14 @@ function MenuFrame({
       </header>
       <div>{children}</div>
       <footer>
-        <span>
-          <kbd>↑↓</kbd> 选择
-        </span>
-        <span>
-          <kbd>Enter</kbd> {actionLabel}
-        </span>
+        {hasResults ? (
+          <>
+            <span><kbd>↑↓</kbd> 选择</span>
+            <span><kbd>Enter</kbd> {actionLabel}</span>
+          </>
+        ) : (
+          <span><kbd>Esc</kbd> 关闭</span>
+        )}
       </footer>
     </>
   )
@@ -158,7 +162,7 @@ export function SlashCommandMenu({
       role="menu"
       aria-label="插入内容块"
     >
-      <MenuFrame label="插入内容块" trigger="/" actionLabel="插入">
+      <MenuFrame label="插入内容块" trigger="/" actionLabel="插入" hasResults={Boolean(commands.length)}>
         {commands.map((command, index) => {
           const Icon = command.icon
           return (
@@ -181,7 +185,11 @@ export function SlashCommandMenu({
             </button>
           )
         })}
-        {!commands.length && <div className="slash-empty">没有匹配的内容块</div>}
+        {!commands.length && (
+          <div className="slash-empty" role="status" aria-live="polite">
+            {state.query ? `没有与“${state.query}”匹配的内容块` : '没有可插入的内容块'}
+          </div>
+        )}
       </MenuFrame>
     </div>
   )
@@ -205,7 +213,7 @@ export function PageMentionMenu({
       role="menu"
       aria-label="链接到页面"
     >
-      <MenuFrame label="链接到页面" trigger="@" actionLabel="链接">
+      <MenuFrame label="链接到页面" trigger="@" actionLabel="链接" hasResults={Boolean(pages.length)}>
         {pages.map((page, index) => {
           const Icon = iconMap[page.icon]
           return (
@@ -232,7 +240,11 @@ export function PageMentionMenu({
             </button>
           )
         })}
-        {!pages.length && <div className="slash-empty">没有匹配的页面</div>}
+        {!pages.length && (
+          <div className="slash-empty" role="status" aria-live="polite">
+            {state.query ? `没有与“${state.query}”匹配的页面` : '没有可链接的其他页面'}
+          </div>
+        )}
       </MenuFrame>
     </div>
   )

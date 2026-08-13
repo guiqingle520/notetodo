@@ -90,4 +90,20 @@ describe('EditorFloatingSurfaces', () => {
 
     expect(screen.getByText('知识库 / 规范')).toBeInTheDocument()
   })
+
+  it('announces an informative empty menu and replaces unavailable keyboard actions', () => {
+    render(
+      <PageMentionMenu
+        state={{ ...menuState, query: '不存在' }}
+        pages={[]}
+        allPages={[]}
+        onSelect={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('没有与“不存在”匹配的页面')
+    expect(screen.getByText('关闭')).toBeInTheDocument()
+    expect(screen.queryByText('选择')).not.toBeInTheDocument()
+    expect(screen.queryByText('链接')).not.toBeInTheDocument()
+  })
 })
