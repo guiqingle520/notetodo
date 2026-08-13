@@ -55,7 +55,7 @@ describe('EditorFloatingSurfaces', () => {
       icon: FileText,
       run: vi.fn(),
     }
-    render(<SlashCommandMenu state={menuState} commands={[command]} onSelect={onSelect} />)
+    render(<SlashCommandMenu state={menuState} commands={[command]} onSelect={onSelect} onHighlight={vi.fn()} />)
 
     fireEvent.mouseDown(screen.getByRole('menuitem', { name: /文本/u }))
     expect(onSelect).toHaveBeenCalledWith(command)
@@ -77,7 +77,7 @@ describe('EditorFloatingSurfaces', () => {
     }))
 
     const { rerender } = render(
-      <SlashCommandMenu state={menuState} commands={commands} onSelect={vi.fn()} />,
+      <SlashCommandMenu state={menuState} commands={commands} onSelect={vi.fn()} onHighlight={vi.fn()} />,
     )
     scrollIntoView.mockClear()
     rerender(
@@ -85,6 +85,7 @@ describe('EditorFloatingSurfaces', () => {
         state={{ ...menuState, index: 2 }}
         commands={commands}
         onSelect={vi.fn()}
+        onHighlight={vi.fn()}
       />,
     )
 
@@ -118,7 +119,7 @@ describe('EditorFloatingSurfaces', () => {
       },
     ]
     render(
-      <PageMentionMenu state={menuState} pages={[pages[1]!]} allPages={pages} onSelect={vi.fn()} />,
+      <PageMentionMenu state={menuState} pages={[pages[1]!]} allPages={pages} onSelect={vi.fn()} onHighlight={vi.fn()} />,
     )
 
     expect(screen.getByText('知识库 / 规范')).toBeInTheDocument()
@@ -131,6 +132,7 @@ describe('EditorFloatingSurfaces', () => {
         pages={[]}
         allPages={[]}
         onSelect={vi.fn()}
+        onHighlight={vi.fn()}
       />,
     )
 
@@ -138,5 +140,30 @@ describe('EditorFloatingSurfaces', () => {
     expect(screen.getByText('关闭')).toBeInTheDocument()
     expect(screen.queryByText('选择')).not.toBeInTheDocument()
     expect(screen.queryByText('链接')).not.toBeInTheDocument()
+  })
+
+  it('synchronizes pointer and focus highlights with the keyboard selection index', () => {
+    const onHighlight = vi.fn()
+    const commands = ['文本', '标题'].map((label) => ({
+      label,
+      hint: `插入${label}`,
+      keywords: label,
+      icon: FileText,
+      run: vi.fn(),
+    }))
+    render(
+      <SlashCommandMenu
+        state={menuState}
+        commands={commands}
+        onSelect={vi.fn()}
+        onHighlight={onHighlight}
+      />,
+    )
+
+    const heading = screen.getByRole('menuitem', { name: /标题/u })
+    fireEvent.mouseEnter(heading)
+    fireEvent.focus(heading)
+    expect(onHighlight).toHaveBeenNthCalledWith(1, 1)
+    expect(onHighlight).toHaveBeenNthCalledWith(2, 1)
   })
 })

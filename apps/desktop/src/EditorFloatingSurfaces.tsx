@@ -150,10 +150,12 @@ export function SlashCommandMenu({
   state,
   commands,
   onSelect,
+  onHighlight,
 }: {
   state: EditorMenuState
   commands: SlashCommand[]
   onSelect: (command: SlashCommand) => void
+  onHighlight: (index: number) => void
 }) {
   const selectedItemRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -175,6 +177,8 @@ export function SlashCommandMenu({
               className={index === state.index ? 'is-selected' : ''}
               key={command.label}
               ref={index === state.index ? selectedItemRef : undefined}
+              onMouseEnter={() => onHighlight(index)}
+              onFocus={() => onHighlight(index)}
               onMouseDown={(event) => {
                 event.preventDefault()
                 onSelect(command)
@@ -206,11 +210,13 @@ export function PageMentionMenu({
   pages,
   allPages,
   onSelect,
+  onHighlight,
 }: {
   state: EditorMenuState
   pages: WorkspacePage[]
   allPages: WorkspacePage[]
   onSelect: (page: WorkspacePage) => void
+  onHighlight: (index: number) => void
 }) {
   const selectedItemRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -232,6 +238,8 @@ export function PageMentionMenu({
               className={index === state.index ? 'is-selected' : ''}
               key={page.id}
               ref={index === state.index ? selectedItemRef : undefined}
+              onMouseEnter={() => onHighlight(index)}
+              onFocus={() => onHighlight(index)}
               onMouseDown={(event) => {
                 event.preventDefault()
                 onSelect(page)

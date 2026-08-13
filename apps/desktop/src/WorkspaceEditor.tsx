@@ -456,10 +456,21 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
           )}
           <PageDatabaseMount pageId={page.id} pageTitle={page.title} canEdit={Boolean(editor?.isEditable)} fullPage={isDatabasePage} />
           {!isDatabasePage && slashMenu && (
-            <SlashCommandMenu state={slashMenu} commands={filteredSlashCommands} onSelect={runSlashCommand} />
+            <SlashCommandMenu
+              state={slashMenu}
+              commands={filteredSlashCommands}
+              onSelect={runSlashCommand}
+              onHighlight={(index) => setSlashMenu((current) => current && current.index !== index ? { ...current, index } : current)}
+            />
           )}
           {!isDatabasePage && pageMentionMenu && (
-            <PageMentionMenu state={pageMentionMenu} pages={mentionedPages} allPages={pages} onSelect={insertPageMention} />
+            <PageMentionMenu
+              state={pageMentionMenu}
+              pages={mentionedPages}
+              allPages={pages}
+              onSelect={insertPageMention}
+              onHighlight={(index) => setPageMentionMenu((current) => current && current.index !== index ? { ...current, index } : current)}
+            />
           )}
           {!isDatabasePage && <div className="document-end"><span />END OF PAGE<span /></div>}
         </article>
