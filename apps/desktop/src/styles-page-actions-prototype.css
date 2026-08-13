@@ -118,6 +118,7 @@
 .page-cover:hover .page-cover-actions, .page-cover:focus-within .page-cover-actions, .page-cover.is-error .page-cover-actions { opacity: 1; }
 .page-cover-actions button { height: 27px; padding: 0 8px; color: var(--notion-text); border: 1px solid rgba(15,15,15,.12); border-radius: 4px; background: rgba(255,255,255,.94); box-shadow: 0 1px 3px rgba(15,15,15,.12); font: 11px var(--font-ui); }
 .page-cover-actions button:hover { background: #fff; }
+.page-cover-actions button:focus-visible { outline: 2px solid var(--notion-blue); outline-offset: 1px; background: #fff; }
 .page-cover-fallback { height: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--notion-muted); font-size: 12px; }
 
 .page-icon-picker { position: relative; width: fit-content; margin: 0 0 5px; z-index: 2; }
@@ -165,4 +166,10 @@
   .top-actions .presence-label { display: none; }
   .top-actions .save-state { width: 18px; justify-content: center; margin-right: 0; }
   .top-actions .collaboration-presence { padding-right: 3px; padding-left: 3px; }
+  .page-cover { margin-right: -42px; margin-left: -42px; }
+}
+
+@media (max-width: 760px) {
+  .page-cover { height: 150px; margin-right: -24px; margin-left: -24px; }
+  .page-cover-actions { right: 8px; bottom: 8px; opacity: 1; }
 }

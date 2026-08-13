@@ -25,9 +25,9 @@ export function PageCover({
       ) : (
         <img src={source} alt="" onError={() => setFailed(true)} />
       )}
-      <div className="page-cover-actions" role="group" aria-label="封面操作">
+      <div className="page-cover-actions" role="toolbar" aria-label="封面操作">
         <button onClick={onChange}>更改封面</button>
-        <button onClick={onRemove}>移除</button>
+        <button aria-label="移除页面封面" onClick={onRemove}>移除</button>
       </div>
     </section>
   )
