@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { iconMap } from './AppSidebar'
 import type { PageIcon as PageIconName } from './domain'
-import { focusFirstMenuItem, navigateMenu } from './menu-keyboard'
+import { focusFirstMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
+import { useDismissibleMenu } from './use-dismissible-menu'
 
 const iconChoices: Array<{ id: PageIconName; label: string }> = [
   { id: 'note', label: '文档' },
@@ -20,7 +21,7 @@ export function PageIcon({
   onChange: (icon: PageIconName) => void
 }) {
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useDismissibleMenu(open, () => setOpen(false))
   const triggerRef = useRef<HTMLButtonElement>(null)
   const Icon = iconMap[icon]
   const activeLabel = iconChoices.find((choice) => choice.id === icon)?.label ?? '页面'
@@ -30,22 +31,6 @@ export function PageIcon({
     setOpen(false)
     requestAnimationFrame(() => triggerRef.current?.focus())
   }
-
-  useEffect(() => {
-    if (!open) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    const closeOnOutsidePress = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    window.addEventListener('pointerdown', closeOnOutsidePress)
-    return () => {
-      window.removeEventListener('keydown', closeOnEscape)
-      window.removeEventListener('pointerdown', closeOnOutsidePress)
-    }
-  }, [open])
 
   useEffect(() => {
     if (open) focusFirstMenuItem(containerRef.current)
@@ -59,6 +44,7 @@ export function PageIcon({
         aria-label={`更改页面图标，当前为${activeLabel}`}
         aria-haspopup="menu"
         aria-expanded={open}
+        onKeyDown={(event) => openMenuFromTrigger(event, () => setOpen(true))}
         onClick={() => setOpen((current) => !current)}
       >
         <Icon size={34} />

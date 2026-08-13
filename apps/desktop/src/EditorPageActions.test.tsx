@@ -110,4 +110,10 @@ describe('editor page actions', () => {
     expect(screen.queryByRole('menu', { name: '更多页面操作' })).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
   })
+
+  it('opens the page menu from the trigger with ArrowDown', () => {
+    render(<PageHeaderActions syncState="ready" collaborationState="local" collaborators={[]} favorite={false} onComments={vi.fn()} onHistory={vi.fn()} onShare={vi.fn()} onToggleFavorite={vi.fn()} onArchive={vi.fn()} />)
+    fireEvent.keyDown(screen.getByRole('button', { name: '更多页面操作' }), { key: 'ArrowDown' })
+    expect(screen.getAllByRole('menuitem')[0]).toHaveFocus()
+  })
 })

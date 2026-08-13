@@ -63,4 +63,10 @@ describe('page icon', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve))
     expect(trigger).toHaveFocus()
   })
+
+  it('opens the icon menu from the trigger with ArrowDown', () => {
+    render(<PageIcon icon="book" onChange={vi.fn()} />)
+    fireEvent.keyDown(screen.getByRole('button', { name: '更改页面图标，当前为知识库' }), { key: 'ArrowDown' })
+    expect(screen.getAllByRole('menuitemradio')[0]).toHaveFocus()
+  })
 })

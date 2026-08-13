@@ -6,6 +6,12 @@ export function focusFirstMenuItem(container: HTMLElement | null) {
   container?.querySelector<HTMLButtonElement>(MENU_ITEM_SELECTOR)?.focus()
 }
 
+export function openMenuFromTrigger(event: KeyboardEvent<HTMLButtonElement>, open: () => void) {
+  if (event.key !== 'ArrowDown') return
+  event.preventDefault()
+  open()
+}
+
 /** Keeps every compact menu on the same predictable WAI-ARIA keyboard loop. */
 export function navigateMenu(event: KeyboardEvent<HTMLDivElement>, onEscape: () => void) {
   const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(MENU_ITEM_SELECTOR))
