@@ -20,6 +20,7 @@ import { AttachmentProgress, BlockToolbar, EditorDropGuide, PageMentionMenu, Sla
 import { PageCover } from './PageCover'
 import { PageIcon } from './PageIcon'
 import { PageTitle } from './PageTitle'
+import { PageDescription } from './PageDescription'
 
 type StoredAttachment = { hash: string; size: number; mimeType: string; displayName: string; url: string; previewUrl: string | null }
 
@@ -52,7 +53,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   const [dropActive, setDropActive] = useState(false)
   const [blockToolbar, setBlockToolbar] = useState<null | { index: number; top: number }>(null)
   const [descriptionOpen, setDescriptionOpen] = useState(Boolean(page.description))
-  const descriptionRef = useRef<HTMLTextAreaElement>(null)
+  const [descriptionFocusRequest, setDescriptionFocusRequest] = useState(0)
   const uploadBusyRef = useRef(false)
   const localEditorRef = useRef<Editor | null>(null)
   slashMenuRef.current = slashMenu
@@ -61,7 +62,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   useEffect(() => setDescriptionOpen(Boolean(page.description)), [page.id])
   const openDescription = () => {
     setDescriptionOpen(true)
-    requestAnimationFrame(() => descriptionRef.current?.focus())
+    setDescriptionFocusRequest((request) => request + 1)
   }
 
   const reportAttachmentProgress = (progress: { completed: number; total: number; currentName: string }) => {
@@ -411,7 +412,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
             />
           )}
           <PageTitle value={page.title} onChange={(title) => updatePage(page.id, { title })} onSubmit={() => editor?.chain().focus('start').run()} />
-          {!isDatabasePage && descriptionOpen && <textarea ref={descriptionRef} className="page-description" aria-label="页面说明" placeholder="添加页面说明…" maxLength={2_000} rows={1} value={page.description ?? ''} onChange={(event) => updatePage(page.id, { description: event.target.value })} onBlur={() => { if (!page.description?.trim()) setDescriptionOpen(false) }} />}
+          {!isDatabasePage && descriptionOpen && <PageDescription value={page.description ?? ''} focusRequest={descriptionFocusRequest} onChange={(description) => updatePage(page.id, { description })} onEmptyBlur={() => setDescriptionOpen(false)} />}
           {!isDatabasePage && <EditorPageProperties page={page} collaborators={collaborators} />}
           {!isDatabasePage && <div
             className={`editor-stage ${dropActive ? 'is-drop-active' : ''}`}
