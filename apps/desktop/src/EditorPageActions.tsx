@@ -157,7 +157,7 @@ export function PageMetaActions({
   onDescriptionRequest: () => void
 }) {
   return (
-    <div className="page-meta-actions">
+    <div className="page-meta-actions" role="toolbar" aria-label="页面外观">
       {!hasCover && <button onClick={onCoverRequest}>添加封面</button>}
       <button onClick={onDescriptionRequest}>{hasDescription ? '编辑说明' : '添加说明'}</button>
     </div>

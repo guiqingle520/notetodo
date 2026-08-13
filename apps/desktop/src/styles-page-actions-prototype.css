@@ -68,7 +68,15 @@
 
 .page-meta-actions {
   align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
+
+.document:hover .page-meta-actions { opacity: 0; }
+.document .page-heading:hover .page-meta-actions,
+.document .page-meta-actions:focus-within { opacity: 1; }
+
+.page-meta-actions button:focus-visible { color: var(--notion-text); outline: 2px solid var(--notion-blue); outline-offset: 1px; background: var(--notion-hover); }
 
 .page-meta-actions > button:disabled {
   color: var(--notion-faint);

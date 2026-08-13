@@ -43,10 +43,20 @@ describe('editor page actions', () => {
       />,
     )
 
+    expect(screen.getByRole('toolbar', { name: '页面外观' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '添加封面' }))
     expect(onCoverRequest).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: '添加说明' }))
     expect(onDescriptionRequest).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the appearance toolbar discoverable from keyboard focus', () => {
+    render(<PageMetaActions hasCover={false} hasDescription onCoverRequest={vi.fn()} onDescriptionRequest={vi.fn()} />)
+
+    const editDescription = screen.getByRole('button', { name: '编辑说明' })
+    editDescription.focus()
+    expect(editDescription).toHaveFocus()
+    expect(screen.getByRole('toolbar', { name: '页面外观' })).toContainElement(editDescription)
   })
 
   it('dismisses page menus with Escape and an outside pointer press', () => {

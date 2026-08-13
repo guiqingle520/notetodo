@@ -402,17 +402,19 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
         <article className={`document ${isDatabasePage ? 'is-database-page' : ''}`}>
           {!isDatabasePage && page.cover && <PageCover source={page.cover} onChange={() => void pickPageCover()} onRemove={() => updatePage(page.id, { cover: '' })} />}
           <div className="document-kicker"><span>NT / {page.id.slice(0, 4).toUpperCase()}</span><span>{new Date(page.updatedAt).toLocaleDateString('zh-CN')}</span></div>
-          {!isDatabasePage && <PageIcon icon={page.icon} onChange={(icon) => updatePage(page.id, { icon })} />}
-          {!isDatabasePage && (
-            <PageMetaActions
-              hasCover={Boolean(page.cover)}
-              hasDescription={Boolean(page.description)}
-              onCoverRequest={() => void pickPageCover()}
-              onDescriptionRequest={openDescription}
-            />
-          )}
-          <PageTitle value={page.title} onChange={(title) => updatePage(page.id, { title })} onSubmit={() => editor?.chain().focus('start').run()} />
-          {!isDatabasePage && descriptionOpen && <PageDescription value={page.description ?? ''} focusRequest={descriptionFocusRequest} onChange={(description) => updatePage(page.id, { description })} onEmptyBlur={() => setDescriptionOpen(false)} />}
+          <header className="page-heading">
+            {!isDatabasePage && <PageIcon icon={page.icon} onChange={(icon) => updatePage(page.id, { icon })} />}
+            {!isDatabasePage && (
+              <PageMetaActions
+                hasCover={Boolean(page.cover)}
+                hasDescription={Boolean(page.description)}
+                onCoverRequest={() => void pickPageCover()}
+                onDescriptionRequest={openDescription}
+              />
+            )}
+            <PageTitle value={page.title} onChange={(title) => updatePage(page.id, { title })} onSubmit={() => editor?.chain().focus('start').run()} />
+            {!isDatabasePage && descriptionOpen && <PageDescription value={page.description ?? ''} focusRequest={descriptionFocusRequest} onChange={(description) => updatePage(page.id, { description })} onEmptyBlur={() => setDescriptionOpen(false)} />}
+          </header>
           {!isDatabasePage && <EditorPageProperties page={page} collaborators={collaborators} />}
           {!isDatabasePage && <div
             className={`editor-stage ${dropActive ? 'is-drop-active' : ''}`}
