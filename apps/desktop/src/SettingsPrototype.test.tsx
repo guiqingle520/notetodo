@@ -32,4 +32,14 @@ describe('settings prototype surface', () => {
     expect(screen.getByRole('button', { name: '签发令牌' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '添加端点' })).toBeDisabled()
   })
+
+  it('scrolls the selected settings section into view', () => {
+    render(<ModelSettingsPanel onClose={vi.fn()} />)
+    const target = document.getElementById('settings-tokens')
+    const scrollIntoView = vi.fn()
+    if (target) target.scrollIntoView = scrollIntoView
+
+    fireEvent.click(screen.getByRole('button', { name: 'API 访问' }))
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth' })
+  })
 })

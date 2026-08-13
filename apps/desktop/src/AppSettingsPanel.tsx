@@ -62,7 +62,10 @@ export function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
 
   const showSection = (section: SettingsSection) => {
     setActiveSection(section)
-    document.getElementById(`settings-${section}`)?.scrollIntoView?.({ behavior: 'smooth' })
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    document
+      .getElementById(`settings-${section}`)
+      ?.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth' })
   }
 
   const issueToken = async () => {
