@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Grid2X2, Image as ImageIcon, Paperclip } from 'lucide-react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -13,6 +13,7 @@ import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/na
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
 import { findDirectEditorBlock, placeEditorMenu, shouldFocusEditorCanvas } from './editor/editor-canvas'
+import { useEditorMenuDismissal } from './editor/use-editor-menu-dismissal'
 import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
 import { EditorPageProperties } from './EditorPageProperties'
@@ -66,6 +67,11 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
     setDescriptionOpen(true)
     setDescriptionFocusRequest((request) => request + 1)
   }
+  const dismissEditorMenus = useCallback(() => {
+    setSlashMenu(null)
+    setPageMentionMenu(null)
+  }, [])
+  useEditorMenuDismissal(Boolean(slashMenu || pageMentionMenu), dismissEditorMenus)
 
   const reportAttachmentProgress = (progress: { completed: number; total: number; currentName: string }) => {
     const percent = progress.total ? Math.min(100, Math.round(progress.completed / progress.total * 100)) : 0
@@ -406,7 +412,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
         />
       </header>
 
-      <div className="editor-scroll">
+      <div className="editor-scroll" onScroll={dismissEditorMenus}>
         <article
           className={`document ${isDatabasePage ? 'is-database-page' : ''}`}
           onMouseLeave={() => setBlockToolbar(null)}
