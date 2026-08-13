@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Copy, GripVertical, Trash2, Upload } from 'lucide-react'
-import type { MouseEvent, ReactNode } from 'react'
+import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { iconMap } from './AppSidebar'
 import { pageBreadcrumbs, type WorkspacePage } from './domain'
 import type { BlockAction } from './editor/block-actions'
@@ -155,6 +155,11 @@ export function SlashCommandMenu({
   commands: SlashCommand[]
   onSelect: (command: SlashCommand) => void
 }) {
+  const selectedItemRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    selectedItemRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [state.index, commands[state.index]?.label])
+
   return (
     <div
       className="slash-menu"
@@ -169,6 +174,7 @@ export function SlashCommandMenu({
             <button
               className={index === state.index ? 'is-selected' : ''}
               key={command.label}
+              ref={index === state.index ? selectedItemRef : undefined}
               onMouseDown={(event) => {
                 event.preventDefault()
                 onSelect(command)
@@ -206,6 +212,11 @@ export function PageMentionMenu({
   allPages: WorkspacePage[]
   onSelect: (page: WorkspacePage) => void
 }) {
+  const selectedItemRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    selectedItemRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [state.index, pages[state.index]?.id])
+
   return (
     <div
       className="page-mention-menu"
@@ -220,6 +231,7 @@ export function PageMentionMenu({
             <button
               className={index === state.index ? 'is-selected' : ''}
               key={page.id}
+              ref={index === state.index ? selectedItemRef : undefined}
               onMouseDown={(event) => {
                 event.preventDefault()
                 onSelect(page)

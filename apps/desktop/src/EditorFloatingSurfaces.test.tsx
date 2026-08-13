@@ -61,6 +61,39 @@ describe('EditorFloatingSurfaces', () => {
     expect(onSelect).toHaveBeenCalledWith(command)
   })
 
+  it('keeps the keyboard-selected command visible while navigating a long menu', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+    const commands = ['文本', '标题', '待办'].map((label) => ({
+      label,
+      hint: `插入${label}`,
+      keywords: label,
+      icon: FileText,
+      run: vi.fn(),
+    }))
+
+    const { rerender } = render(
+      <SlashCommandMenu state={menuState} commands={commands} onSelect={vi.fn()} />,
+    )
+    scrollIntoView.mockClear()
+    rerender(
+      <SlashCommandMenu
+        state={{ ...menuState, index: 2 }}
+        commands={commands}
+        onSelect={vi.fn()}
+      />,
+    )
+
+    expect(scrollIntoView).toHaveBeenCalledOnce()
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    if (descriptor) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', descriptor)
+    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+  })
+
   it('shows page breadcrumbs in the mention menu', () => {
     const pages: WorkspacePage[] = [
       {
