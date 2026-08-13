@@ -14,6 +14,7 @@ import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/re
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
 import { findDirectEditorBlock, isEditorCompositionEvent, placeEditorMenu, shouldFocusEditorCanvas } from './editor/editor-canvas'
 import { useEditorMenuDismissal } from './editor/use-editor-menu-dismissal'
+import { useEditorMenuKeyboard } from './editor/use-editor-menu-keyboard'
 import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
 import { EditorPageProperties } from './EditorPageProperties'
@@ -309,49 +310,18 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
     return () => window.clearTimeout(timeout)
   }, [uploadState?.phase, uploadState?.message])
 
-  useEffect(() => {
-    if (!slashMenu) return
-    const handleMenuKeys = (event: KeyboardEvent) => {
-      if (isEditorCompositionEvent(event)) return
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setSlashMenu(null)
-      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        const direction = event.key === 'ArrowDown' ? 1 : -1
-        setSlashMenu((current) => current && filteredSlashCommands.length
-          ? { ...current, index: (current.index + direction + filteredSlashCommands.length) % filteredSlashCommands.length }
-          : current)
-      } else if (event.key === 'Enter' && filteredSlashCommands.length) {
-        event.preventDefault()
-        const command = filteredSlashCommands[slashMenu.index] ?? filteredSlashCommands[0]
-        if (command) runSlashCommand(command)
-      }
-    }
-    window.addEventListener('keydown', handleMenuKeys, true)
-    return () => window.removeEventListener('keydown', handleMenuKeys, true)
-  }, [slashMenu, filteredSlashCommands, editor])
-
-  useEffect(() => {
-    if (!pageMentionMenu) return
-    const handleMentionKeys = (event: KeyboardEvent) => {
-      if (isEditorCompositionEvent(event)) return
-      if (event.key === 'Escape') { event.preventDefault(); setPageMentionMenu(null) }
-      else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        const direction = event.key === 'ArrowDown' ? 1 : -1
-        setPageMentionMenu((current) => current && mentionedPages.length
-          ? { ...current, index: (current.index + direction + mentionedPages.length) % mentionedPages.length }
-          : current)
-      } else if (event.key === 'Enter' && mentionedPages.length) {
-        event.preventDefault()
-        const mentionedPage = mentionedPages[pageMentionMenu.index] ?? mentionedPages[0]
-        if (mentionedPage) insertPageMention(mentionedPage)
-      }
-    }
-    window.addEventListener('keydown', handleMentionKeys, true)
-    return () => window.removeEventListener('keydown', handleMentionKeys, true)
-  }, [pageMentionMenu, mentionedPages, editor])
+  useEditorMenuKeyboard({
+    open: Boolean(slashMenu), itemCount: filteredSlashCommands.length, selectedIndex: slashMenu?.index ?? 0,
+    onMove: (direction) => setSlashMenu((current) => current ? { ...current, index: (current.index + direction + filteredSlashCommands.length) % filteredSlashCommands.length } : null),
+    onSelect: (index) => { const command = filteredSlashCommands[index]; if (command) runSlashCommand(command) },
+    onClose: () => setSlashMenu(null),
+  })
+  useEditorMenuKeyboard({
+    open: Boolean(pageMentionMenu), itemCount: mentionedPages.length, selectedIndex: pageMentionMenu?.index ?? 0,
+    onMove: (direction) => setPageMentionMenu((current) => current ? { ...current, index: (current.index + direction + mentionedPages.length) % mentionedPages.length } : null),
+    onSelect: (index) => { const mentionedPage = mentionedPages[index]; if (mentionedPage) insertPageMention(mentionedPage) },
+    onClose: () => setPageMentionMenu(null),
+  })
 
   useEffect(() => {
     let active = true
