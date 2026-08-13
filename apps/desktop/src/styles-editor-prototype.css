@@ -194,6 +194,13 @@
   height: 24px;
 }
 
+.workspace .block-toolbar > button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 1px;
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
+
 @media (max-width: 1080px) {
   .workspace .document:not(.is-database-page) {
     width: min(820px, calc(100% - 48px));

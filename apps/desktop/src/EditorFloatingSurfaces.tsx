@@ -41,9 +41,15 @@ export function BlockToolbar({
   childCount: number
   onAction: (action: BlockAction) => void
 }) {
-  const run = (event: MouseEvent, action: BlockAction) => {
+  const runPointerAction = (event: MouseEvent, action: BlockAction) => {
     event.preventDefault()
     onAction(action)
+  }
+
+  const runKeyboardAction = (event: MouseEvent, action: BlockAction) => {
+    // Keyboard-generated click events have no pointer click count. Pointer
+    // actions already run on mouse down so the editor selection is preserved.
+    if (event.detail === 0) onAction(action)
   }
 
   return (
@@ -52,25 +58,36 @@ export function BlockToolbar({
         <GripVertical size={14} />
       </span>
       <button
-        onMouseDown={(event) => run(event, 'move-up')}
+        type="button"
+        onMouseDown={(event) => runPointerAction(event, 'move-up')}
+        onClick={(event) => runKeyboardAction(event, 'move-up')}
         disabled={index === 0}
         aria-label="上移内容块"
       >
         <ArrowUp size={13} />
       </button>
       <button
-        onMouseDown={(event) => run(event, 'move-down')}
+        type="button"
+        onMouseDown={(event) => runPointerAction(event, 'move-down')}
+        onClick={(event) => runKeyboardAction(event, 'move-down')}
         disabled={index >= childCount - 1}
         aria-label="下移内容块"
       >
         <ArrowDown size={13} />
       </button>
-      <button onMouseDown={(event) => run(event, 'duplicate')} aria-label="复制内容块">
+      <button
+        type="button"
+        onMouseDown={(event) => runPointerAction(event, 'duplicate')}
+        onClick={(event) => runKeyboardAction(event, 'duplicate')}
+        aria-label="复制内容块"
+      >
         <Copy size={13} />
       </button>
       <button
+        type="button"
         className="is-danger"
-        onMouseDown={(event) => run(event, 'delete')}
+        onMouseDown={(event) => runPointerAction(event, 'delete')}
+        onClick={(event) => runKeyboardAction(event, 'delete')}
         aria-label="删除内容块"
       >
         <Trash2 size={13} />

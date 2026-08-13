@@ -32,6 +32,20 @@ describe('EditorFloatingSurfaces', () => {
     expect(onAction).toHaveBeenCalledWith('duplicate')
   })
 
+  it('dispatches block actions from keyboard-generated clicks without duplicating pointer clicks', () => {
+    const onAction = vi.fn()
+    render(<BlockToolbar top={12} index={1} childCount={3} onAction={onAction} />)
+
+    const moveDown = screen.getByRole('button', { name: '下移内容块' })
+    fireEvent.click(moveDown, { detail: 0 })
+    expect(onAction).toHaveBeenCalledOnce()
+    expect(onAction).toHaveBeenLastCalledWith('move-down')
+
+    fireEvent.mouseDown(moveDown)
+    fireEvent.click(moveDown, { detail: 1 })
+    expect(onAction).toHaveBeenCalledTimes(2)
+  })
+
   it('renders slash commands and preserves pointer selection', () => {
     const onSelect = vi.fn()
     const command = {
