@@ -64,10 +64,18 @@
 
 .slash-menu > div > button:hover,
 .slash-menu > div > button.is-selected,
+.slash-menu > div > button:focus-visible,
 .page-mention-menu > div > button:hover,
-.page-mention-menu > div > button.is-selected {
+.page-mention-menu > div > button.is-selected,
+.page-mention-menu > div > button:focus-visible {
   color: var(--notion-text);
   background: var(--notion-hover);
+}
+
+.slash-menu > div > button:focus-visible,
+.page-mention-menu > div > button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: -2px;
 }
 
 .slash-menu > div > button > span:first-child,

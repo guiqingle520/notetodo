@@ -188,6 +188,8 @@ describe('EditorFloatingSurfaces', () => {
     )
 
     const heading = screen.getByRole('menuitem', { name: /标题/u })
+    expect(screen.getByRole('menuitem', { name: /文本/u })).toHaveAttribute('aria-current', 'true')
+    expect(heading).not.toHaveAttribute('aria-current')
     fireEvent.mouseEnter(heading)
     fireEvent.focus(heading)
     expect(onHighlight).toHaveBeenNthCalledWith(1, 1)

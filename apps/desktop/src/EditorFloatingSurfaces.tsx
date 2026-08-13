@@ -176,6 +176,7 @@ export function SlashCommandMenu({
             <button
               type="button"
               className={index === state.index ? 'is-selected' : ''}
+              aria-current={index === state.index ? 'true' : undefined}
               key={command.label}
               ref={index === state.index ? selectedItemRef : undefined}
               onMouseEnter={() => onHighlight(index)}
@@ -241,6 +242,7 @@ export function PageMentionMenu({
             <button
               type="button"
               className={index === state.index ? 'is-selected' : ''}
+              aria-current={index === state.index ? 'true' : undefined}
               key={page.id}
               ref={index === state.index ? selectedItemRef : undefined}
               onMouseEnter={() => onHighlight(index)}
