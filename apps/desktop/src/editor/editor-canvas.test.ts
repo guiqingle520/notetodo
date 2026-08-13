@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findDirectEditorBlock, shouldFocusEditorCanvas } from './editor-canvas'
+import { findDirectEditorBlock, placeEditorMenu, shouldFocusEditorCanvas } from './editor-canvas'
 
 describe('shouldFocusEditorCanvas', () => {
   it('focuses only a primary-button press on the blank canvas', () => {
@@ -27,5 +27,10 @@ describe('shouldFocusEditorCanvas', () => {
     expect(findDirectEditorBlock(root, text)).toBe(paragraph)
     expect(findDirectEditorBlock(root, root)).toBeNull()
     expect(findDirectEditorBlock(root, document.createElement('button'))).toBeNull()
+  })
+
+  it('keeps menus inside narrow viewports and opens upward near the bottom edge', () => {
+    expect(placeEditorMenu({ anchorLeft: 280, anchorTop: 80, anchorBottom: 100, viewportWidth: 300, viewportHeight: 600 })).toEqual({ left: 8, top: 108 })
+    expect(placeEditorMenu({ anchorLeft: 120, anchorTop: 680, anchorBottom: 700, viewportWidth: 1200, viewportHeight: 768 })).toEqual({ left: 120, top: 286 })
   })
 })

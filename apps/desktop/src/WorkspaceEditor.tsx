@@ -12,7 +12,7 @@ import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
-import { findDirectEditorBlock, shouldFocusEditorCanvas } from './editor/editor-canvas'
+import { findDirectEditorBlock, placeEditorMenu, shouldFocusEditorCanvas } from './editor/editor-canvas'
 import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
 import { EditorPageProperties } from './EditorPageProperties'
@@ -179,10 +179,16 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
         if (!['/', '@'].includes(event.key) || !view.state.selection.empty) return false
         const position = view.state.selection.from
         const coordinates = view.coordsAtPos(position)
+        const menuPosition = placeEditorMenu({
+          anchorLeft: coordinates.left,
+          anchorTop: coordinates.top,
+          anchorBottom: coordinates.bottom,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        })
         const nextMenu = {
           from: position,
-          left: Math.min(coordinates.left, window.innerWidth - 310),
-          top: Math.min(coordinates.bottom + 8, window.innerHeight - 430),
+          ...menuPosition,
           query: '',
           index: 0,
         }
