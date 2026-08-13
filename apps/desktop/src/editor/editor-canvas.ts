@@ -8,3 +8,13 @@ type CanvasPointerEvent = Pick<MouseEvent, 'button' | 'currentTarget' | 'default
 export function shouldFocusEditorCanvas(event: CanvasPointerEvent) {
   return !event.defaultPrevented && event.button === 0 && event.target === event.currentTarget
 }
+
+/** Resolve a pointer target to the top-level ProseMirror block it belongs to. */
+export function findDirectEditorBlock(root: HTMLElement, target: EventTarget | null) {
+  if (!(target instanceof Element) || !root.contains(target)) return null
+  let candidate: Element | null = target
+  while (candidate?.parentElement && candidate.parentElement !== root) {
+    candidate = candidate.parentElement
+  }
+  return candidate instanceof HTMLElement && candidate.parentElement === root ? candidate : null
+}

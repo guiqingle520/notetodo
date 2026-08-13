@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldFocusEditorCanvas } from './editor-canvas'
+import { findDirectEditorBlock, shouldFocusEditorCanvas } from './editor-canvas'
 
 describe('shouldFocusEditorCanvas', () => {
   it('focuses only a primary-button press on the blank canvas', () => {
@@ -15,5 +15,17 @@ describe('shouldFocusEditorCanvas', () => {
     expect(shouldFocusEditorCanvas({ button: 0, currentTarget: canvas, target: block, defaultPrevented: false })).toBe(false)
     expect(shouldFocusEditorCanvas({ button: 1, currentTarget: canvas, target: canvas, defaultPrevented: false })).toBe(false)
     expect(shouldFocusEditorCanvas({ button: 0, currentTarget: canvas, target: canvas, defaultPrevented: true })).toBe(false)
+  })
+
+  it('resolves nested content to its direct editor block', () => {
+    const root = document.createElement('div')
+    const paragraph = document.createElement('p')
+    const text = document.createElement('span')
+    paragraph.append(text)
+    root.append(paragraph)
+
+    expect(findDirectEditorBlock(root, text)).toBe(paragraph)
+    expect(findDirectEditorBlock(root, root)).toBeNull()
+    expect(findDirectEditorBlock(root, document.createElement('button'))).toBeNull()
   })
 })

@@ -12,7 +12,7 @@ import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
-import { shouldFocusEditorCanvas } from './editor/editor-canvas'
+import { findDirectEditorBlock, shouldFocusEditorCanvas } from './editor/editor-canvas'
 import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
 import { EditorPageProperties } from './EditorPageProperties'
@@ -241,9 +241,11 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   const trackHoveredBlock = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!editor?.isEditable) return
     const root = editor.view.dom
-    let block = event.target as HTMLElement | null
-    while (block?.parentElement && block.parentElement !== root) block = block.parentElement
-    if (!block || block.parentElement !== root) return
+    const block = findDirectEditorBlock(root, event.target)
+    if (!block) {
+      setBlockToolbar(null)
+      return
+    }
     const index = Array.from(root.children).indexOf(block)
     if (index < 0) return
     const documentElement = root.closest('.document')
@@ -399,7 +401,10 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
       </header>
 
       <div className="editor-scroll">
-        <article className={`document ${isDatabasePage ? 'is-database-page' : ''}`}>
+        <article
+          className={`document ${isDatabasePage ? 'is-database-page' : ''}`}
+          onMouseLeave={() => setBlockToolbar(null)}
+        >
           {!isDatabasePage && page.cover && <PageCover source={page.cover} onChange={() => void pickPageCover()} onRemove={() => updatePage(page.id, { cover: '' })} />}
           <div className="document-kicker"><span>NT / {page.id.slice(0, 4).toUpperCase()}</span><span>{new Date(page.updatedAt).toLocaleDateString('zh-CN')}</span></div>
           <header className="page-heading">
