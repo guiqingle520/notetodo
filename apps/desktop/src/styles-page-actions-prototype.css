@@ -125,6 +125,7 @@
 .document:has(.page-cover) .page-icon-picker { margin-top: -55px; }
 .page-icon-trigger { width: 52px; height: 52px; display: grid; place-items: center; padding: 0; color: var(--notion-text); border: 0; border-radius: 5px; background: #fff; box-shadow: 0 0 0 1px rgba(15,15,15,.08); }
 .page-icon-trigger:hover, .page-icon-trigger[aria-expanded='true'] { background: var(--notion-hover); }
+.page-icon-trigger:focus-visible { outline: 2px solid var(--notion-blue); outline-offset: 2px; }
 
 .page-icon-menu {
   top: 57px;
@@ -156,10 +157,12 @@
 }
 
 .page-icon-menu > button:hover,
+.page-icon-menu > button:focus-visible,
 .page-icon-menu > button.is-selected {
   color: var(--notion-text);
   background: var(--notion-hover);
 }
+.page-icon-menu > button:focus-visible { outline: 2px solid var(--notion-blue); outline-offset: -2px; }
 
 @media (max-width: 1080px) {
   .top-actions .save-state-label,
@@ -172,4 +175,7 @@
 @media (max-width: 760px) {
   .page-cover { height: 150px; margin-right: -24px; margin-left: -24px; }
   .page-cover-actions { right: 8px; bottom: 8px; opacity: 1; }
+  .page-icon-trigger { width: 46px; height: 46px; }
+  .document:has(.page-cover) .page-icon-picker { margin-top: -49px; }
+  .page-icon-menu { top: 51px; }
 }

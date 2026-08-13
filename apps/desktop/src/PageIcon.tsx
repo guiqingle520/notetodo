@@ -23,6 +23,13 @@ export function PageIcon({
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const Icon = iconMap[icon]
+  const activeLabel = iconChoices.find((choice) => choice.id === icon)?.label ?? '页面'
+
+  const selectIcon = (nextIcon: PageIconName) => {
+    onChange(nextIcon)
+    setOpen(false)
+    requestAnimationFrame(() => triggerRef.current?.focus())
+  }
 
   useEffect(() => {
     if (!open) return
@@ -49,7 +56,7 @@ export function PageIcon({
       <button
         ref={triggerRef}
         className="page-icon-trigger"
-        aria-label="更改页面图标"
+        aria-label={`更改页面图标，当前为${activeLabel}`}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
@@ -67,10 +74,7 @@ export function PageIcon({
                 aria-checked={icon === choice.id}
                 aria-label={`${choice.label}图标`}
                 key={choice.id}
-                onClick={() => {
-                  onChange(choice.id)
-                  setOpen(false)
-                }}
+                onClick={() => selectIcon(choice.id)}
               >
                 <ChoiceIcon size={17} />
                 <span>{choice.label}</span>
