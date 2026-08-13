@@ -22,6 +22,9 @@ describe('editor page actions', () => {
       />,
     )
 
+    expect(screen.getByRole('toolbar', { name: '页面操作' })).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: '同步状态：本机 CRDT 已同步' })).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: '协作状态：当前为本机模式' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '更多页面操作' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '添加到收藏' }))
     expect(onToggleFavorite).toHaveBeenCalledOnce()

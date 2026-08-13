@@ -1,7 +1,10 @@
 /* Final page chrome: truthful actions, compact menus and Notion interaction density. */
 .top-actions {
   position: relative;
+  flex: 0 0 auto;
 }
+
+.topbar > .breadcrumbs { flex: 1 1 auto; overflow: hidden; }
 
 .breadcrumbs .breadcrumb-item { min-width: 0; gap: 2px; }
 .breadcrumbs .breadcrumb-item > button,
@@ -155,4 +158,11 @@
 .page-icon-menu > button.is-selected {
   color: var(--notion-text);
   background: var(--notion-hover);
+}
+
+@media (max-width: 1080px) {
+  .top-actions .save-state-label,
+  .top-actions .presence-label { display: none; }
+  .top-actions .save-state { width: 18px; justify-content: center; margin-right: 0; }
+  .top-actions .collaboration-presence { padding-right: 3px; padding-left: 3px; }
 }

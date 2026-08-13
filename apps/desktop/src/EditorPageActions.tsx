@@ -55,6 +55,13 @@ function presenceLabel(state: PageHeaderActionsProps['collaborationState']) {
   return '本机'
 }
 
+function presenceDescription(state: PageHeaderActionsProps['collaborationState']) {
+  if (state === 'online') return '实时协作已连接'
+  if (state === 'offline') return '离线编辑，恢复后自动同步'
+  if (state === 'connecting') return '正在连接实时协作'
+  return '当前为本机模式'
+}
+
 export function PageHeaderActions({
   syncState,
   collaborationState,
@@ -80,24 +87,20 @@ export function PageHeaderActions({
   }
 
   return (
-    <div className="top-actions">
-      <span className={`save-state is-${syncState}`} role="status">
+    <div className="top-actions" role="toolbar" aria-label="页面操作">
+      <span className={`save-state is-${syncState}`} role="status" aria-label={`同步状态：${syncLabel(syncState)}`}>
         <i />
-        {syncLabel(syncState)}
+        <span className="save-state-label" aria-hidden="true">{syncLabel(syncState)}</span>
       </span>
       <div
         className={`collaboration-presence is-${collaborationState}`}
-        title={
-          collaborationState === 'online'
-            ? '实时协作已连接'
-            : collaborationState === 'offline'
-              ? '离线编辑，恢复后自动同步'
-              : '本机模式'
-        }
+        role="status"
+        aria-label={`协作状态：${presenceDescription(collaborationState)}`}
+        title={presenceDescription(collaborationState)}
       >
         <span className="presence-state">
           <Users size={13} />
-          {presenceLabel(collaborationState)}
+          <span className="presence-label" aria-hidden="true">{presenceLabel(collaborationState)}</span>
         </span>
         <span className="presence-avatars">
           {collaborators.slice(0, 3).map((person) => (
