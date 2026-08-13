@@ -61,6 +61,33 @@ describe('EditorFloatingSurfaces', () => {
     expect(onSelect).toHaveBeenCalledWith(command)
   })
 
+  it('activates a focused menu item from the keyboard without duplicating pointer selection', () => {
+    const onSelect = vi.fn()
+    const command = {
+      label: '文本',
+      hint: '插入普通文本',
+      keywords: 'text',
+      icon: FileText,
+      run: vi.fn(),
+    }
+    render(
+      <SlashCommandMenu
+        state={menuState}
+        commands={[command]}
+        onSelect={onSelect}
+        onHighlight={vi.fn()}
+      />,
+    )
+
+    const item = screen.getByRole('menuitem', { name: /文本/u })
+    fireEvent.click(item, { detail: 0 })
+    expect(onSelect).toHaveBeenCalledOnce()
+
+    fireEvent.mouseDown(item)
+    fireEvent.click(item, { detail: 1 })
+    expect(onSelect).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps the keyboard-selected command visible while navigating a long menu', () => {
     const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
     const scrollIntoView = vi.fn()

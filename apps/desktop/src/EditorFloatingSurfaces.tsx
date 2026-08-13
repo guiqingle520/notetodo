@@ -174,6 +174,7 @@ export function SlashCommandMenu({
           const Icon = command.icon
           return (
             <button
+              type="button"
               className={index === state.index ? 'is-selected' : ''}
               key={command.label}
               ref={index === state.index ? selectedItemRef : undefined}
@@ -182,6 +183,9 @@ export function SlashCommandMenu({
               onMouseDown={(event) => {
                 event.preventDefault()
                 onSelect(command)
+              }}
+              onClick={(event) => {
+                if (event.detail === 0) onSelect(command)
               }}
               role="menuitem"
             >
@@ -235,6 +239,7 @@ export function PageMentionMenu({
           const Icon = iconMap[page.icon]
           return (
             <button
+              type="button"
               className={index === state.index ? 'is-selected' : ''}
               key={page.id}
               ref={index === state.index ? selectedItemRef : undefined}
@@ -243,6 +248,9 @@ export function PageMentionMenu({
               onMouseDown={(event) => {
                 event.preventDefault()
                 onSelect(page)
+              }}
+              onClick={(event) => {
+                if (event.detail === 0) onSelect(page)
               }}
               role="menuitem"
             >
