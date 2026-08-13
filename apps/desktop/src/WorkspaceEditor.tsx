@@ -12,6 +12,7 @@ import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
+import { shouldFocusEditorCanvas } from './editor/editor-canvas'
 import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
 import { EditorPageProperties } from './EditorPageProperties'
@@ -423,6 +424,11 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
           )}
           {!isDatabasePage && <div
             className={`editor-stage ${dropActive ? 'is-drop-active' : ''}`}
+            onMouseDown={(event) => {
+              if (!editor?.isEditable || !shouldFocusEditorCanvas(event)) return
+              event.preventDefault()
+              editor.chain().focus('end').run()
+            }}
             onMouseMove={trackHoveredBlock}
             onDragEnter={(event) => { if (editor?.isEditable && window.notetodo?.attachments && event.dataTransfer.types.includes('Files')) setDropActive(true) }}
             onDragOver={(event) => { if (editor?.isEditable && window.notetodo?.attachments && event.dataTransfer.types.includes('Files')) event.preventDefault() }}

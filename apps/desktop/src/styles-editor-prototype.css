@@ -162,6 +162,11 @@
   line-height: 1.58;
 }
 
+.workspace .editor-stage {
+  min-height: max(180px, 32vh);
+  cursor: text;
+}
+
 .workspace .editor-content .tiptap > h2 {
   margin-top: 1.45em;
   font-size: 22px;
@@ -194,5 +199,11 @@
     width: min(820px, calc(100% - 48px));
     padding-right: 42px;
     padding-left: 42px;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace .editor-stage {
+    min-height: max(150px, 28vh);
   }
 }
