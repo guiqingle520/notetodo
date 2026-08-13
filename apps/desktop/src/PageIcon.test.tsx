@@ -37,4 +37,20 @@ describe('page icon', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: '图标外部' }))
     expect(screen.queryByRole('menu', { name: '选择页面图标' })).not.toBeInTheDocument()
   })
+
+  it('cycles through icon choices and restores trigger focus', () => {
+    render(<PageIcon icon="note" onChange={vi.fn()} />)
+    const trigger = screen.getByRole('button', { name: '更改页面图标' })
+    fireEvent.click(trigger)
+    const choices = screen.getAllByRole('menuitemradio')
+
+    expect(choices[0]).toHaveFocus()
+    fireEvent.keyDown(choices[0]!, { key: 'ArrowUp' })
+    expect(choices.at(-1)).toHaveFocus()
+    fireEvent.keyDown(choices.at(-1)!, { key: 'Home' })
+    expect(choices[0]).toHaveFocus()
+    fireEvent.keyDown(choices[0]!, { key: 'Escape' })
+    expect(screen.queryByRole('menu', { name: '选择页面图标' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
 })

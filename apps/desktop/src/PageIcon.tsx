@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { iconMap } from './AppSidebar'
 import type { PageIcon as PageIconName } from './domain'
+import { focusFirstMenuItem, navigateMenu } from './menu-keyboard'
 
 const iconChoices: Array<{ id: PageIconName; label: string }> = [
   { id: 'note', label: '文档' },
@@ -20,6 +21,7 @@ export function PageIcon({
 }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const Icon = iconMap[icon]
 
   useEffect(() => {
@@ -38,9 +40,14 @@ export function PageIcon({
     }
   }, [open])
 
+  useEffect(() => {
+    if (open) focusFirstMenuItem(containerRef.current)
+  }, [open])
+
   return (
     <div className="page-icon-picker" ref={containerRef}>
       <button
+        ref={triggerRef}
         className="page-icon-trigger"
         aria-label="更改页面图标"
         aria-haspopup="menu"
@@ -50,7 +57,7 @@ export function PageIcon({
         <Icon size={34} />
       </button>
       {open && (
-        <div className="page-icon-menu" role="menu" aria-label="选择页面图标">
+        <div className="page-icon-menu" role="menu" aria-label="选择页面图标" onKeyDown={(event) => navigateMenu(event, () => { setOpen(false); triggerRef.current?.focus() })}>
           {iconChoices.map((choice) => {
             const ChoiceIcon = iconMap[choice.id]
             return (

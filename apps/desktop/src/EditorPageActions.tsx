@@ -1,6 +1,7 @@
 import { Archive, History, MessageSquare, MoreHorizontal, Star, Users } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { RemoteCursor } from './data/remote-cursors'
+import { focusFirstMenuItem, navigateMenu } from './menu-keyboard'
 
 interface PageHeaderActionsProps {
   syncState: 'loading' | 'ready' | 'saving' | 'error'
@@ -54,27 +55,6 @@ function presenceLabel(state: PageHeaderActionsProps['collaborationState']) {
   return '本机'
 }
 
-/** Implements the standard keyboard loop shared by compact application menus. */
-function navigateMenu(event: React.KeyboardEvent<HTMLDivElement>, onEscape: () => void) {
-  const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)'))
-  const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
-  let nextIndex: number | null = null
-  if (event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % items.length
-  if (event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + items.length) % items.length
-  if (event.key === 'Home') nextIndex = 0
-  if (event.key === 'End') nextIndex = items.length - 1
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    event.stopPropagation()
-    onEscape()
-    return
-  }
-  const nextItem = nextIndex === null ? undefined : items[nextIndex]
-  if (!nextItem) return
-  event.preventDefault()
-  nextItem.focus()
-}
-
 export function PageHeaderActions({
   syncState,
   collaborationState,
@@ -91,7 +71,7 @@ export function PageHeaderActions({
   const menuTriggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    if (menuOpen) menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus()
+    if (menuOpen) focusFirstMenuItem(menuRef.current)
   }, [menuOpen, menuRef])
 
   const runMenuAction = (action: () => void) => {
