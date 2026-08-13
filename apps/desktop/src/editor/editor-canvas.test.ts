@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findDirectEditorBlock, placeEditorMenu, shouldFocusEditorCanvas } from './editor-canvas'
+import { findDirectEditorBlock, isEditorCompositionEvent, placeEditorMenu, shouldFocusEditorCanvas } from './editor-canvas'
 
 describe('shouldFocusEditorCanvas', () => {
   it('focuses only a primary-button press on the blank canvas', () => {
@@ -32,5 +32,11 @@ describe('shouldFocusEditorCanvas', () => {
   it('keeps menus inside narrow viewports and opens upward near the bottom edge', () => {
     expect(placeEditorMenu({ anchorLeft: 280, anchorTop: 80, anchorBottom: 100, viewportWidth: 300, viewportHeight: 600 })).toEqual({ left: 8, top: 108 })
     expect(placeEditorMenu({ anchorLeft: 120, anchorTop: 680, anchorBottom: 700, viewportWidth: 1200, viewportHeight: 768 })).toEqual({ left: 120, top: 286 })
+  })
+
+  it('recognizes modern and legacy IME composition keyboard events', () => {
+    expect(isEditorCompositionEvent({ isComposing: true, keyCode: 13 })).toBe(true)
+    expect(isEditorCompositionEvent({ isComposing: false, keyCode: 229 })).toBe(true)
+    expect(isEditorCompositionEvent({ isComposing: false, keyCode: 13 })).toBe(false)
   })
 })

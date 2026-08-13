@@ -12,7 +12,7 @@ import { PageSyncSession } from './data/page-sync'
 import { documentSchemaExtensions, migrateHtmlToNativeFragment } from './data/native-collaboration'
 import { RemoteCursors, renderRemoteCursors, type RemoteCursor } from './data/remote-cursors'
 import { applyBlockAction, type BlockAction } from './editor/block-actions'
-import { findDirectEditorBlock, placeEditorMenu, shouldFocusEditorCanvas } from './editor/editor-canvas'
+import { findDirectEditorBlock, isEditorCompositionEvent, placeEditorMenu, shouldFocusEditorCanvas } from './editor/editor-canvas'
 import { useEditorMenuDismissal } from './editor/use-editor-menu-dismissal'
 import { baseSlashCommands, type SlashCommand } from './editor/slash-commands'
 import type { SelectionContext } from './AppAIPanel'
@@ -182,7 +182,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
         return true
       },
       handleKeyDown: (view, event) => {
-        if (!['/', '@'].includes(event.key) || !view.state.selection.empty) return false
+        if (isEditorCompositionEvent(event) || !['/', '@'].includes(event.key) || !view.state.selection.empty) return false
         const position = view.state.selection.from
         const coordinates = view.coordsAtPos(position)
         const menuPosition = placeEditorMenu({
@@ -312,6 +312,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   useEffect(() => {
     if (!slashMenu) return
     const handleMenuKeys = (event: KeyboardEvent) => {
+      if (isEditorCompositionEvent(event)) return
       if (event.key === 'Escape') {
         event.preventDefault()
         setSlashMenu(null)
@@ -334,6 +335,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   useEffect(() => {
     if (!pageMentionMenu) return
     const handleMentionKeys = (event: KeyboardEvent) => {
+      if (isEditorCompositionEvent(event)) return
       if (event.key === 'Escape') { event.preventDefault(); setPageMentionMenu(null) }
       else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()

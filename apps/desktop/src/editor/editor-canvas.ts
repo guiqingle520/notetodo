@@ -8,6 +8,8 @@ type EditorMenuPlacement = {
   viewportHeight: number
 }
 
+type CompositionKeyboardEvent = Pick<KeyboardEvent, 'isComposing' | 'keyCode'>
+
 const MENU_MARGIN = 8
 const MENU_WIDTH = 324
 const MENU_HEIGHT = 386
@@ -44,4 +46,9 @@ export function placeEditorMenu({ anchorLeft, anchorTop, anchorBottom, viewportW
     ? below
     : Math.max(MENU_MARGIN, anchorTop - visibleHeight - MENU_MARGIN)
   return { left, top }
+}
+
+/** Browsers and embedded webviews expose IME composition through either flag. */
+export function isEditorCompositionEvent(event: CompositionKeyboardEvent) {
+  return event.isComposing || event.keyCode === 229
 }
