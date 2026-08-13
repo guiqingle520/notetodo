@@ -75,6 +75,8 @@
   padding: 0 6px 6px;
   scrollbar-width: thin;
   scrollbar-color: rgba(55, 53, 47, 0.18) transparent;
+  overscroll-behavior: contain;
+  scroll-padding-block: 6px;
 }
 
 .workspace-search-result {
@@ -96,6 +98,11 @@
 .workspace-search-result:hover,
 .workspace-search-result.is-active {
   background: rgba(55, 53, 47, 0.08);
+}
+
+.workspace-search-result:focus-visible {
+  outline: 2px solid #2383e2;
+  outline-offset: -2px;
 }
 
 .workspace-search-result-icon {
@@ -198,5 +205,34 @@
   }
   .workspace-search-footer > span:nth-of-type(n + 3) {
     display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .workspace-search-backdrop {
+    padding: 8px;
+  }
+
+  .workspace-search-dialog {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+  }
+
+  .workspace-search-input {
+    height: 50px;
+    padding-inline: 12px;
+  }
+
+  .workspace-search-caption {
+    padding-inline: 12px;
+  }
+
+  .workspace-search-results {
+    min-height: 160px;
+    max-height: calc(100vh - 146px);
+  }
+
+  .workspace-search-footer {
+    justify-content: space-between;
   }
 }

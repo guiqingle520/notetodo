@@ -65,6 +65,7 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const resultsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!query.trim()) return
@@ -83,6 +84,12 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
 
   useEffect(() => setActiveIndex(0), [query, results.length])
 
+  useEffect(() => {
+    // Keep keyboard navigation visible without moving focus away from the search input.
+    const activeOption = resultsRef.current?.children.item(activeIndex) as HTMLElement | null
+    activeOption?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeIndex, results])
+
   const openResult = (page: WorkspacePage | undefined) => {
     if (!page) return
     onOpenPage(page.id)
@@ -95,10 +102,12 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
       onClose()
     } else if (event.key === 'ArrowDown') {
       event.preventDefault()
-      setActiveIndex((current) => (results.length ? Math.min(results.length - 1, current + 1) : 0))
+      setActiveIndex((current) => (results.length ? (current + 1) % results.length : 0))
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
-      setActiveIndex((current) => Math.max(0, current - 1))
+      setActiveIndex((current) =>
+        results.length ? (current - 1 + results.length) % results.length : 0,
+      )
     } else if (event.key === 'Enter') {
       event.preventDefault()
       openResult(results[activeIndex])
@@ -147,6 +156,7 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
         </div>
 
         <div
+          ref={resultsRef}
           id="workspace-search-results"
           className="workspace-search-results"
           role="listbox"

@@ -40,6 +40,18 @@ describe('WorkspaceSearchPalette', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
+  it('wraps keyboard navigation across the result boundaries', () => {
+    render(<WorkspaceSearchPalette onClose={vi.fn()} onOpenPage={vi.fn()} />)
+    const input = screen.getByRole('combobox', { name: '搜索页面与内容' })
+    const options = screen.getAllByRole('option')
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(options.at(-1)).toHaveAttribute('aria-selected', 'true')
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(options[0]).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('opens a clicked result through the application navigation callback', () => {
     const onOpenPage = vi.fn()
     render(<WorkspaceSearchPalette onClose={vi.fn()} onOpenPage={onOpenPage} />)
