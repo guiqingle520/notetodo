@@ -44,6 +44,7 @@ export function AIPanel({
   const [error, setError] = useState('')
   const cancelRef = useRef<null | (() => void)>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
+  const conversationRef = useRef<HTMLDivElement>(null)
   const [modelName, setModelName] = useState('浏览器预览模型')
   const [contextMode, setContextMode] = useState<'page' | 'selection'>('page')
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
@@ -182,6 +183,16 @@ export function AIPanel({
 
   useEffect(() => () => cancelRef.current?.(), [])
 
+  useEffect(() => {
+    const conversation = conversationRef.current
+    if (!conversation) return
+    // Follow streaming output only while the reader remains near the bottom.
+    // Scrolling up to inspect an earlier answer must not be interrupted.
+    const distanceFromBottom =
+      conversation.scrollHeight - conversation.scrollTop - conversation.clientHeight
+    if (distanceFromBottom < 80) conversation.scrollTop = conversation.scrollHeight
+  }, [messages, error, patch])
+
   const proposePatch = async (text: string) => {
     const operation: AIPatchProposal['operation'] = usingSelection
       ? 'replace-selection'
@@ -261,7 +272,7 @@ export function AIPanel({
             : (activePage?.title ?? '当前页面')}
         </strong>
       </div>
-      <div className="ai-conversation" role="log" aria-live="polite" aria-label="AI 对话">
+      <div ref={conversationRef} className="ai-conversation" role="log" aria-live="polite" aria-label="AI 对话" aria-busy={running}>
         {!messages.length && (
           <div className="ai-message">
             <span className="ai-orbit">
