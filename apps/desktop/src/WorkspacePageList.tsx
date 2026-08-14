@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -111,17 +111,27 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<PageListFilter>('all')
   const [pageMenuOpen, setPageMenuOpen] = useState(false)
+  const pageMenuRef = useRef<HTMLDivElement>(null)
   const [openGroups, setOpenGroups] = useState<Set<PageGroupId>>(
     () => new Set(['workspace', 'favorites', 'nested']),
   )
 
   useEffect(() => {
     if (!pageMenuOpen) return
-    const close = (event: KeyboardEvent) => {
+    const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setPageMenuOpen(false)
     }
-    window.addEventListener('keydown', close)
-    return () => window.removeEventListener('keydown', close)
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !pageMenuRef.current?.contains(event.target)) {
+        setPageMenuOpen(false)
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('pointerdown', closeOnOutsidePointer)
+    }
   }, [pageMenuOpen])
 
   const filteredPages = useMemo(() => {
@@ -164,7 +174,7 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
           <ChevronRight size={13} />
           <span>页面</span>
         </div>
-        <div className="page-list-menu-wrap">
+        <div className="page-list-menu-wrap" ref={pageMenuRef}>
           <button
             aria-label="页面列表操作"
             aria-haspopup="menu"
@@ -176,6 +186,7 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
           {pageMenuOpen && (
             <div className="page-list-menu" role="menu" aria-label="页面列表操作">
               <button
+                autoFocus
                 role="menuitem"
                 onClick={() => {
                   setPageMenuOpen(false)
@@ -235,12 +246,13 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
                 placeholder="搜索页面"
               />
             </label>
-            <div className="page-list-filters" aria-label="页面筛选">
+            <div className="page-list-filters" aria-label="页面筛选" role="tablist">
               {filters.map((item) => (
                 <button
                   className={filter === item.id ? 'is-active' : ''}
-                  aria-pressed={filter === item.id}
+                  aria-selected={filter === item.id}
                   key={item.id}
+                  role="tab"
                   onClick={() => setFilter(item.id)}
                 >
                   {item.label}
@@ -256,7 +268,15 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
             <span />
           </div>
           <div className="page-list-groups">
-            {groups.map((group) => (
+            {!filteredPages.length ? (
+              <div className="page-list-no-results" role="status">
+                <Search size={19} />
+                <span>
+                  <strong>{query.trim() ? '没有匹配的页面' : '工作区还没有页面'}</strong>
+                  <small>{query.trim() ? '换一个关键词，或清除当前筛选。' : '新建页面后会显示在这里。'}</small>
+                </span>
+              </div>
+            ) : groups.map((group) => (
               <PageTableGroup
                 key={group.id}
                 group={group}

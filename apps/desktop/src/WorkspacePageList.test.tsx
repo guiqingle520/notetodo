@@ -46,13 +46,27 @@ describe('WorkspacePageList', () => {
     expect(onCreatePage).toHaveBeenCalledOnce()
   })
 
-  it('provides real list actions and pressed filter states', () => {
+  it('provides real list actions and selected filter states', () => {
     render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('tab', { name: '全部' })).toHaveAttribute('aria-selected', 'true')
     fireEvent.click(screen.getByRole('button', { name: '页面列表操作' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '按最近编辑筛选' }))
 
-    expect(screen.getByRole('button', { name: '最近编辑' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('tab', { name: '最近编辑' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('closes the action menu outside and renders one search empty state', () => {
+    render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: '页面列表操作' }))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole('textbox', { name: '搜索所有页面' }), {
+      target: { value: '不存在的页面' },
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('没有匹配的页面')
+    expect(screen.queryAllByText('此分类中没有页面。')).toHaveLength(0)
   })
 })
