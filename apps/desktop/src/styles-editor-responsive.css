@@ -1,0 +1,125 @@
+/* Final editor viewport layer keeps document chrome usable beside desktop panels. */
+@media (max-width: 900px) {
+  .workspace .document:not(.is-database-page) {
+    width: min(760px, calc(100% - 32px));
+    margin-top: 36px;
+    padding-right: 32px;
+    padding-bottom: 76px;
+    padding-left: 32px;
+  }
+
+  .workspace .page-cover {
+    margin-right: -32px;
+    margin-left: -32px;
+  }
+}
+
+@media (max-width: 600px) {
+  .workspace > .topbar {
+    padding-right: 6px;
+    padding-left: 8px;
+  }
+
+  .workspace > .topbar .breadcrumbs span,
+  .breadcrumbs .breadcrumb-item > button,
+  .breadcrumbs .breadcrumb-current {
+    max-width: 112px;
+  }
+
+  .workspace > .topbar .top-actions {
+    gap: 0;
+  }
+
+  .workspace > .topbar .top-actions button {
+    min-width: 28px;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  .workspace .document:not(.is-database-page) {
+    width: calc(100% - 20px);
+    margin-top: 28px;
+    padding-right: 18px;
+    padding-bottom: 64px;
+    padding-left: 18px;
+  }
+
+  .workspace .page-cover {
+    height: 138px;
+    margin-right: -18px;
+    margin-left: -18px;
+  }
+
+  .workspace .page-title {
+    min-height: 46px;
+    font-size: clamp(29px, 9vw, 34px);
+  }
+
+  .workspace .page-meta-actions {
+    flex-wrap: wrap;
+    opacity: 1;
+  }
+
+  .editor-page-properties {
+    margin-bottom: 18px;
+  }
+
+  .editor-property-row {
+    grid-template-columns: 94px minmax(0, 1fr);
+  }
+
+  .workspace .editor-content .tiptap > h2 {
+    font-size: 20px;
+  }
+
+  .floating-menu {
+    left: 8px;
+  }
+
+  .open-ai {
+    right: 8px;
+  }
+}
+
+@media (max-width: 400px) {
+  .breadcrumbs .breadcrumb-item:not(:last-child) {
+    display: none;
+  }
+
+  .top-actions > button[aria-label='页面历史'],
+  .top-actions > button[aria-label='收藏页面'],
+  .top-actions > button[aria-label='取消收藏'] {
+    display: none;
+  }
+
+  .workspace .document:not(.is-database-page) {
+    width: calc(100% - 12px);
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .workspace .page-cover {
+    margin-right: -14px;
+    margin-left: -14px;
+  }
+
+  .editor-property-row {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+}
+
+@media (hover: none) {
+  .workspace .page-meta-actions,
+  .workspace .page-cover-actions {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace .document,
+  .workspace .page-meta-actions,
+  .workspace .page-cover-actions {
+    animation: none;
+    transition: none;
+  }
+}

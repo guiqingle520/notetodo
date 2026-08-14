@@ -10,6 +10,7 @@ import { WorkspaceHome } from './WorkspaceHome'
 import { WorkspacePageList } from './WorkspacePageList'
 import { WorkspaceSearchPalette } from './WorkspaceSearchPalette'
 import { HelpPanel } from './AppHelpPanel'
+import { useCompactShell } from './use-compact-shell'
 
 type AppSurface = 'home' | 'pages' | 'editor'
 
@@ -63,6 +64,7 @@ export function App() {
   useEffect(() => {
     void hydrate()
   }, [hydrate])
+  useCompactShell(setSidebarCollapsed, setAiOpen)
   useEffect(() => {
     if (window.notetodo?.notifications)
       void window.notetodo.notifications
