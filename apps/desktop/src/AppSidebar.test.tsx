@@ -66,10 +66,25 @@ describe('Sidebar', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('dialog', { name: '选择页面模板' })).toBeInTheDocument()
     expect(screen.getByText('本地模板')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /空白页/ })).toHaveFocus()
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: '选择页面模板' })).not.toBeInTheDocument()
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveFocus()
+  })
+
+  it('opens page-tree items from the keyboard and closes templates outside', () => {
+    const props = renderSidebar()
+    const page = screen.getByRole('treeitem', { name: /本周计划/ })
+    page.focus()
+    fireEvent.keyDown(page, { key: 'Enter' })
+    expect(useWorkspace.getState().activePageId).toBe('weekly')
+    expect(props.onPageOpen).toHaveBeenCalledOnce()
+
+    fireEvent.click(screen.getByRole('button', { name: '从模板新建页面' }))
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('dialog', { name: '选择页面模板' })).not.toBeInTheDocument()
   })
 
   it('routes AI and help controls to real application actions', () => {

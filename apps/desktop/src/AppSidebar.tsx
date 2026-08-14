@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
 import {
   Archive,
   Bell,
@@ -49,35 +49,44 @@ function PageRow({
     (candidate) => candidate.parentId === page.id && !candidate.archivedAt,
   )
   const Icon = iconMap[page.icon]
+  const openPage = () => {
+    setActivePage(page.id)
+    onPageOpen()
+  }
 
   return (
     <>
       <div
         className={`page-row ${isEditorSurface && activePageId === page.id ? 'is-active' : ''}`}
         style={{ paddingLeft: 10 + depth * 15 }}
-        onClick={() => {
-          setActivePage(page.id)
-          onPageOpen()
+        role="treeitem"
+        tabIndex={0}
+        aria-current={isEditorSurface && activePageId === page.id ? 'page' : undefined}
+        aria-expanded={children.length ? open : undefined}
+        aria-level={depth + 1}
+        onClick={openPage}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || !['Enter', ' '].includes(event.key)) return
+          event.preventDefault()
+          openPage()
         }}
       >
-        <button
-          className="row-disclosure"
-          aria-label={open ? '收起子页面' : '展开子页面'}
-          onClick={(event) => {
-            event.stopPropagation()
-            setOpen((value) => !value)
-          }}
-        >
-          {children.length ? (
-            open ? (
+        {children.length ? (
+          <button
+            className="row-disclosure"
+            aria-label={open ? '收起子页面' : '展开子页面'}
+            onClick={(event) => {
+              event.stopPropagation()
+              setOpen((value) => !value)
+            }}
+          >
+            {open ? (
               <ChevronDown size={13} />
             ) : (
               <ChevronRight size={13} />
-            )
-          ) : (
-            <span />
-          )}
-        </button>
+            )}
+          </button>
+        ) : <span className="row-disclosure" aria-hidden="true" />}
         <Icon size={15} />
         <span>{page.title}</span>
         <button
@@ -139,16 +148,27 @@ export function Sidebar({
 }) {
   const { pages, addPage, setActivePage } = useWorkspace()
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
+  const templateMenuRef = useRef<HTMLDivElement>(null)
+  const templateTriggerRef = useRef<HTMLButtonElement>(null)
   const topLevel = pages.filter((page) => page.parentId === null && !page.archivedAt)
   const favorites = pages.filter((page) => page.favorite && !page.archivedAt)
 
   useEffect(() => {
     if (!templateMenuOpen) return
-    const closeMenu = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setTemplateMenuOpen(false)
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setTemplateMenuOpen(false)
+      templateTriggerRef.current?.focus()
     }
-    window.addEventListener('keydown', closeMenu)
-    return () => window.removeEventListener('keydown', closeMenu)
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !templateMenuRef.current?.contains(event.target) && !templateTriggerRef.current?.contains(event.target)) setTemplateMenuOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('pointerdown', closeOnOutsidePointer)
+    }
   }, [templateMenuOpen])
 
   if (collapsed) {
@@ -202,6 +222,7 @@ export function Sidebar({
           <div className="section-label">
             <span>私有</span>
             <button
+              ref={templateTriggerRef}
               aria-label="从模板新建页面"
               aria-expanded={templateMenuOpen}
               aria-controls="sidebar-template-menu"
@@ -214,6 +235,7 @@ export function Sidebar({
             <div
               className="template-quick-menu"
               id="sidebar-template-menu"
+              ref={templateMenuRef}
               role="dialog"
               aria-label="选择页面模板"
             >
@@ -226,6 +248,7 @@ export function Sidebar({
                 const TemplateIcon = iconMap[template.icon]
                 return (
                   <button
+                    autoFocus={template.id === pageTemplates[0]?.id}
                     key={template.id}
                     onClick={() => {
                       addPage(null, template.id)
@@ -243,7 +266,7 @@ export function Sidebar({
               })}
             </div>
           )}
-          <div className="page-tree">
+          <div className="page-tree" role="tree" aria-label="私有页面">
             {topLevel.map((page) => (
               <PageRow
                 key={page.id}

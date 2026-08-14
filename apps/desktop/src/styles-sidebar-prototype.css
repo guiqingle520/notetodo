@@ -115,6 +115,21 @@
   color: #9b9a97;
 }
 
+.page-row:focus-visible,
+.sidebar button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 1px;
+}
+
+.page-row:focus-visible {
+  color: var(--notion-text);
+  background: var(--notion-hover);
+}
+
+.page-row:focus-within .row-add {
+  opacity: 1;
+}
+
 .simple-row i {
   color: #9b9a97;
   font-size: 10px;
@@ -142,5 +157,19 @@
   .sidebar {
     width: 228px;
     flex-basis: 228px;
+  }
+}
+
+@media (hover: none) {
+  .row-add,
+  .section-label > button {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-label > svg,
+  .section-label > button {
+    transition: none;
   }
 }

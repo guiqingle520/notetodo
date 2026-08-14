@@ -73,6 +73,8 @@
 .template-quick-menu > button:hover,
 .template-quick-menu > button:focus-visible {
   color: var(--notion-text);
+  outline: 2px solid var(--notion-blue);
+  outline-offset: -2px;
   background: var(--notion-hover);
   box-shadow: none;
 }
