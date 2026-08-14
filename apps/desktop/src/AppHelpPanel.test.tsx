@@ -12,6 +12,7 @@ describe('HelpPanel', () => {
     expect(screen.getByRole('dialog', { name: '帮助与快捷键' })).toBeInTheDocument()
     expect(screen.getByText('搜索工作区')).toBeInTheDocument()
     expect(screen.getByText('Ctrl + K')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '关闭帮助' })).toHaveFocus()
 
     fireEvent.click(screen.getByRole('button', { name: '关闭帮助' }))
     expect(onClose).toHaveBeenCalledOnce()

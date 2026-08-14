@@ -124,6 +124,15 @@ export function WorkspaceHome({ onOpenPage, onCreatePage }: WorkspaceHomeProps) 
                 {recentPages.map((page) => (
                   <PageLink key={page.id} page={page} onOpen={() => onOpenPage(page.id)} />
                 ))}
+                {!recentPages.length && (
+                  <div className="home-empty-list" role="status">
+                    <FileText size={18} />
+                    <span>
+                      <strong>还没有最近页面</strong>
+                      <small>新建或打开页面后，它会出现在这里。</small>
+                    </span>
+                  </div>
+                )}
               </div>
             </section>
 

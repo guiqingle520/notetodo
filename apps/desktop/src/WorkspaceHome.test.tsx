@@ -46,4 +46,12 @@ describe('WorkspaceHome', () => {
     fireEvent.click(task)
     expect(task).toHaveClass('is-done')
   })
+
+  it('shows a formal empty state when the workspace has no pages', () => {
+    useWorkspace.setState({ pages: [] })
+    render(<WorkspaceHome onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
+
+    expect(screen.getByRole('status')).toHaveTextContent('还没有最近页面')
+    expect(screen.getByText('收藏页面后会显示在这里。')).toBeInTheDocument()
+  })
 })

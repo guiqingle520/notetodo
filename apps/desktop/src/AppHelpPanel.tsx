@@ -34,7 +34,7 @@ export function HelpPanel({ onClose }: { onClose: () => void }) {
               <small>快速找到 NoteTodo 的常用操作</small>
             </span>
           </div>
-          <button onClick={onClose} aria-label="关闭帮助">
+          <button autoFocus onClick={onClose} aria-label="关闭帮助">
             <X size={16} />
           </button>
         </header>

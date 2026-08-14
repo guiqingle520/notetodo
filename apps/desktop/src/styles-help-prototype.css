@@ -65,6 +65,11 @@
   background: var(--notion-hover);
 }
 
+.help-panel button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 2px;
+}
+
 .help-panel > main {
   padding: 16px;
 }
@@ -129,4 +134,33 @@
   border-top: 1px solid var(--notion-divider);
   background: #fbfbfa;
   font-size: 10px;
+}
+
+@media (max-width: 520px) {
+  .help-backdrop {
+    align-items: start;
+    padding: 8px;
+  }
+
+  .help-panel {
+    width: 100%;
+    max-height: calc(100vh - 47px);
+    overflow-y: auto;
+    border-radius: 6px;
+  }
+
+  .help-panel > main {
+    padding: 12px;
+  }
+
+  .help-shortcuts > div {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-backdrop,
+  .help-panel {
+    animation: none;
+  }
 }
