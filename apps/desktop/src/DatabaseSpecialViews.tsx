@@ -13,7 +13,7 @@ export function GalleryView({ records, schema, coverPropertyId, visiblePropertyI
   const gallery = useMemo(() => prepareGalleryRecords(records), [records])
 
   if (!titleProperty) return <div className="gallery-missing"><Images size={22} /><strong>需要标题属性</strong><span>Gallery 视图使用标题属性生成卡片。</span></div>
-  return <div className={`database-gallery size-${cardSize}`}>
+  return <div className={`database-gallery size-${cardSize}`} role="region" aria-label="画廊视图">
     <header className="gallery-masthead"><div><small>{gallery.records.length} 张卡片</small><strong>画廊</strong></div><p>以卡片浏览记录；没有封面时显示本地生成的占位图。</p></header>
     <div className="gallery-grid">{gallery.records.map((record, index) => <GalleryCard key={record.id} record={record} index={index} titleProperty={titleProperty} statusProperty={statusProperty} metadata={metadata} coverPropertyId={coverPropertyId} updateCell={updateCell} />)}</div>
     {gallery.truncatedCount > 0 && <footer className="gallery-foot">已显示前 120 项 · 另有 {gallery.truncatedCount} 项，请使用筛选缩小范围</footer>}
@@ -74,9 +74,9 @@ export function TimelineView({ records, schema, startDatePropertyId, endDateProp
 
   if (!startProperty || !endProperty || !titleProperty) return <div className="calendar-missing"><ChartNoAxesGantt size={22} /><strong>需要开始与截止日期</strong><span>Timeline 视图会使用数据库中的日期属性绘制任务范围。</span></div>
 
-  return <div className="database-timeline">
+  return <div className="database-timeline" role="region" aria-label="时间轴视图">
     <header className="timeline-toolbar"><div><small>28 天时间范围</small><strong>{rangeLabel}</strong></div><span>{layout.matchingCount} 条记录 · {layout.unscheduled.length} 待排期</span><nav aria-label="切换时间范围"><button aria-label="前两周" onClick={() => setRangeStart(shiftIsoDate(rangeStart, -14))}><ChevronLeft size={14} /></button><button onClick={() => setRangeStart(startOfWeekIso(todayIso))}>今天</button><button aria-label="后两周" onClick={() => setRangeStart(shiftIsoDate(rangeStart, 14))}><ChevronRight size={14} /></button></nav></header>
-    <div className="timeline-scroll">
+    <div className="timeline-scroll" tabIndex={0} aria-label="横向滚动时间轴">
       <div className="timeline-canvas" style={{ width: 168 + TIMELINE_DAYS * TIMELINE_DAY_WIDTH }}>
         <div className="timeline-scale"><strong>任务 / OWNER</strong><div>{days.map((day) => <time className={`${day.weekday === 0 || day.weekday === 6 ? 'is-weekend' : ''} ${day.date === todayIso ? 'is-today' : ''}`} dateTime={day.date} key={day.date}><b>{day.month}/{day.day}</b><small>{['日', '一', '二', '三', '四', '五', '六'][day.weekday]}</small></time>)}</div></div>
         <div className="timeline-rows">{layout.items.map((item) => <div className="timeline-row" key={item.record.id}>
@@ -110,7 +110,7 @@ export function CalendarView({ records, schema, datePropertyId, updateCell }: { 
 
   if (!dateProperty || !titleProperty) return <div className="calendar-missing"><CalendarDays size={22} /><strong>需要日期与标题属性</strong><span>Calendar 视图会自动使用数据库中的第一个日期属性。</span></div>
 
-  return <div className="database-calendar">
+  return <div className="database-calendar" role="region" aria-label="日历视图" tabIndex={0}>
     <header className="calendar-header">
       <div><small>日历</small><strong>{monthLabel}</strong></div>
       <span>{records.length - grouped.unscheduled.length} 已排期 · {grouped.unscheduled.length} 待排期</span>

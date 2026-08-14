@@ -1,0 +1,157 @@
+/* Final responsive layer for database content views; dialogs live in their own modules. */
+.database-board {
+  gap: 12px;
+  padding: 10px 8px 18px;
+  background: #fff;
+  scroll-padding-inline: 8px;
+}
+
+.database-board .board-column {
+  min-width: 220px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--notion-sidebar);
+}
+
+.database-list,
+.database-calendar,
+.database-gallery,
+.database-timeline {
+  max-width: 100%;
+}
+
+.calendar-header button:focus-visible,
+.timeline-toolbar button:focus-visible,
+.calendar-more:focus-visible,
+.gallery-card > button:focus-visible,
+.board-column article button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .database-board {
+    grid-template-columns: repeat(3, minmax(240px, 82vw));
+    scroll-snap-type: x proximity;
+  }
+
+  .database-board .board-column {
+    scroll-snap-align: start;
+  }
+
+  .database-list {
+    overflow: auto;
+  }
+
+  .database-list-space {
+    min-width: 0;
+  }
+
+  .database-list-row {
+    grid-template-columns: 28px minmax(150px, 1fr) 104px;
+  }
+
+  .database-list-row > span:not(.list-index),
+  .database-list-row > time {
+    display: none;
+  }
+
+  .database-calendar,
+  .database-gallery,
+  .database-timeline {
+    min-width: 0;
+  }
+
+  .calendar-header,
+  .timeline-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .calendar-header > span,
+  .timeline-toolbar > span {
+    display: none;
+  }
+
+  .calendar-weekdays,
+  .calendar-grid {
+    min-width: 600px;
+  }
+
+  .database-calendar {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .gallery-masthead {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .gallery-masthead p {
+    max-width: 420px;
+  }
+
+  .gallery-grid,
+  .database-gallery.size-small .gallery-grid,
+  .database-gallery.size-large .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  .timeline-toolbar,
+  .calendar-header {
+    position: sticky;
+    left: 0;
+    z-index: 8;
+  }
+
+  .timeline-foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .database-board {
+    grid-template-columns: repeat(3, minmax(224px, 88vw));
+  }
+
+  .gallery-grid,
+  .database-gallery.size-small .gallery-grid,
+  .database-gallery.size-large .gallery-grid {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 8px;
+  }
+
+  .gallery-masthead p {
+    display: none;
+  }
+
+  .calendar-header,
+  .timeline-toolbar {
+    min-width: 320px;
+  }
+
+  .calendar-unscheduled {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calendar-unscheduled > div {
+    overflow-x: auto;
+  }
+}
+
+@media (hover: none) {
+  .gallery-card > button,
+  .board-column article button {
+    min-height: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-grid > section,
+  .calendar-grid article,
+  .gallery-card,
+  .timeline-track > article {
+    transition: none;
+  }
+}

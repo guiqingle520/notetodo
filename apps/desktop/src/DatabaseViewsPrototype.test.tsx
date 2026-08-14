@@ -24,6 +24,7 @@ describe('database prototype views', () => {
   it('uses direct gallery language instead of the legacy editorial theme', () => {
     render(<GalleryView records={[record]} schema={schema} updateCell={vi.fn()} />)
 
+    expect(screen.getByRole('region', { name: '画廊视图' })).toBeInTheDocument()
     expect(screen.getByText('画廊')).toBeInTheDocument()
     expect(screen.getByText('1 张卡片')).toBeInTheDocument()
     expect(screen.getByText('桌面端体验')).toBeInTheDocument()
