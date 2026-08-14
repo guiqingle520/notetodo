@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import { Activity, ArrowRight, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Images, Plus, RotateCcw, X, Zap } from 'lucide-react'
 import { buildCalendarMonth, groupRecordsByDate, layoutTimelineRecords, prepareGalleryRecords, safeGalleryCover, timelineDays, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type PropertyValue } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
@@ -141,6 +141,14 @@ export function AutomationPanel({ schema, rules, runs, onClose, onSave, onToggle
   const [message, setMessage] = useState('')
   const [replayingId, setReplayingId] = useState<string | null>(null)
 
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+
   const setCondition = (patch: Partial<NonNullable<AutomationRule['condition']>>) => setDraft((current) => ({ ...current, condition: { propertyId: current.condition?.propertyId ?? defaultTrigger.id, operator: current.condition?.operator ?? 'equals', ...current.condition, ...patch } }))
   const setAction = (patch: Partial<AutomationRule['actions'][number]>) => setDraft((current) => ({ ...current, actions: [{ ...current.actions[0]!, ...patch }] }))
   const save = async () => {
@@ -156,8 +164,8 @@ export function AutomationPanel({ schema, rules, runs, onClose, onSave, onToggle
 
   return <div className="automation-backdrop" onMouseDown={onClose}>
     <section className="automation-panel" role="dialog" aria-modal="true" aria-label="数据库自动化" onMouseDown={(event) => event.stopPropagation()}>
-      <header><div><span><Zap size={15} /></span><div><small>{schema.name}</small><strong>数据库自动化</strong></div></div><button onClick={onClose}><X size={16} /></button></header>
-      <nav><button className={tab === 'rules' ? 'is-active' : ''} onClick={() => setTab('rules')}><Zap size={12} />规则 {rules.length}</button><button className={tab === 'runs' ? 'is-active' : ''} onClick={() => setTab('runs')}><Activity size={12} />运行 {runs.length}</button></nav>
+      <header><div><span><Zap size={15} /></span><div><small>{schema.name}</small><strong>数据库自动化</strong></div></div><button aria-label="关闭数据库自动化" onClick={onClose}><X size={16} /></button></header>
+      <nav aria-label="自动化视图" role="tablist"><button aria-selected={tab === 'rules'} className={tab === 'rules' ? 'is-active' : ''} role="tab" onClick={() => setTab('rules')}><Zap size={12} />规则 {rules.length}</button><button aria-selected={tab === 'runs'} className={tab === 'runs' ? 'is-active' : ''} role="tab" onClick={() => setTab('runs')}><Activity size={12} />运行 {runs.length}</button></nav>
       {tab === 'rules' ? <div className="automation-layout">
         <aside><button className="automation-new" onClick={() => setDraft(blankRule())}><Plus size={12} />新建规则</button>{rules.map((rule) => <button className={draft.id === rule.id ? 'is-selected' : ''} key={rule.id} onClick={() => setDraft(structuredClone(rule))}><i className={rule.enabled ? 'is-live' : ''} /><span><strong>{rule.name}</strong><small>{propertyName(schema.properties, rule.trigger.propertyId)} 变更时</small></span><em onClick={(event) => { event.stopPropagation(); void onToggle(rule) }}>{rule.enabled ? 'ON' : 'OFF'}</em></button>)}</aside>
         <main>

@@ -350,6 +350,12 @@
   background: #eb5757;
 }
 
+.record-detail-panel button:focus-visible,
+.record-trash-panel button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 2px;
+}
+
 @media (max-width: 820px) {
   .record-detail-backdrop {
     padding: 10px;
@@ -370,5 +376,38 @@
     overflow: visible;
     border-top: 1px solid var(--notion-divider);
     border-left: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .record-detail-backdrop {
+    padding: 6px;
+  }
+
+  .record-detail-panel {
+    width: calc(100vw - 12px);
+    height: calc(100vh - 43px);
+    border-radius: 6px;
+  }
+
+  .record-detail-layout > main {
+    padding: 28px 18px 40px;
+  }
+
+  .record-title-input {
+    font-size: clamp(26px, 9vw, 34px);
+  }
+
+  .record-property-field {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .record-detail-backdrop,
+  .record-detail-panel,
+  .record-trash-backdrop,
+  .record-trash-panel {
+    animation: none;
   }
 }

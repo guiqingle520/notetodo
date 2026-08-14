@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { DatabaseSchema } from '@notetodo/database-core'
 import { CsvImportPanel, SchemaPanel, TemplateEditorPanel, ViewRulesPanel } from './DatabaseBlock'
+import { AutomationPanel } from './DatabaseSpecialViews'
 
 const schema: DatabaseSchema = {
   id: 'product-db',
@@ -48,9 +49,30 @@ describe('database prototype dialogs', () => {
 
     expect(screen.getByRole('dialog', { name: '视图规则工作台' })).toBeInTheDocument()
     expect(screen.getByText('筛选、排序与分组')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '筛选 0' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '排序 0' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '分组' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '筛选 0' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: '排序 0' })).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getByRole('tab', { name: '分组' })).toBeInTheDocument()
+  })
+
+  it('exposes automation navigation and dismissal to keyboard users', () => {
+    const onClose = vi.fn()
+    render(
+      <AutomationPanel
+        schema={schema}
+        rules={[]}
+        runs={[]}
+        onClose={onClose}
+        onSave={vi.fn()}
+        onToggle={vi.fn()}
+        onReplay={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('dialog', { name: '数据库自动化' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '规则 0' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: '运行 0' })).toHaveAttribute('aria-selected', 'false')
+    fireEvent.click(screen.getByRole('button', { name: '关闭数据库自动化' }))
+    expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('keeps template and CSV authoring dialogs labelled and dismissible', () => {
