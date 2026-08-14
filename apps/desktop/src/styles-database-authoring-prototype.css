@@ -281,6 +281,12 @@
   font-size: 10px;
 }
 
+.template-editor-panel button:focus-visible,
+.csv-import-panel button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 2px;
+}
+
 @media (max-width: 720px) {
   .template-editor-backdrop,
   .csv-import-backdrop {
@@ -293,5 +299,57 @@
   .csv-mapping-head,
   .csv-mapping label {
     grid-template-columns: minmax(90px, 0.8fr) minmax(100px, 1fr) minmax(140px, 1.1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .template-editor-backdrop,
+  .csv-import-backdrop {
+    padding: 6px;
+  }
+
+  .template-editor-panel,
+  .csv-import-panel {
+    width: calc(100vw - 12px);
+    max-height: calc(100vh - 43px);
+    border-radius: 6px;
+  }
+
+  .template-editor-panel > main,
+  .csv-import-panel > main {
+    padding: 12px;
+  }
+
+  .template-name-field,
+  .template-property-section label {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+
+  .csv-mapping-head {
+    display: none;
+  }
+
+  .csv-mapping label {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px 8px;
+    padding: 8px 10px;
+  }
+
+  .csv-mapping label select {
+    grid-column: 1 / -1;
+  }
+
+  .template-editor-panel > footer,
+  .csv-import-panel > footer {
+    flex-wrap: wrap;
+    gap: 7px;
+    padding: 9px 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .template-editor-panel,
+  .csv-import-panel {
+    animation: none;
   }
 }

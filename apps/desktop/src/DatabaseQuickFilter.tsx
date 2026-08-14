@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Filter, Plus, X } from 'lucide-react'
 import type {
   DatabaseProperty,
@@ -33,6 +33,13 @@ export function QuickFilterMenu({
   const [value, setValue] = useState<PropertyValue>(() =>
     initialProperty ? defaultValue(initialProperty) : null,
   )
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
   const selectProperty = (nextId: string) => {
     const next = schema.properties.find((candidate) => candidate.id === nextId) ?? initialProperty
     if (!next) return

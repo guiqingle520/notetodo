@@ -401,6 +401,26 @@
   .record-property-field {
     grid-template-columns: 92px minmax(0, 1fr);
   }
+
+  .record-trash-backdrop {
+    padding: 6px;
+  }
+
+  .record-trash-panel {
+    width: calc(100vw - 12px);
+    max-height: calc(100vh - 43px);
+    border-radius: 6px;
+  }
+
+  .record-trash-panel article {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px;
+    padding: 7px;
+  }
+
+  .record-trash-panel article > span {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

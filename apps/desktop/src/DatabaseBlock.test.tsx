@@ -75,10 +75,13 @@ describe('database quick queries and groups', () => {
 
   it('builds and removes persisted quick-filter chips', () => {
     const onChange = vi.fn()
-    const menu = render(<QuickFilterMenu schema={querySchema} filters={[]} onClose={vi.fn()} onChange={onChange} />)
+    const onClose = vi.fn()
+    const menu = render(<QuickFilterMenu schema={querySchema} filters={[]} onClose={onClose} onChange={onChange} />)
     fireEvent.change(menu.getByRole('combobox', { name: '快速筛选值' }), { target: { value: 'doing' } })
     fireEvent.click(menu.getByRole('button', { name: '添加' }))
     expect(onChange).toHaveBeenCalledWith([{ propertyId: 'status', operator: 'equals', value: 'doing' }])
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
     menu.unmount()
     const saved = [{ propertyId: 'status', operator: 'equals', value: 'doing' }] as const
     const persisted = render(<QuickFilterMenu schema={querySchema} filters={[...saved]} onClose={vi.fn()} onChange={onChange} />)
@@ -332,7 +335,10 @@ describe('database authoring', () => {
 
     const onSaveSelection = vi.fn().mockResolvedValue(undefined)
     const onEdit = vi.fn()
-    const templates = render(<DatabaseTemplateMenu templates={[]} selectedCount={1} onClose={vi.fn()} onCreateBlank={vi.fn()} onApply={vi.fn()} onEdit={onEdit} onSaveSelection={onSaveSelection} onDelete={vi.fn()} />)
+    const closeTemplates = vi.fn()
+    const templates = render(<DatabaseTemplateMenu templates={[]} selectedCount={1} onClose={closeTemplates} onCreateBlank={vi.fn()} onApply={vi.fn()} onEdit={onEdit} onSaveSelection={onSaveSelection} onDelete={vi.fn()} />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(closeTemplates).toHaveBeenCalledOnce()
     fireEvent.click(templates.getByRole('button', { name: /新建模板/u }))
     expect(onEdit).toHaveBeenCalledWith(null)
     fireEvent.change(templates.getByRole('textbox', { name: '模板名称' }), { target: { value: '发布检查' } })

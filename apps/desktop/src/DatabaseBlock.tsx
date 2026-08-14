@@ -322,6 +322,13 @@ export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCrea
 }) {
   const [name, setName] = useState('新模板')
   const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy) onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [busy, onClose])
   const run = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); try { await action() } finally { setBusy(false) } }
   return <section className="database-template-menu" role="dialog" aria-label="数据库模板">
     <header><strong>新建记录</strong><button aria-label="关闭数据库模板" onClick={onClose}><X size={14} /></button></header>

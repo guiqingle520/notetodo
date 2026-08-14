@@ -355,3 +355,51 @@
 .database-row-select input:checked + span::after { content: '✓'; font-size: 10px; line-height: 1; }
 .database-grid-row.is-selected, .generic-database-row.is-selected { background: rgba(35,131,226,.07); }
 .generic-database-head > .database-row-select { border-bottom: 0; }
+
+.database-view-menu button:focus-visible,
+.database-layout-menu button:focus-visible,
+.quick-filter-menu button:focus-visible,
+.database-template-menu button:focus-visible {
+  outline: 2px solid var(--notion-blue);
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .database-view-menu,
+  .database-view-menu.is-manage,
+  .database-layout-menu,
+  .quick-filter-menu,
+  .database-template-menu {
+    right: 6px;
+    left: 6px;
+    width: auto;
+    max-height: calc(100vh - 112px);
+  }
+
+  .database-view-menu,
+  .database-layout-menu,
+  .database-template-menu {
+    overflow-y: auto;
+  }
+
+  .database-view-menu > label {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quick-filter-composer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .database-template-menu > footer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .database-view-menu,
+  .database-layout-menu,
+  .quick-filter-menu,
+  .database-template-menu {
+    animation: none;
+  }
+}
