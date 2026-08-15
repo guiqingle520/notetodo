@@ -94,10 +94,16 @@ describe('WorkspacePageList', () => {
 
   it('closes the action menu outside and renders one search empty state', () => {
     render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: '页面列表操作' }))
+    const trigger = screen.getByRole('button', { name: '页面列表操作' })
+    fireEvent.click(trigger)
     expect(screen.getByRole('menu')).toBeInTheDocument()
     fireEvent.pointerDown(document.body)
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+
+    fireEvent.click(trigger)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
 
     fireEvent.change(screen.getByRole('textbox', { name: '搜索所有页面' }), {
       target: { value: '不存在的页面' },

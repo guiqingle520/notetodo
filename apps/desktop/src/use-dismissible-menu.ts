@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-/** Centralizes outside-press and global Escape dismissal for anchored menus. */
+/** Centralizes outside-press and global Escape dismissal for anchored popovers. */
 export function useDismissibleMenu(
   open: boolean,
   close: () => void,

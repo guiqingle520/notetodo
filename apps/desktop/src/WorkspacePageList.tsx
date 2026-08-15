@@ -15,6 +15,7 @@ import type { WorkspacePage } from './domain'
 import { iconMap } from './AppSidebar'
 import { focusFirstMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
 import { useWorkspace } from './store'
+import { useDismissibleMenu } from './use-dismissible-menu'
 
 type PageListFilter = 'all' | 'mine' | 'recent'
 type PageGroupId = 'workspace' | 'favorites' | 'nested'
@@ -124,32 +125,15 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
   const filterTabsId = useId()
   const resultsPanelId = useId()
   const filterTabsRef = useRef<HTMLDivElement>(null)
-  const pageMenuRef = useRef<HTMLDivElement>(null)
   const pageMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const pageMenuRef = useDismissibleMenu(
+    pageMenuOpen,
+    () => setPageMenuOpen(false),
+    () => pageMenuTriggerRef.current?.focus(),
+  )
   const [openGroups, setOpenGroups] = useState<Set<PageGroupId>>(
     () => new Set(['workspace', 'favorites', 'nested']),
   )
-
-  useEffect(() => {
-    if (!pageMenuOpen) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPageMenuOpen(false)
-        pageMenuTriggerRef.current?.focus()
-      }
-    }
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (event.target instanceof Node && !pageMenuRef.current?.contains(event.target)) {
-        setPageMenuOpen(false)
-      }
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    window.addEventListener('pointerdown', closeOnOutsidePointer)
-    return () => {
-      window.removeEventListener('keydown', closeOnEscape)
-      window.removeEventListener('pointerdown', closeOnOutsidePointer)
-    }
-  }, [pageMenuOpen])
 
   useEffect(() => {
     if (pageMenuOpen) focusFirstMenuItem(pageMenuRef.current)

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ComponentType } from 'react'
+import { useId, useRef, useState, type ComponentType } from 'react'
 import {
   Archive,
   Bell,
@@ -23,6 +23,7 @@ import {
 import { type PageIcon, type WorkspacePage } from './domain'
 import { pageTemplates } from './data/page-templates'
 import { useWorkspace } from './store'
+import { useDismissibleMenu } from './use-dismissible-menu'
 import { focusSidebarTreeItem, navigateSidebarTree } from './sidebar-tree-keyboard'
 
 export const iconMap: Record<PageIcon, ComponentType<{ size?: number }>> = {
@@ -161,34 +162,15 @@ export function Sidebar({
   const { pages, activePageId, addPage, setActivePage } = useWorkspace()
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
   const templateMenuId = useId()
-  const templateMenuRef = useRef<HTMLDivElement>(null)
   const templateTriggerRef = useRef<HTMLButtonElement>(null)
+  const templateMenuRef = useDismissibleMenu(
+    templateMenuOpen,
+    () => setTemplateMenuOpen(false),
+    () => templateTriggerRef.current?.focus(),
+  )
   const topLevel = pages.filter((page) => page.parentId === null && !page.archivedAt)
   const tabStopPageId = activeSurface === 'editor' ? activePageId : topLevel[0]?.id
   const favorites = pages.filter((page) => page.favorite && !page.archivedAt)
-
-  useEffect(() => {
-    if (!templateMenuOpen) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      setTemplateMenuOpen(false)
-      templateTriggerRef.current?.focus()
-    }
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !templateMenuRef.current?.contains(event.target) &&
-        !templateTriggerRef.current?.contains(event.target)
-      )
-        setTemplateMenuOpen(false)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    window.addEventListener('pointerdown', closeOnOutsidePointer)
-    return () => {
-      window.removeEventListener('keydown', closeOnEscape)
-      window.removeEventListener('pointerdown', closeOnOutsidePointer)
-    }
-  }, [templateMenuOpen])
 
   if (collapsed) {
     return (
@@ -267,54 +249,55 @@ export function Sidebar({
 
       <div className="sidebar-scroll-area">
         <div className="sidebar-section page-section">
-          <div className="section-label">
-            <span>私有</span>
-            <button
-              ref={templateTriggerRef}
-              aria-label="从模板新建页面"
-              aria-haspopup="dialog"
-              aria-expanded={templateMenuOpen}
-              aria-controls={templateMenuId}
-              onClick={() => setTemplateMenuOpen((value) => !value)}
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-          {templateMenuOpen && (
-            <div
-              className="template-quick-menu"
-              id={templateMenuId}
-              ref={templateMenuRef}
-              role="dialog"
-              aria-label="选择页面模板"
-            >
-              <header>
-                <LayoutTemplate size={13} />
-                <span>选择起点</span>
-                <small>本地模板</small>
-              </header>
-              {pageTemplates.map((template) => {
-                const TemplateIcon = iconMap[template.icon]
-                return (
-                  <button
-                    autoFocus={template.id === pageTemplates[0]?.id}
-                    key={template.id}
-                    onClick={() => {
-                      addPage(null, template.id)
-                      setTemplateMenuOpen(false)
-                      onPageOpen()
-                    }}
-                  >
-                    <TemplateIcon size={14} />
-                    <span>
-                      <strong>{template.name}</strong>
-                      <small>{template.description}</small>
-                    </span>
-                  </button>
-                )
-              })}
+          <div className="template-quick-wrap" ref={templateMenuRef}>
+            <div className="section-label">
+              <span>私有</span>
+              <button
+                ref={templateTriggerRef}
+                aria-label="从模板新建页面"
+                aria-haspopup="dialog"
+                aria-expanded={templateMenuOpen}
+                aria-controls={templateMenuId}
+                onClick={() => setTemplateMenuOpen((value) => !value)}
+              >
+                <Plus size={14} />
+              </button>
             </div>
-          )}
+            {templateMenuOpen && (
+              <div
+                className="template-quick-menu"
+                id={templateMenuId}
+                role="dialog"
+                aria-label="选择页面模板"
+              >
+                <header>
+                  <LayoutTemplate size={13} />
+                  <span>选择起点</span>
+                  <small>本地模板</small>
+                </header>
+                {pageTemplates.map((template) => {
+                  const TemplateIcon = iconMap[template.icon]
+                  return (
+                    <button
+                      autoFocus={template.id === pageTemplates[0]?.id}
+                      key={template.id}
+                      onClick={() => {
+                        addPage(null, template.id)
+                        setTemplateMenuOpen(false)
+                        onPageOpen()
+                      }}
+                    >
+                      <TemplateIcon size={14} />
+                      <span>
+                        <strong>{template.name}</strong>
+                        <small>{template.description}</small>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           <div
             className="page-tree"
             role="tree"
