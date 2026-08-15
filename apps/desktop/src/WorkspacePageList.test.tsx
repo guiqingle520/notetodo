@@ -61,6 +61,37 @@ describe('WorkspacePageList', () => {
     expect(screen.getByRole('tab', { name: '最近编辑' })).toHaveAttribute('aria-selected', 'true')
   })
 
+  it('switches filter tabs with standard keyboard navigation', () => {
+    render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
+    const all = screen.getByRole('tab', { name: '全部' })
+    const mine = screen.getByRole('tab', { name: '我创建的' })
+    const recent = screen.getByRole('tab', { name: '最近编辑' })
+
+    expect(all).toHaveAttribute('tabindex', '0')
+    expect(mine).toHaveAttribute('tabindex', '-1')
+    fireEvent.keyDown(all, { key: 'ArrowRight' })
+    expect(mine).toHaveFocus()
+    expect(mine).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(mine, { key: 'End' })
+    expect(recent).toHaveFocus()
+
+    const results = screen.getByRole('tabpanel')
+    expect(results).toHaveAttribute('id', recent.getAttribute('aria-controls'))
+    expect(results).toHaveAttribute('aria-labelledby', recent.id)
+  })
+
+  it('connects each collapsible group heading to its rows', () => {
+    render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
+    const workspace = screen.getByRole('button', { name: /工作区/u })
+    const rowsId = workspace.getAttribute('aria-controls')
+
+    expect(rowsId).toBeTruthy()
+    expect(document.getElementById(rowsId!)).toHaveAttribute('aria-labelledby', workspace.id)
+    fireEvent.click(workspace)
+    expect(workspace).toHaveAttribute('aria-expanded', 'false')
+    expect(document.getElementById(rowsId!)).not.toBeInTheDocument()
+  })
+
   it('closes the action menu outside and renders one search empty state', () => {
     render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: '页面列表操作' }))

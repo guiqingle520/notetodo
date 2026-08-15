@@ -64,17 +64,25 @@ function PageTableGroup({
   onToggle: () => void
   onOpenPage: (pageId: string) => void
 }) {
+  const headingId = useId()
+  const rowsId = useId()
   const GroupIcon = group.icon
   return (
-    <section className="page-list-group">
-      <button className="page-list-group-heading" aria-expanded={open} onClick={onToggle}>
+    <section className="page-list-group" aria-labelledby={headingId}>
+      <button
+        id={headingId}
+        className="page-list-group-heading"
+        aria-expanded={open}
+        aria-controls={rowsId}
+        onClick={onToggle}
+      >
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <GroupIcon size={15} />
         <strong>{group.label}</strong>
         <span>{group.pages.length}</span>
       </button>
       {open && (
-        <div className="page-list-rows">
+        <div id={rowsId} className="page-list-rows" aria-labelledby={headingId}>
           {group.pages.map((page) => {
             const Icon = iconMap[page.icon]
             return (
@@ -113,6 +121,9 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
   const [filter, setFilter] = useState<PageListFilter>('all')
   const [pageMenuOpen, setPageMenuOpen] = useState(false)
   const pageMenuId = useId()
+  const filterTabsId = useId()
+  const resultsPanelId = useId()
+  const filterTabsRef = useRef<HTMLDivElement>(null)
   const pageMenuRef = useRef<HTMLDivElement>(null)
   const pageMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const [openGroups, setOpenGroups] = useState<Set<PageGroupId>>(
@@ -270,14 +281,38 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
                 placeholder="搜索页面"
               />
             </label>
-            <div className="page-list-filters" aria-label="页面筛选" role="tablist">
-              {filters.map((item) => (
+            <div
+              ref={filterTabsRef}
+              className="page-list-filters"
+              aria-label="页面筛选"
+              role="tablist"
+            >
+              {filters.map((item, index) => (
                 <button
+                  id={`${filterTabsId}-${item.id}`}
                   className={filter === item.id ? 'is-active' : ''}
                   aria-selected={filter === item.id}
+                  aria-controls={resultsPanelId}
                   key={item.id}
                   role="tab"
+                  tabIndex={filter === item.id ? 0 : -1}
                   onClick={() => setFilter(item.id)}
+                  onKeyDown={(event) => {
+                    let nextIndex: number | undefined
+                    if (event.key === 'ArrowRight') nextIndex = (index + 1) % filters.length
+                    if (event.key === 'ArrowLeft')
+                      nextIndex = (index - 1 + filters.length) % filters.length
+                    if (event.key === 'Home') nextIndex = 0
+                    if (event.key === 'End') nextIndex = filters.length - 1
+                    if (nextIndex === undefined) return
+                    event.preventDefault()
+                    const nextFilter = filters[nextIndex]
+                    if (!nextFilter) return
+                    setFilter(nextFilter.id)
+                    filterTabsRef.current
+                      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+                      [nextIndex]?.focus()
+                  }}
                 >
                   {item.label}
                 </button>
@@ -291,7 +326,12 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
             <span>作者</span>
             <span />
           </div>
-          <div className="page-list-groups">
+          <div
+            id={resultsPanelId}
+            className="page-list-groups"
+            role="tabpanel"
+            aria-labelledby={`${filterTabsId}-${filter}`}
+          >
             {!filteredPages.length ? (
               <div className="page-list-no-results" role="status">
                 <Search size={19} />
