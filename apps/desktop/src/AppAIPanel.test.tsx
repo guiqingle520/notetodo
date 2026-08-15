@@ -19,6 +19,7 @@ describe('AIPanel', () => {
   it('renders the prototype context, quick actions and accessible composer', () => {
     render(
       <AIPanel
+        id="ai-panel"
         onClose={vi.fn()}
         selectionContext={null}
         onApplyPatch={vi.fn()}
@@ -27,6 +28,10 @@ describe('AIPanel', () => {
     )
 
     expect(screen.getByRole('complementary', { name: '工作副驾驶' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '工作副驾驶' })).toHaveAttribute(
+      'id',
+      'ai-panel',
+    )
     expect(screen.getByRole('log', { name: 'AI 对话' })).toBeInTheDocument()
     expect(screen.getByRole('log', { name: 'AI 对话' })).toHaveAttribute('aria-busy', 'false')
     expect(screen.getByText(/当前页面 · \d+ 块/u)).toBeInTheDocument()

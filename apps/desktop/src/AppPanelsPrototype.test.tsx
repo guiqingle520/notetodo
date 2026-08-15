@@ -18,16 +18,24 @@ afterEach(cleanup)
 describe('prototype modal surfaces', () => {
   it('exposes the archive as a labelled modal and closes from its header', () => {
     const onClose = vi.fn()
-    render(<ArchivePanel onClose={onClose} />)
+    render(<ArchivePanel id="archive-dialog" onClose={onClose} />)
 
-    expect(screen.getByRole('dialog', { name: '归档与回收站' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '归档与回收站' })).toHaveAttribute(
+      'id',
+      'archive-dialog',
+    )
     fireEvent.click(screen.getByRole('button', { name: '关闭归档与回收站' }))
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('uses the same dialog semantics for updates and sharing', () => {
-    const { unmount } = render(<NotificationPanel onClose={vi.fn()} onCountChange={vi.fn()} />)
-    expect(screen.getByRole('dialog', { name: '更新' })).toBeInTheDocument()
+    const { unmount } = render(
+      <NotificationPanel id="notifications-dialog" onClose={vi.fn()} onCountChange={vi.fn()} />,
+    )
+    expect(screen.getByRole('dialog', { name: '更新' })).toHaveAttribute(
+      'id',
+      'notifications-dialog',
+    )
     expect(screen.getByRole('button', { name: '关闭更新' })).toBeInTheDocument()
 
     unmount()
@@ -41,9 +49,13 @@ describe('prototype modal surfaces', () => {
 
   it('presents workspace import as a local preflight dialog', () => {
     const onClose = vi.fn()
-    render(<ImportPanel onClose={onClose} onImported={vi.fn()} />)
+    render(<ImportPanel id="import-dialog" onClose={onClose} onImported={vi.fn()} />)
 
     expect(screen.getByRole('dialog', { name: '导入工作区' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '导入工作区' })).toHaveAttribute(
+      'id',
+      'import-dialog',
+    )
     expect(screen.getByRole('dialog', { name: '导入工作区' })).toHaveAttribute('aria-busy', 'false')
     expect(screen.getByText('Notion 导出包 · 本地安全预检')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '选择 Notion 导出包' })).toBeInTheDocument()

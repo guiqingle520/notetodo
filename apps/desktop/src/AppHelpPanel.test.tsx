@@ -7,9 +7,12 @@ afterEach(cleanup)
 describe('HelpPanel', () => {
   it('shows only supported shortcuts and closes explicitly', () => {
     const onClose = vi.fn()
-    render(<HelpPanel onClose={onClose} />)
+    render(<HelpPanel id="help-dialog" onClose={onClose} />)
 
-    expect(screen.getByRole('dialog', { name: '帮助与快捷键' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '帮助与快捷键' })).toHaveAttribute(
+      'id',
+      'help-dialog',
+    )
     expect(screen.getByText('搜索工作区')).toBeInTheDocument()
     expect(screen.getByText('Ctrl + K')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '关闭帮助' })).toHaveFocus()

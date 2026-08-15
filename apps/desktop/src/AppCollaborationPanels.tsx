@@ -53,7 +53,7 @@ const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
   book: BookOpen,
 }
 
-export function ArchivePanel({ onClose }: { onClose: () => void }) {
+export function ArchivePanel({ id, onClose }: { id?: string; onClose: () => void }) {
   const dialogRef = useDialogFocus<HTMLElement>()
   const { pages, restorePage } = useWorkspace()
   const archivedPages = pages.filter((page) => page.archivedAt)
@@ -61,6 +61,7 @@ export function ArchivePanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        id={id}
         ref={dialogRef}
         className="archive-panel"
         role="dialog"
@@ -116,9 +117,11 @@ export function ArchivePanel({ onClose }: { onClose: () => void }) {
 }
 
 export function NotificationPanel({
+  id,
   onClose,
   onCountChange,
 }: {
+  id?: string
   onClose: () => void
   onCountChange: (count: number) => void
 }) {
@@ -151,6 +154,7 @@ export function NotificationPanel({
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        id={id}
         ref={dialogRef}
         className="notification-panel"
         role="dialog"

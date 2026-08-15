@@ -17,9 +17,13 @@ afterEach(cleanup)
 
 describe('WorkspaceSearchPalette', () => {
   it('shows recently visited pages before a query is entered', () => {
-    render(<WorkspaceSearchPalette onClose={vi.fn()} onOpenPage={vi.fn()} />)
+    render(<WorkspaceSearchPalette id="search-dialog" onClose={vi.fn()} onOpenPage={vi.fn()} />)
 
     expect(screen.getByText('最近访问')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '搜索工作区' })).toHaveAttribute(
+      'id',
+      'search-dialog',
+    )
     expect(screen.getByRole('listbox', { name: '最近访问' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '打开搜索结果：从这里开始' })).toHaveAttribute(
       'aria-selected',

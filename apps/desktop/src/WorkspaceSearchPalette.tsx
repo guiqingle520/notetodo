@@ -6,6 +6,7 @@ import { useWorkspace } from './store'
 import { useDialogFocus } from './use-dialog-focus'
 
 interface WorkspaceSearchPaletteProps {
+  id?: string
   onClose: () => void
   onOpenPage: (pageId: string) => void
 }
@@ -59,7 +60,7 @@ function SearchResultRow({
   )
 }
 
-export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchPaletteProps) {
+export function WorkspaceSearchPalette({ id, onClose, onOpenPage }: WorkspaceSearchPaletteProps) {
   const dialogRef = useDialogFocus<HTMLElement>()
   const pages = useWorkspace((state) => state.pages)
   const searchResults = useWorkspace((state) => state.searchResults)
@@ -123,6 +124,7 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
       onMouseDown={onClose}
     >
       <section
+        id={id}
         ref={dialogRef}
         className="workspace-search-dialog"
         role="dialog"

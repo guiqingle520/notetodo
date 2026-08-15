@@ -9,7 +9,7 @@ const shortcuts = [
   { keys: ['Esc'], label: '关闭当前弹窗或菜单', icon: X },
 ]
 
-export function HelpPanel({ onClose }: { onClose: () => void }) {
+export function HelpPanel({ id, onClose }: { id?: string; onClose: () => void }) {
   const dialogRef = useDialogFocus<HTMLElement>()
 
   useEffect(() => {
@@ -23,6 +23,7 @@ export function HelpPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop help-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        id={id}
         ref={dialogRef}
         className="help-panel"
         role="dialog"

@@ -25,7 +25,7 @@ import {
 import { AppSettingsSidebar } from './AppSettingsSidebar'
 import { useDialogFocus } from './use-dialog-focus'
 
-export function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
+export function ModelSettingsPanel({ id, onClose }: { id?: string; onClose: () => void }) {
   const ref = useDialogFocus<HTMLDivElement>()
   const [activeSection, setActiveSection] = useState<SettingsSection>('model')
   const [form, setForm] = useState<ModelForm>({
@@ -168,6 +168,7 @@ export function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div
+      id={id}
       ref={ref}
       className="settings-shell"
       role="dialog"

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Command, Menu, PanelRightOpen, Sparkles } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 import { useWorkspace } from './store'
@@ -23,6 +23,13 @@ export function App() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const searchDialogId = useId()
+  const archiveDialogId = useId()
+  const settingsDialogId = useId()
+  const notificationsDialogId = useId()
+  const importDialogId = useId()
+  const helpDialogId = useId()
+  const aiPanelId = useId()
   const [notificationCount, setNotificationCount] = useState(0)
   const [surface, setSurface] = useState<AppSurface>('home')
   const [selectionContext, setSelectionContext] = useState<SelectionContext | null>(null)
@@ -118,6 +125,15 @@ export function App() {
           onHome={() => setSurface('home')}
           onAllPages={() => setSurface('pages')}
           onPageOpen={() => setSurface('editor')}
+          panels={{
+            search: { id: searchDialogId, open: searchOpen },
+            notifications: { id: notificationsDialogId, open: notificationsOpen },
+            settings: { id: settingsDialogId, open: settingsOpen },
+            ai: { id: aiPanelId, open: surface === 'editor' && aiOpen },
+            import: { id: importDialogId, open: importOpen },
+            archive: { id: archiveDialogId, open: archiveOpen },
+            help: { id: helpDialogId, open: helpOpen },
+          }}
         />
         {sidebarCollapsed && (
           <button
@@ -141,30 +157,50 @@ export function App() {
         {surface === 'editor' &&
           (aiOpen ? (
             <AIPanel
+              id={aiPanelId}
               onClose={() => setAiOpen(false)}
               selectionContext={selectionContext}
               onApplyPatch={applyAIPatch}
               onUndoPatch={() => activeEditorRef.current?.commands.undo()}
             />
           ) : (
-            <button className="open-ai" onClick={() => setAiOpen(true)} aria-label="打开 AI 助手">
+            <button
+              className="open-ai"
+              onClick={() => setAiOpen(true)}
+              aria-label="打开 AI 助手"
+              aria-expanded="false"
+              aria-controls={aiPanelId}
+            >
               <PanelRightOpen size={17} />
               <Sparkles size={14} />
             </button>
           ))}
         {searchOpen && (
-          <WorkspaceSearchPalette onClose={() => setSearchOpen(false)} onOpenPage={openPage} />
+          <WorkspaceSearchPalette
+            id={searchDialogId}
+            onClose={() => setSearchOpen(false)}
+            onOpenPage={openPage}
+          />
         )}
-        {archiveOpen && <ArchivePanel onClose={() => setArchiveOpen(false)} />}
-        {settingsOpen && <ModelSettingsPanel onClose={() => setSettingsOpen(false)} />}
+        {archiveOpen && <ArchivePanel id={archiveDialogId} onClose={() => setArchiveOpen(false)} />}
+        {settingsOpen && (
+          <ModelSettingsPanel id={settingsDialogId} onClose={() => setSettingsOpen(false)} />
+        )}
         {notificationsOpen && (
           <NotificationPanel
+            id={notificationsDialogId}
             onClose={() => setNotificationsOpen(false)}
             onCountChange={setNotificationCount}
           />
         )}
-        {importOpen && <ImportPanel onClose={() => setImportOpen(false)} onImported={hydrate} />}
-        {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
+        {importOpen && (
+          <ImportPanel
+            id={importDialogId}
+            onClose={() => setImportOpen(false)}
+            onImported={hydrate}
+          />
+        )}
+        {helpOpen && <HelpPanel id={helpDialogId} onClose={() => setHelpOpen(false)} />}
       </div>
     </div>
   )

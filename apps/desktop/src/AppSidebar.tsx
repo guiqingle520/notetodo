@@ -128,6 +128,7 @@ export function Sidebar({
   onHome,
   onAllPages,
   onPageOpen,
+  panels,
 }: {
   collapsed: boolean
   onToggle: () => void
@@ -143,6 +144,15 @@ export function Sidebar({
   onHome: () => void
   onAllPages: () => void
   onPageOpen: () => void
+  panels?: {
+    search: { id: string; open: boolean }
+    notifications: { id: string; open: boolean }
+    settings: { id: string; open: boolean }
+    ai: { id: string; open: boolean }
+    import: { id: string; open: boolean }
+    archive: { id: string; open: boolean }
+    help: { id: string; open: boolean }
+  }
 }) {
   const { pages, addPage, setActivePage } = useWorkspace()
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
@@ -181,10 +191,24 @@ export function Sidebar({
         <button className="icon-button brand-mark" onClick={onToggle} aria-label="展开侧栏">
           N
         </button>
-        <button className="icon-button" onClick={onSearch} aria-label="搜索">
+        <button
+          className="icon-button"
+          onClick={onSearch}
+          aria-label="搜索"
+          aria-haspopup="dialog"
+          aria-expanded={panels?.search.open}
+          aria-controls={panels?.search.id}
+        >
           <Search size={17} />
         </button>
-        <button className="icon-button" onClick={onNotifications} aria-label="更新">
+        <button
+          className="icon-button"
+          onClick={onNotifications}
+          aria-label="更新"
+          aria-haspopup="dialog"
+          aria-expanded={panels?.notifications.open}
+          aria-controls={panels?.notifications.id}
+        >
           <Bell size={17} />
         </button>
       </aside>
@@ -205,17 +229,32 @@ export function Sidebar({
       </div>
 
       <nav className="primary-nav">
-        <button onClick={onSearch}>
+        <button
+          onClick={onSearch}
+          aria-haspopup="dialog"
+          aria-expanded={panels?.search.open}
+          aria-controls={panels?.search.id}
+        >
           <Search size={16} />
           <span>搜索</span>
           <kbd>Ctrl K</kbd>
         </button>
-        <button onClick={onNotifications}>
+        <button
+          onClick={onNotifications}
+          aria-haspopup="dialog"
+          aria-expanded={panels?.notifications.open}
+          aria-controls={panels?.notifications.id}
+        >
           <Bell size={16} />
           <span>更新</span>
           {notificationCount > 0 && <em>{notificationCount}</em>}
         </button>
-        <button onClick={onSettings}>
+        <button
+          onClick={onSettings}
+          aria-haspopup="dialog"
+          aria-expanded={panels?.settings.open}
+          aria-controls={panels?.settings.id}
+        >
           <Settings size={16} />
           <span>设置</span>
         </button>
@@ -308,7 +347,12 @@ export function Sidebar({
             <Files size={15} />
             <span>所有页面</span>
           </button>
-          <button className="simple-row" onClick={onAI}>
+          <button
+            className="simple-row"
+            onClick={onAI}
+            aria-expanded={panels?.ai.open}
+            aria-controls={panels?.ai.id}
+          >
             <Bot size={15} />
             <span>AI 工作台</span>
             <i>Beta</i>
@@ -342,15 +386,30 @@ export function Sidebar({
           <Plus size={16} />
           <span>新建页面</span>
         </button>
-        <button onClick={onImport}>
+        <button
+          onClick={onImport}
+          aria-haspopup="dialog"
+          aria-expanded={panels?.import.open}
+          aria-controls={panels?.import.id}
+        >
           <Upload size={16} />
           <span>导入工作区</span>
         </button>
-        <button onClick={onArchive}>
+        <button
+          onClick={onArchive}
+          aria-haspopup="dialog"
+          aria-expanded={panels?.archive.open}
+          aria-controls={panels?.archive.id}
+        >
           <Archive size={16} />
           <span>归档与回收站</span>
         </button>
-        <button onClick={onHelp}>
+        <button
+          onClick={onHelp}
+          aria-haspopup="dialog"
+          aria-expanded={panels?.help.open}
+          aria-controls={panels?.help.id}
+        >
           <CircleHelp size={16} />
           <span>帮助与快捷键</span>
         </button>

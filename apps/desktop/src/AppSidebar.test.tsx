@@ -31,6 +31,15 @@ const renderSidebar = (overrides: Partial<React.ComponentProps<typeof Sidebar>> 
     onHome: vi.fn(),
     onAllPages: vi.fn(),
     onPageOpen: vi.fn(),
+    panels: {
+      search: { id: 'search-dialog', open: true },
+      notifications: { id: 'notifications-dialog', open: false },
+      settings: { id: 'settings-dialog', open: false },
+      ai: { id: 'ai-panel', open: true },
+      import: { id: 'import-dialog', open: false },
+      archive: { id: 'archive-dialog', open: false },
+      help: { id: 'help-dialog', open: false },
+    },
     ...overrides,
   }
   render(<Sidebar {...props} />)
@@ -47,6 +56,19 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: /更新/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '新建页面' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /归档与回收站/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^搜索/u })).toHaveAttribute(
+      'aria-controls',
+      'search-dialog',
+    )
+    expect(screen.getByRole('button', { name: /^搜索/u })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: /AI 工作台/ })).toHaveAttribute(
+      'aria-controls',
+      'ai-panel',
+    )
+    expect(screen.getByRole('button', { name: /导入工作区/ })).toHaveAttribute(
+      'aria-haspopup',
+      'dialog',
+    )
   })
 
   it('keeps collapsed navigation accessible to keyboard and screen readers', () => {

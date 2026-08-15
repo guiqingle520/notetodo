@@ -7,9 +7,12 @@ afterEach(cleanup)
 describe('settings prototype surface', () => {
   it('exposes labelled settings navigation and an explicit close action', () => {
     const onClose = vi.fn()
-    render(<ModelSettingsPanel onClose={onClose} />)
+    render(<ModelSettingsPanel id="settings-dialog" onClose={onClose} />)
 
-    expect(screen.getByRole('dialog', { name: '模型与 AI 设置' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '模型与 AI 设置' })).toHaveAttribute(
+      'id',
+      'settings-dialog',
+    )
     expect(screen.getByRole('navigation', { name: '设置分类' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '模型与 AI' })).toHaveAttribute(
       'aria-current',

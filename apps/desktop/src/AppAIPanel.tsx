@@ -23,11 +23,13 @@ type RetrievalCitation = Awaited<
 >[number]
 
 export function AIPanel({
+  id,
   onClose,
   selectionContext,
   onApplyPatch,
   onUndoPatch,
 }: {
+  id?: string
   onClose: () => void
   selectionContext: SelectionContext | null
   onApplyPatch: (patch: AIPatchProposal) => boolean
@@ -212,7 +214,7 @@ export function AIPanel({
   }
 
   return (
-    <aside className="ai-panel" aria-label="工作副驾驶">
+    <aside id={id} className="ai-panel" aria-label="工作副驾驶">
       <div className="ai-panel-head">
         <div>
           <span className="ai-orbit">
