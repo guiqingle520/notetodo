@@ -1,6 +1,6 @@
 import { CheckCircle2, FileText, MousePointer2, Plus } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
-import { focusFirstMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
+import { focusSelectedMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
 
 type ContextMode = 'page' | 'selection'
 
@@ -43,7 +43,7 @@ export function AIContextMenu({
   }, [open])
 
   useEffect(() => {
-    if (open) focusFirstMenuItem(containerRef.current)
+    if (open) focusSelectedMenuItem(containerRef.current)
   }, [open])
 
   const selectMode = (nextMode: ContextMode) => {

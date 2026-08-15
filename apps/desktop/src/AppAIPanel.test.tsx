@@ -66,6 +66,7 @@ describe('AIPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '选择 AI 上下文' }))
     expect(screen.getByRole('menu', { name: '选择 AI 上下文' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitemradio', { name: /所选文本/u })).toHaveFocus()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('menu', { name: '选择 AI 上下文' })).not.toBeInTheDocument()
     expect(menuTrigger).toHaveFocus()

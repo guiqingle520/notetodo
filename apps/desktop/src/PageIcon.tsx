@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { iconMap } from './AppSidebar'
 import type { PageIcon as PageIconName } from './domain'
-import { focusFirstMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
+import { focusSelectedMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
 import { useDismissibleMenu } from './use-dismissible-menu'
 
 const iconChoices: Array<{ id: PageIconName; label: string }> = [
@@ -34,7 +34,7 @@ export function PageIcon({
   }
 
   useEffect(() => {
-    if (open) focusFirstMenuItem(containerRef.current)
+    if (open) focusSelectedMenuItem(containerRef.current)
   }, [open])
 
   return (

@@ -6,6 +6,15 @@ export function focusFirstMenuItem(container: HTMLElement | null) {
   container?.querySelector<HTMLButtonElement>(MENU_ITEM_SELECTOR)?.focus()
 }
 
+/** Focuses the checked choice when reopening a radio menu, then falls back safely. */
+export function focusSelectedMenuItem(container: HTMLElement | null) {
+  const selected = container?.querySelector<HTMLButtonElement>(
+    '[role="menuitemradio"][aria-checked="true"]:not(:disabled)',
+  )
+  if (selected) selected.focus()
+  else focusFirstMenuItem(container)
+}
+
 export function openMenuFromTrigger(event: KeyboardEvent<HTMLButtonElement>, open: () => void) {
   if (event.key !== 'ArrowDown') return
   event.preventDefault()
@@ -14,7 +23,9 @@ export function openMenuFromTrigger(event: KeyboardEvent<HTMLButtonElement>, ope
 
 /** Keeps every compact menu on the same predictable WAI-ARIA keyboard loop. */
 export function navigateMenu(event: KeyboardEvent<HTMLDivElement>, onEscape: () => void) {
-  const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(MENU_ITEM_SELECTOR))
+  const items = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>(MENU_ITEM_SELECTOR),
+  )
   const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
   let nextIndex: number | null = null
   if (event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % items.length

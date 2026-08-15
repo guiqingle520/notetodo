@@ -74,6 +74,6 @@ describe('page icon', () => {
     fireEvent.keyDown(screen.getByRole('button', { name: '更改页面图标，当前为知识库' }), {
       key: 'ArrowDown',
     })
-    expect(screen.getAllByRole('menuitemradio')[0]).toHaveFocus()
+    expect(screen.getByRole('menuitemradio', { name: '知识库图标' })).toHaveFocus()
   })
 })
