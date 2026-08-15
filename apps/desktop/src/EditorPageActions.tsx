@@ -56,8 +56,12 @@ export function PageHeaderActions({
 }: PageHeaderActionsProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const moreMenuId = useId()
-  const menuRef = useDismissibleMenu(menuOpen, () => setMenuOpen(false))
   const menuTriggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useDismissibleMenu(
+    menuOpen,
+    () => setMenuOpen(false),
+    () => menuTriggerRef.current?.focus(),
+  )
 
   useEffect(() => {
     if (menuOpen) focusFirstMenuItem(menuRef.current)

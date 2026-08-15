@@ -22,8 +22,12 @@ export function PageIcon({
 }) {
   const [open, setOpen] = useState(false)
   const menuId = useId()
-  const containerRef = useDismissibleMenu(open, () => setOpen(false))
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const containerRef = useDismissibleMenu(
+    open,
+    () => setOpen(false),
+    () => triggerRef.current?.focus(),
+  )
   const Icon = iconMap[icon]
   const activeLabel = iconChoices.find((choice) => choice.id === icon)?.label ?? '页面'
 

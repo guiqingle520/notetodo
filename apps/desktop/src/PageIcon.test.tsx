@@ -37,6 +37,7 @@ describe('page icon', () => {
     fireEvent.click(trigger)
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('menu', { name: '选择页面图标' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
 
     fireEvent.click(trigger)
     fireEvent.pointerDown(screen.getByRole('button', { name: '图标外部' }))

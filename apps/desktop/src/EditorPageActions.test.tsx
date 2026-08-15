@@ -119,9 +119,11 @@ describe('editor page actions', () => {
       </div>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '更多页面操作' }))
+    const trigger = screen.getByRole('button', { name: '更多页面操作' })
+    fireEvent.click(trigger)
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('menu', { name: '更多页面操作' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
   })
 
   it('cycles through the page menu with the keyboard and restores trigger focus', () => {
