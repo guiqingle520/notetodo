@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useEffect, useId, useMemo, useState, type DragEvent } from 'react'
 import { Activity, ArrowRight, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Images, Plus, RotateCcw, X, Zap } from 'lucide-react'
 import { buildCalendarMonth, groupRecordsByDate, layoutTimelineRecords, prepareGalleryRecords, safeGalleryCover, timelineDays, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type PropertyValue } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
 import { useDialogFocus } from './use-dialog-focus'
+import { moveRovingTab } from './roving-tabs'
 
 const statuses = [{ id: 'todo', label: '待开始' }, { id: 'doing', label: '进行中' }, { id: 'done', label: '已完成' }]
 type AutomationRun = Awaited<ReturnType<NonNullable<typeof window.notetodo>['automations']['listRuns']>>[number]
@@ -134,6 +135,7 @@ export function CalendarView({ records, schema, datePropertyId, updateCell }: { 
 
 export function AutomationPanel({ id, schema, rules, runs, onClose, onSave, onToggle, onReplay }: { id?: string; schema: DatabaseSchema; rules: AutomationRule[]; runs: AutomationRun[]; onClose: () => void; onSave: (rule: AutomationRule) => Promise<void>; onToggle: (rule: AutomationRule) => Promise<void>; onReplay: (runId: string) => Promise<void> }) {
   const dialogRef = useDialogFocus<HTMLElement>()
+  const tabsetId = useId()
   const writable = schema.properties.filter((property) => property.type !== 'formula' && property.type !== 'rollup')
   const defaultTrigger = schema.properties.find((property) => property.type === 'select') ?? writable[0]!
   const defaultAction = schema.properties.find((property) => property.type === 'number') ?? writable[0]!
@@ -167,8 +169,8 @@ export function AutomationPanel({ id, schema, rules, runs, onClose, onSave, onTo
   return <div className="automation-backdrop" onMouseDown={onClose}>
     <section id={id} ref={dialogRef} className="automation-panel" role="dialog" aria-modal="true" aria-label="数据库自动化" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
       <header><div><span><Zap size={15} /></span><div><small>{schema.name}</small><strong>数据库自动化</strong></div></div><button aria-label="关闭数据库自动化" onClick={onClose}><X size={16} /></button></header>
-      <nav aria-label="自动化视图" role="tablist"><button aria-selected={tab === 'rules'} className={tab === 'rules' ? 'is-active' : ''} role="tab" onClick={() => setTab('rules')}><Zap size={12} />规则 {rules.length}</button><button aria-selected={tab === 'runs'} className={tab === 'runs' ? 'is-active' : ''} role="tab" onClick={() => setTab('runs')}><Activity size={12} />运行 {runs.length}</button></nav>
-      {tab === 'rules' ? <div className="automation-layout">
+      <nav aria-label="自动化视图" role="tablist">{(['rules', 'runs'] as const).map((item, index, items) => <button id={`${tabsetId}-${item}-tab`} aria-controls={`${tabsetId}-panel`} aria-selected={tab === item} className={tab === item ? 'is-active' : ''} role="tab" tabIndex={tab === item ? 0 : -1} key={item} onClick={() => setTab(item)} onKeyDown={(event) => moveRovingTab(event, items, index, setTab)}>{item === 'rules' ? <><Zap size={12} />规则 {rules.length}</> : <><Activity size={12} />运行 {runs.length}</>}</button>)}</nav>
+      {tab === 'rules' ? <div id={`${tabsetId}-panel`} role="tabpanel" aria-labelledby={`${tabsetId}-rules-tab`} className="automation-layout">
         <aside><button className="automation-new" onClick={() => setDraft(blankRule())}><Plus size={12} />新建规则</button>{rules.map((rule) => <button className={draft.id === rule.id ? 'is-selected' : ''} key={rule.id} onClick={() => setDraft(structuredClone(rule))}><i className={rule.enabled ? 'is-live' : ''} /><span><strong>{rule.name}</strong><small>{propertyName(schema.properties, rule.trigger.propertyId)} 变更时</small></span><em onClick={(event) => { event.stopPropagation(); void onToggle(rule) }}>{rule.enabled ? 'ON' : 'OFF'}</em></button>)}</aside>
         <main>
           <label className="automation-name"><span>规则名称</span><input value={draft.name} maxLength={100} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
@@ -177,7 +179,7 @@ export function AutomationPanel({ id, schema, rules, runs, onClose, onSave, onTo
           <div className="automation-sentence"><b>就</b><label><span>写入属性</span><select value={draft.actions[0]?.propertyId} onChange={(event) => setAction({ propertyId: event.target.value })}>{writable.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label><label className="automation-grow"><span>写入值</span><input value={displayAutomationValue(draft.actions[0]?.value)} onChange={(event) => setAction({ value: parseAutomationValue(schema.properties.find((property) => property.id === draft.actions[0]?.propertyId), event.target.value) })} /></label></div>
           <footer><span>{message || '规则最多执行 20 个写入动作；公式与 Rollup 始终只读。'}</span><button onClick={() => void save()}>保存规则</button></footer>
         </main>
-      </div> : <div className="automation-runs">{message && <div className="automation-run-message">{message}</div>}{runs.map((run) => <article className={`is-${run.status}`} key={run.id}><i>{run.status === 'succeeded' ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}</i><span><strong>{run.automationName}</strong><small>{new Date(run.createdAt).toLocaleString('zh-CN')} · {run.recordId}</small><code>{run.status === 'failed' ? run.errorMessage : run.output.map((patch) => `${propertyName(schema.properties, patch.propertyId)} → ${displayAutomationValue(patch.value)}`).join(' · ')}</code></span><em>{run.replayOf ? 'REPLAY' : run.status.toLocaleUpperCase()}</em>{run.status === 'failed' && <button disabled={replayingId !== null} onClick={() => void replay(run.id)}><RotateCcw size={12} />{replayingId === run.id ? '重放中' : '重放'}</button>}</article>)}{!runs.length && <div className="automation-empty"><Activity size={22} /><strong>尚无执行记录</strong><span>数据库属性变更后，运行磁带会在这里留档。</span></div>}</div>}
+      </div> : <div id={`${tabsetId}-panel`} role="tabpanel" aria-labelledby={`${tabsetId}-runs-tab`} className="automation-runs">{message && <div className="automation-run-message">{message}</div>}{runs.map((run) => <article className={`is-${run.status}`} key={run.id}><i>{run.status === 'succeeded' ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}</i><span><strong>{run.automationName}</strong><small>{new Date(run.createdAt).toLocaleString('zh-CN')} · {run.recordId}</small><code>{run.status === 'failed' ? run.errorMessage : run.output.map((patch) => `${propertyName(schema.properties, patch.propertyId)} → ${displayAutomationValue(patch.value)}`).join(' · ')}</code></span><em>{run.replayOf ? 'REPLAY' : run.status.toLocaleUpperCase()}</em>{run.status === 'failed' && <button disabled={replayingId !== null} onClick={() => void replay(run.id)}><RotateCcw size={12} />{replayingId === run.id ? '重放中' : '重放'}</button>}</article>)}{!runs.length && <div className="automation-empty"><Activity size={22} /><strong>尚无执行记录</strong><span>数据库属性变更后，运行磁带会在这里留档。</span></div>}</div>}
     </section>
   </div>
 }

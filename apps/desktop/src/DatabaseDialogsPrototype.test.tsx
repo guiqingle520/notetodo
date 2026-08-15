@@ -1,8 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSchema } from '@notetodo/database-core'
 import { CsvImportPanel, SchemaPanel, TemplateEditorPanel, ViewRulesPanel } from './DatabaseBlock'
 import { AutomationPanel } from './DatabaseSpecialViews'
+
+afterEach(cleanup)
 
 const schema: DatabaseSchema = {
   id: 'product-db',
@@ -51,8 +53,15 @@ describe('database prototype dialogs', () => {
     expect(screen.getByRole('dialog', { name: '视图规则工作台' })).toBeInTheDocument()
     expect(screen.getByText('筛选、排序与分组')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '筛选 0' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: '排序 0' })).toHaveAttribute('aria-selected', 'false')
+    const filterTab = screen.getByRole('tab', { name: '筛选 0' })
+    const sortTab = screen.getByRole('tab', { name: '排序 0' })
+    expect(sortTab).toHaveAttribute('aria-selected', 'false')
     expect(screen.getByRole('tab', { name: '分组' })).toBeInTheDocument()
+    filterTab.focus()
+    fireEvent.keyDown(filterTab, { key: 'ArrowRight' })
+    expect(sortTab).toHaveFocus()
+    expect(sortTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', sortTab.id)
   })
 
   it('exposes automation navigation and dismissal to keyboard users', () => {
@@ -71,8 +80,16 @@ describe('database prototype dialogs', () => {
 
     expect(screen.getByRole('dialog', { name: '数据库自动化' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '关闭数据库自动化' })).toHaveFocus()
-    expect(screen.getByRole('tab', { name: '规则 0' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: '运行 0' })).toHaveAttribute('aria-selected', 'false')
+    const rulesTab = screen.getByRole('tab', { name: '规则 0' })
+    const runsTab = screen.getByRole('tab', { name: '运行 0' })
+    expect(rulesTab).toHaveAttribute('aria-selected', 'true')
+    expect(rulesTab).toHaveAttribute('tabindex', '0')
+    expect(runsTab).toHaveAttribute('aria-selected', 'false')
+    rulesTab.focus()
+    fireEvent.keyDown(rulesTab, { key: 'End' })
+    expect(runsTab).toHaveFocus()
+    expect(runsTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', runsTab.id)
     fireEvent.click(screen.getByRole('button', { name: '关闭数据库自动化' }))
     expect(onClose).toHaveBeenCalledOnce()
   })

@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { ArrowUpDown, ChevronDown, ChevronRight, Filter, GripVertical, Layers3, Link2, Plus, Settings2, Sigma, Trash2, X } from 'lucide-react'
 import { evaluateFormula, validateFormulaExpression, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseViewConfig, type FilterRule, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import { propertyTypeLabel, type RelationTargets } from './DatabaseViews'
 import { useDialogFocus } from './use-dialog-focus'
+import { moveRovingTab } from './roving-tabs'
 
 const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title'>; label: string }> = [
   { id: 'text', label: '文本' }, { id: 'number', label: '数字' }, { id: 'checkbox', label: '复选框' },
@@ -140,6 +141,7 @@ export function ViewRuleSummary({ config, schema, dialogId, openTab, onOpen }: {
 
 export function ViewRulesPanel({ id, schema, config, initialTab, onClose, onSave }: { id?: string; schema: DatabaseSchema; config: DatabaseViewConfig; initialTab: 'filters' | 'sorts' | 'group'; onClose: () => void; onSave: (config: DatabaseViewConfig) => void }) {
   const dialogRef = useDialogFocus<HTMLElement>()
+  const tabsetId = useId()
   const [tab, setTab] = useState(initialTab)
   const [draft, setDraft] = useState<DatabaseViewConfig>(() => structuredClone(config))
   const filters = draft.filters ?? []; const sorts = draft.sorts ?? []
@@ -154,8 +156,8 @@ export function ViewRulesPanel({ id, schema, config, initialTab, onClose, onSave
   return <div className="view-rules-backdrop" onMouseDown={onClose}>
     <section id={id} ref={dialogRef} className="view-rules-panel" role="dialog" aria-modal="true" aria-label="视图规则工作台" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
       <header><div><small>{schema.name}</small><strong>筛选、排序与分组</strong></div><button aria-label="关闭视图规则" onClick={onClose}><X size={15} /></button></header>
-      <nav aria-label="视图规则分类" role="tablist">{(['filters', 'sorts', 'group'] as const).map((item) => <button aria-selected={tab === item} className={tab === item ? 'is-active' : ''} key={item} role="tab" onClick={() => setTab(item)}>{item === 'filters' ? <Filter size={12} /> : item === 'sorts' ? <ArrowUpDown size={12} /> : <Layers3 size={12} />}{item === 'filters' ? `筛选 ${filters.length}` : item === 'sorts' ? `排序 ${sorts.length}` : '分组'}</button>)}</nav>
-      <main>
+      <nav aria-label="视图规则分类" role="tablist">{(['filters', 'sorts', 'group'] as const).map((item, index, items) => <button id={`${tabsetId}-${item}-tab`} aria-controls={`${tabsetId}-panel`} aria-selected={tab === item} className={tab === item ? 'is-active' : ''} key={item} role="tab" tabIndex={tab === item ? 0 : -1} onClick={() => setTab(item)} onKeyDown={(event) => moveRovingTab(event, items, index, setTab)}>{item === 'filters' ? <Filter size={12} /> : item === 'sorts' ? <ArrowUpDown size={12} /> : <Layers3 size={12} />}{item === 'filters' ? `筛选 ${filters.length}` : item === 'sorts' ? `排序 ${sorts.length}` : '分组'}</button>)}</nav>
+      <main id={`${tabsetId}-panel`} role="tabpanel" aria-labelledby={`${tabsetId}-${tab}-tab`}>
         {tab === 'filters' && <><div className="rule-logic"><span>显示满足</span><button className={draft.filterMode !== 'or' ? 'is-active' : ''} onClick={() => setDraft({ ...draft, filterMode: 'and' })}>全部条件</button><button className={draft.filterMode === 'or' ? 'is-active' : ''} onClick={() => setDraft({ ...draft, filterMode: 'or' })}>任一条件</button></div><div className="rule-stack">{filters.map((rule, index) => {
           const property = schema.properties.find((candidate) => candidate.id === rule.propertyId) ?? defaultProperty
           return <div className="filter-rule" key={`${index}-${rule.propertyId}`}><em>{String(index + 1).padStart(2, '0')}</em><select aria-label={`筛选 ${index + 1} 属性`} value={rule.propertyId} onChange={(event) => { const nextProperty = schema.properties.find((candidate) => candidate.id === event.target.value)!; setFilter(index, { propertyId: nextProperty.id, value: defaultFilterValue(nextProperty) }) }}>{schema.properties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select><select aria-label={`筛选 ${index + 1} 条件`} value={rule.operator} onChange={(event) => setFilter(index, { operator: event.target.value as FilterRule['operator'] })}>{filterOperators.map((operator) => <option key={operator.id} value={operator.id}>{operator.label}</option>)}</select>{!['isEmpty', 'isNotEmpty'].includes(rule.operator) && <FilterValueInput property={property} value={rule.value} onChange={(value) => setFilter(index, { value })} />}<button aria-label={`删除筛选 ${index + 1}`} onClick={() => setDraft({ ...draft, filters: filters.filter((_, candidate) => candidate !== index) })}><Trash2 size={12} /></button></div>
