@@ -50,7 +50,12 @@ describe('WorkspacePageList', () => {
     render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
 
     expect(screen.getByRole('tab', { name: '全部' })).toHaveAttribute('aria-selected', 'true')
-    fireEvent.click(screen.getByRole('button', { name: '页面列表操作' }))
+    const menuTrigger = screen.getByRole('button', { name: '页面列表操作' })
+    fireEvent.click(menuTrigger)
+    expect(screen.getByRole('menu', { name: '页面列表操作' })).toHaveAttribute(
+      'id',
+      menuTrigger.getAttribute('aria-controls'),
+    )
     fireEvent.click(screen.getByRole('menuitem', { name: '按最近编辑筛选' }))
 
     expect(screen.getByRole('tab', { name: '最近编辑' })).toHaveAttribute('aria-selected', 'true')
@@ -68,5 +73,20 @@ describe('WorkspacePageList', () => {
     })
     expect(screen.getByRole('status')).toHaveTextContent('没有匹配的页面')
     expect(screen.queryAllByText('此分类中没有页面。')).toHaveLength(0)
+  })
+
+  it('opens and navigates the action menu from the keyboard', () => {
+    render(<WorkspacePageList onOpenPage={vi.fn()} onCreatePage={vi.fn()} />)
+    const trigger = screen.getByRole('button', { name: '页面列表操作' })
+
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    const items = screen.getAllByRole('menuitem')
+    expect(items[0]).toHaveFocus()
+    fireEvent.keyDown(items[0]!, { key: 'End' })
+    expect(items.at(-1)).toHaveFocus()
+    fireEvent.keyDown(items.at(-1)!, { key: 'Escape' })
+
+    expect(screen.queryByRole('menu', { name: '页面列表操作' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
   })
 })

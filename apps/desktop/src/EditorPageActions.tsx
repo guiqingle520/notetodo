@@ -1,5 +1,5 @@
 import { Archive, History, MessageSquare, MoreHorizontal, Star, Users } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { RemoteCursor } from './data/remote-cursors'
 import { focusFirstMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
 import { useDismissibleMenu } from './use-dismissible-menu'
@@ -49,6 +49,7 @@ export function PageHeaderActions({
   onArchive,
 }: PageHeaderActionsProps) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const moreMenuId = useId()
   const menuRef = useDismissibleMenu(menuOpen, () => setMenuOpen(false))
   const menuTriggerRef = useRef<HTMLButtonElement>(null)
 
@@ -63,9 +64,15 @@ export function PageHeaderActions({
 
   return (
     <div className="top-actions" role="toolbar" aria-label="页面操作">
-      <span className={`save-state is-${syncState}`} role="status" aria-label={`同步状态：${syncLabel(syncState)}`}>
+      <span
+        className={`save-state is-${syncState}`}
+        role="status"
+        aria-label={`同步状态：${syncLabel(syncState)}`}
+      >
         <i />
-        <span className="save-state-label" aria-hidden="true">{syncLabel(syncState)}</span>
+        <span className="save-state-label" aria-hidden="true">
+          {syncLabel(syncState)}
+        </span>
       </span>
       <div
         className={`collaboration-presence is-${collaborationState}`}
@@ -75,7 +82,9 @@ export function PageHeaderActions({
       >
         <span className="presence-state">
           <Users size={13} />
-          <span className="presence-label" aria-hidden="true">{presenceLabel(collaborationState)}</span>
+          <span className="presence-label" aria-hidden="true">
+            {presenceLabel(collaborationState)}
+          </span>
         </span>
         <span className="presence-avatars">
           {collaborators.slice(0, 3).map((person) => (
@@ -105,13 +114,25 @@ export function PageHeaderActions({
           aria-label="更多页面操作"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
+          aria-controls={moreMenuId}
           onKeyDown={(event) => openMenuFromTrigger(event, () => setMenuOpen(true))}
           onClick={() => setMenuOpen((current) => !current)}
         >
           <MoreHorizontal size={18} />
         </button>
         {menuOpen && (
-          <div className="page-more-menu" role="menu" aria-label="更多页面操作" onKeyDown={(event) => navigateMenu(event, () => { setMenuOpen(false); menuTriggerRef.current?.focus() })}>
+          <div
+            id={moreMenuId}
+            className="page-more-menu"
+            role="menu"
+            aria-label="更多页面操作"
+            onKeyDown={(event) =>
+              navigateMenu(event, () => {
+                setMenuOpen(false)
+                menuTriggerRef.current?.focus()
+              })
+            }
+          >
             <button role="menuitem" onClick={() => runMenuAction(onToggleFavorite)}>
               <Star size={14} />
               {favorite ? '取消收藏' : '添加到收藏'}

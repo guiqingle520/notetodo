@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { iconMap } from './AppSidebar'
 import type { PageIcon as PageIconName } from './domain'
 import { focusFirstMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
@@ -21,6 +21,7 @@ export function PageIcon({
   onChange: (icon: PageIconName) => void
 }) {
   const [open, setOpen] = useState(false)
+  const menuId = useId()
   const containerRef = useDismissibleMenu(open, () => setOpen(false))
   const triggerRef = useRef<HTMLButtonElement>(null)
   const Icon = iconMap[icon]
@@ -44,13 +45,25 @@ export function PageIcon({
         aria-label={`更改页面图标，当前为${activeLabel}`}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={menuId}
         onKeyDown={(event) => openMenuFromTrigger(event, () => setOpen(true))}
         onClick={() => setOpen((current) => !current)}
       >
         <Icon size={34} />
       </button>
       {open && (
-        <div className="page-icon-menu" role="menu" aria-label="选择页面图标" onKeyDown={(event) => navigateMenu(event, () => { setOpen(false); triggerRef.current?.focus() })}>
+        <div
+          id={menuId}
+          className="page-icon-menu"
+          role="menu"
+          aria-label="选择页面图标"
+          onKeyDown={(event) =>
+            navigateMenu(event, () => {
+              setOpen(false)
+              triggerRef.current?.focus()
+            })
+          }
+        >
           {iconChoices.map((choice) => {
             const ChoiceIcon = iconMap[choice.id]
             return (

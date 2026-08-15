@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { WorkspacePage } from './domain'
 import { iconMap } from './AppSidebar'
+import { focusFirstMenuItem, navigateMenu, openMenuFromTrigger } from './menu-keyboard'
 import { useWorkspace } from './store'
 
 type PageListFilter = 'all' | 'mine' | 'recent'
@@ -111,7 +112,9 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<PageListFilter>('all')
   const [pageMenuOpen, setPageMenuOpen] = useState(false)
+  const pageMenuId = useId()
   const pageMenuRef = useRef<HTMLDivElement>(null)
+  const pageMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const [openGroups, setOpenGroups] = useState<Set<PageGroupId>>(
     () => new Set(['workspace', 'favorites', 'nested']),
   )
@@ -119,7 +122,10 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
   useEffect(() => {
     if (!pageMenuOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPageMenuOpen(false)
+      if (event.key === 'Escape') {
+        setPageMenuOpen(false)
+        pageMenuTriggerRef.current?.focus()
+      }
     }
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (event.target instanceof Node && !pageMenuRef.current?.contains(event.target)) {
@@ -132,6 +138,10 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
       window.removeEventListener('keydown', closeOnEscape)
       window.removeEventListener('pointerdown', closeOnOutsidePointer)
     }
+  }, [pageMenuOpen])
+
+  useEffect(() => {
+    if (pageMenuOpen) focusFirstMenuItem(pageMenuRef.current)
   }, [pageMenuOpen])
 
   const filteredPages = useMemo(() => {
@@ -176,15 +186,29 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
         </div>
         <div className="page-list-menu-wrap" ref={pageMenuRef}>
           <button
+            ref={pageMenuTriggerRef}
             aria-label="页面列表操作"
             aria-haspopup="menu"
             aria-expanded={pageMenuOpen}
+            aria-controls={pageMenuId}
+            onKeyDown={(event) => openMenuFromTrigger(event, () => setPageMenuOpen(true))}
             onClick={() => setPageMenuOpen((current) => !current)}
           >
             <MoreHorizontal size={16} />
           </button>
           {pageMenuOpen && (
-            <div className="page-list-menu" role="menu" aria-label="页面列表操作">
+            <div
+              id={pageMenuId}
+              className="page-list-menu"
+              role="menu"
+              aria-label="页面列表操作"
+              onKeyDown={(event) =>
+                navigateMenu(event, () => {
+                  setPageMenuOpen(false)
+                  pageMenuTriggerRef.current?.focus()
+                })
+              }
+            >
               <button
                 autoFocus
                 role="menuitem"
@@ -273,18 +297,22 @@ export function WorkspacePageList({ onOpenPage, onCreatePage }: WorkspacePageLis
                 <Search size={19} />
                 <span>
                   <strong>{query.trim() ? '没有匹配的页面' : '工作区还没有页面'}</strong>
-                  <small>{query.trim() ? '换一个关键词，或清除当前筛选。' : '新建页面后会显示在这里。'}</small>
+                  <small>
+                    {query.trim() ? '换一个关键词，或清除当前筛选。' : '新建页面后会显示在这里。'}
+                  </small>
                 </span>
               </div>
-            ) : groups.map((group) => (
-              <PageTableGroup
-                key={group.id}
-                group={group}
-                open={openGroups.has(group.id)}
-                onToggle={() => toggleGroup(group.id)}
-                onOpenPage={onOpenPage}
-              />
-            ))}
+            ) : (
+              groups.map((group) => (
+                <PageTableGroup
+                  key={group.id}
+                  group={group}
+                  open={openGroups.has(group.id)}
+                  onToggle={() => toggleGroup(group.id)}
+                  onOpenPage={onOpenPage}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>

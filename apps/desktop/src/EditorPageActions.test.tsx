@@ -25,7 +25,12 @@ describe('editor page actions', () => {
     expect(screen.getByRole('toolbar', { name: '页面操作' })).toBeInTheDocument()
     expect(screen.getByRole('status', { name: '同步状态：本机 CRDT 已同步' })).toBeInTheDocument()
     expect(screen.getByRole('status', { name: '协作状态：当前为本机模式' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '更多页面操作' }))
+    const menuTrigger = screen.getByRole('button', { name: '更多页面操作' })
+    fireEvent.click(menuTrigger)
+    expect(screen.getByRole('menu', { name: '更多页面操作' })).toHaveAttribute(
+      'id',
+      menuTrigger.getAttribute('aria-controls'),
+    )
     fireEvent.click(screen.getByRole('menuitem', { name: '添加到收藏' }))
     expect(onToggleFavorite).toHaveBeenCalledOnce()
 
@@ -54,7 +59,14 @@ describe('editor page actions', () => {
   })
 
   it('keeps the appearance toolbar discoverable from keyboard focus', () => {
-    render(<PageMetaActions hasCover={false} hasDescription onCoverRequest={vi.fn()} onDescriptionRequest={vi.fn()} />)
+    render(
+      <PageMetaActions
+        hasCover={false}
+        hasDescription
+        onCoverRequest={vi.fn()}
+        onDescriptionRequest={vi.fn()}
+      />,
+    )
 
     const editDescription = screen.getByRole('button', { name: '编辑说明' })
     editDescription.focus()
@@ -93,7 +105,17 @@ describe('editor page actions', () => {
 
   it('cycles through the page menu with the keyboard and restores trigger focus', () => {
     render(
-      <PageHeaderActions syncState="ready" collaborationState="local" collaborators={[]} favorite={false} onComments={vi.fn()} onHistory={vi.fn()} onShare={vi.fn()} onToggleFavorite={vi.fn()} onArchive={vi.fn()} />,
+      <PageHeaderActions
+        syncState="ready"
+        collaborationState="local"
+        collaborators={[]}
+        favorite={false}
+        onComments={vi.fn()}
+        onHistory={vi.fn()}
+        onShare={vi.fn()}
+        onToggleFavorite={vi.fn()}
+        onArchive={vi.fn()}
+      />,
     )
     const trigger = screen.getByRole('button', { name: '更多页面操作' })
     fireEvent.click(trigger)
@@ -112,7 +134,19 @@ describe('editor page actions', () => {
   })
 
   it('opens the page menu from the trigger with ArrowDown', () => {
-    render(<PageHeaderActions syncState="ready" collaborationState="local" collaborators={[]} favorite={false} onComments={vi.fn()} onHistory={vi.fn()} onShare={vi.fn()} onToggleFavorite={vi.fn()} onArchive={vi.fn()} />)
+    render(
+      <PageHeaderActions
+        syncState="ready"
+        collaborationState="local"
+        collaborators={[]}
+        favorite={false}
+        onComments={vi.fn()}
+        onHistory={vi.fn()}
+        onShare={vi.fn()}
+        onToggleFavorite={vi.fn()}
+        onArchive={vi.fn()}
+      />,
+    )
     fireEvent.keyDown(screen.getByRole('button', { name: '更多页面操作' }), { key: 'ArrowDown' })
     expect(screen.getAllByRole('menuitem')[0]).toHaveFocus()
   })

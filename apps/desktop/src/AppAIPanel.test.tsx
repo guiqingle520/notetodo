@@ -50,7 +50,12 @@ describe('AIPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '选择 AI 上下文' }))
+    const menuTrigger = screen.getByRole('button', { name: '选择 AI 上下文' })
+    fireEvent.click(menuTrigger)
+    expect(screen.getByRole('menu', { name: '选择 AI 上下文' })).toHaveAttribute(
+      'id',
+      menuTrigger.getAttribute('aria-controls'),
+    )
     fireEvent.click(screen.getByRole('menuitemradio', { name: /所选文本/u }))
     expect(screen.getByText('所选文本上下文已开启')).toBeInTheDocument()
 
@@ -58,6 +63,25 @@ describe('AIPanel', () => {
     expect(screen.getByRole('menu', { name: '选择 AI 上下文' })).toBeInTheDocument()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('menu', { name: '选择 AI 上下文' })).not.toBeInTheDocument()
+    expect(menuTrigger).toHaveFocus()
+  })
+
+  it('opens and navigates the context menu from the keyboard', () => {
+    render(
+      <AIPanel
+        onClose={vi.fn()}
+        selectionContext={{ from: 0, to: 4, text: '测试选区' }}
+        onApplyPatch={vi.fn()}
+        onUndoPatch={vi.fn()}
+      />,
+    )
+    const trigger = screen.getByRole('button', { name: '选择 AI 上下文' })
+
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    const items = screen.getAllByRole('menuitemradio')
+    expect(items[0]).toHaveFocus()
+    fireEvent.keyDown(items[0]!, { key: 'ArrowDown' })
+    expect(items[1]).toHaveFocus()
   })
 
   it('explains why selected text is unavailable', () => {
