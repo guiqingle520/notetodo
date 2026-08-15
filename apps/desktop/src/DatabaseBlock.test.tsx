@@ -284,6 +284,7 @@ describe('database authoring', () => {
     const detailRecord: DatabaseRecord = { id: 'detail-1', values: { name: '离线知识图谱', status: 'todo' }, content: '<p>记录正文</p>', createdAt: '2026-08-07T08:00:00Z', updatedAt: '2026-08-07T08:00:00Z' }
     const { container, getByRole, getByText } = render(<RecordDetailPanel record={detailRecord} schema={detailSchema} onClose={vi.fn()} onUpdateCell={onUpdateCell} onUpdateContent={onUpdateContent} />)
     expect(getByText('记录正文')).toBeTruthy()
+    expect(getByRole('textbox', { name: '记录标题' })).toHaveFocus()
     fireEvent.change(getByRole('textbox', { name: '记录标题' }), { target: { value: '知识图谱 v2' } })
     fireEvent.change(container.querySelector('.record-property-field select')!, { target: { value: 'done' } })
     expect(onUpdateCell).toHaveBeenCalledWith('detail-1', 'name', '知识图谱 v2')

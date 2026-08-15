@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { ArrowRight, Bell, BookOpen, Calculator, Check, Database, GripVertical, Link2, MessageSquare, RotateCcw, Sigma, Trash2, X } from 'lucide-react'
 import { calculateColumn, validColumnCalculations, virtualWindow, type ColumnCalculation, type DatabaseProperty, type DatabaseRecord, type DatabaseRecordComment, type DatabaseRecordHistory, type DatabaseRecordReminder, type DatabaseSchema, type DatabaseViewConfig, type PropertyValue } from '@notetodo/database-core'
+import { useDialogFocus } from './use-dialog-focus'
 
 const ROW_HEIGHT = 42
 const VIEWPORT_HEIGHT = 336
@@ -101,6 +102,7 @@ function RelationValueEditor({ value, target, onChange }: { value: string[]; tar
 }
 
 export function RecordDetailPanel({ record, schema, relationTargets = {}, onClose, onUpdateCell, onUpdateContent, onListHistory, onRestoreHistory, onListComments, onCreateComment, onResolveComment, onDeleteComment, onListReminders, onCreateReminder, onCompleteReminder, onDeleteReminder }: { record: DatabaseRecord; schema: DatabaseSchema; relationTargets?: RelationTargets; onClose: () => void; onUpdateCell: (recordId: string, propertyId: string, value: PropertyValue) => void; onUpdateContent: (recordId: string, content: string) => void; onListHistory?: () => Promise<DatabaseRecordHistory[]>; onRestoreHistory?: (historyId: string) => Promise<void>; onListComments?: (unresolvedOnly: boolean) => Promise<DatabaseRecordComment[]>; onCreateComment?: (propertyId: string | null, body: string) => Promise<DatabaseRecordComment[]>; onResolveComment?: (id: string, resolved: boolean) => Promise<DatabaseRecordComment[]>; onDeleteComment?: (id: string) => Promise<DatabaseRecordComment[]>; onListReminders?: () => Promise<DatabaseRecordReminder[]>; onCreateReminder?: (propertyId: string, dueAt: string, note: string) => Promise<DatabaseRecordReminder[]>; onCompleteReminder?: (id: string, completed: boolean) => Promise<DatabaseRecordReminder[]>; onDeleteReminder?: (id: string) => Promise<DatabaseRecordReminder[]> }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const titleProperty = schema.properties.find((property) => property.type === 'title')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestContent = useRef(record.content ?? '')
@@ -140,12 +142,12 @@ export function RecordDetailPanel({ record, schema, relationTargets = {}, onClos
   const close = () => { persist(); onClose() }
   const title = titleProperty ? String(record.values[titleProperty.id] ?? '') : ''
   return <div className="record-detail-backdrop" role="presentation" onMouseDown={close}>
-    <section className="record-detail-panel" role="dialog" aria-modal="true" aria-label={`记录详情：${title || '无标题'}`} onMouseDown={(event) => event.stopPropagation()}>
+    <section ref={dialogRef} className="record-detail-panel" role="dialog" aria-modal="true" aria-label={`记录详情：${title || '无标题'}`} tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
       <header><span><BookOpen size={13} />{schema.name}<i>/</i>{record.id.slice(0, 8)}</span><div><em className={`is-${saveState}`}>{saveState === 'saving' ? '正在保存…' : '已保存到本地'}</em><button aria-label="记录提醒" aria-pressed={sideMode === 'reminders'} className={sideMode === 'reminders' ? 'is-active' : ''} onClick={() => setSideMode(sideMode === 'reminders' ? 'properties' : 'reminders')}><Bell size={14} /></button><button aria-label="记录讨论" aria-pressed={sideMode === 'comments'} className={sideMode === 'comments' ? 'is-active' : ''} onClick={() => setSideMode(sideMode === 'comments' ? 'properties' : 'comments')}><MessageSquare size={14} /></button><button aria-label="记录历史" aria-pressed={sideMode === 'history'} className={sideMode === 'history' ? 'is-active' : ''} onClick={() => sideMode === 'history' ? setSideMode('properties') : void openHistory()}><RotateCcw size={14} /></button><button aria-label="关闭记录详情" onClick={close}><X size={16} /></button></div></header>
       <div className="record-detail-layout">
         <main>
           <small>数据库记录</small>
-          <input className="record-detail-title" aria-label="记录标题" placeholder="无标题" value={title} onChange={(event) => titleProperty && onUpdateCell(record.id, titleProperty.id, event.target.value)} />
+          <input autoFocus className="record-detail-title" aria-label="记录标题" placeholder="无标题" value={title} onChange={(event) => titleProperty && onUpdateCell(record.id, titleProperty.id, event.target.value)} />
           <nav className="record-editor-toolbar" aria-label="正文格式">
             <button className={editor?.isActive('bold') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBold().run()}>B</button>
             <button className={editor?.isActive('italic') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleItalic().run()}><i>I</i></button>

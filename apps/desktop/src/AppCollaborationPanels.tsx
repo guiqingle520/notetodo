@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from 'react'
 import type { PageIcon } from './domain'
 import { useWorkspace } from './store'
+import { useDialogFocus } from './use-dialog-focus'
 
 type PagePermission = {
   subjectId: string
@@ -53,16 +54,19 @@ const iconMap: Record<PageIcon, React.ComponentType<{ size?: number }>> = {
 }
 
 export function ArchivePanel({ onClose }: { onClose: () => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const { pages, restorePage } = useWorkspace()
   const archivedPages = pages.filter((page) => page.archivedAt)
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         className="archive-panel"
         role="dialog"
         aria-modal="true"
         aria-label="归档与回收站"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
@@ -118,6 +122,7 @@ export function NotificationPanel({
   onClose: () => void
   onCountChange: (count: number) => void
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const { setActivePage } = useWorkspace()
   const [items, setItems] = useState<WorkspaceNotification[]>([])
 
@@ -146,10 +151,12 @@ export function NotificationPanel({
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         className="notification-panel"
         role="dialog"
         aria-modal="true"
         aria-label="更新"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
@@ -196,6 +203,7 @@ export function NotificationPanel({
 }
 
 export function SharePanel({ pageId, onClose }: { pageId: string; onClose: () => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const [permissions, setPermissions] = useState<PagePermission[]>([])
   const [name, setName] = useState('')
   const [role, setRole] = useState<'viewer' | 'commenter' | 'editor'>('editor')
@@ -224,10 +232,12 @@ export function SharePanel({ pageId, onClose }: { pageId: string; onClose: () =>
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         className="share-panel"
         role="dialog"
         aria-modal="true"
         aria-label="共享此页面"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
@@ -244,6 +254,7 @@ export function SharePanel({ pageId, onClose }: { pageId: string; onClose: () =>
         </header>
         <div className="share-invite">
           <input
+            autoFocus
             aria-label="受邀成员"
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -309,6 +320,7 @@ export function CommentsPanel({
   editor: Editor | null
   onClose: () => void
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const [comments, setComments] = useState<PageComment[]>([])
   const [members, setMembers] = useState<PagePermission[]>([])
   const [body, setBody] = useState('')
@@ -361,7 +373,14 @@ export function CommentsPanel({
   }
 
   return (
-    <aside className="comments-panel" role="dialog" aria-modal="true" aria-label="页面讨论">
+    <aside
+      ref={dialogRef}
+      className="comments-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="页面讨论"
+      tabIndex={-1}
+    >
       <header>
         <div>
           <MessageSquare size={16} />
@@ -379,6 +398,7 @@ export function CommentsPanel({
       <div className="comment-composer">
         {quote && <blockquote>“{quote}”</blockquote>}
         <textarea
+          autoFocus
           aria-label="评论内容"
           value={body}
           onChange={(event) => setBody(event.target.value)}
