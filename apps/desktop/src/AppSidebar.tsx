@@ -23,6 +23,7 @@ import {
 import { type PageIcon, type WorkspacePage } from './domain'
 import { pageTemplates } from './data/page-templates'
 import { useWorkspace } from './store'
+import { focusSidebarTreeItem, navigateSidebarTree } from './sidebar-tree-keyboard'
 
 export const iconMap: Record<PageIcon, ComponentType<{ size?: number }>> = {
   spark: Sparkles,
@@ -36,11 +37,13 @@ function PageRow({
   page,
   depth = 0,
   isEditorSurface,
+  tabStopPageId,
   onPageOpen,
 }: {
   page: WorkspacePage
   depth?: number
   isEditorSurface: boolean
+  tabStopPageId: string | undefined
   onPageOpen: () => void
 }) {
   const { pages, activePageId, setActivePage, addPage } = useWorkspace()
@@ -60,7 +63,7 @@ function PageRow({
         className={`page-row ${isEditorSurface && activePageId === page.id ? 'is-active' : ''}`}
         style={{ paddingLeft: 10 + depth * 15 }}
         role="treeitem"
-        tabIndex={0}
+        tabIndex={page.id === tabStopPageId ? 0 : -1}
         aria-current={isEditorSurface && activePageId === page.id ? 'page' : undefined}
         aria-expanded={children.length ? open : undefined}
         aria-level={depth + 1}
@@ -106,6 +109,7 @@ function PageRow({
             page={child}
             depth={depth + 1}
             isEditorSurface={isEditorSurface}
+            tabStopPageId={tabStopPageId}
             onPageOpen={onPageOpen}
           />
         ))}
@@ -154,12 +158,13 @@ export function Sidebar({
     help: { id: string; open: boolean }
   }
 }) {
-  const { pages, addPage, setActivePage } = useWorkspace()
+  const { pages, activePageId, addPage, setActivePage } = useWorkspace()
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
   const templateMenuId = useId()
   const templateMenuRef = useRef<HTMLDivElement>(null)
   const templateTriggerRef = useRef<HTMLButtonElement>(null)
   const topLevel = pages.filter((page) => page.parentId === null && !page.archivedAt)
+  const tabStopPageId = activeSurface === 'editor' ? activePageId : topLevel[0]?.id
   const favorites = pages.filter((page) => page.favorite && !page.archivedAt)
 
   useEffect(() => {
@@ -310,12 +315,35 @@ export function Sidebar({
               })}
             </div>
           )}
-          <div className="page-tree" role="tree" aria-label="私有页面">
+          <div
+            className="page-tree"
+            role="tree"
+            aria-label="私有页面"
+            onFocus={(event) => {
+              if (
+                event.target instanceof HTMLElement &&
+                event.target.matches('[role="treeitem"]')
+              ) {
+                focusSidebarTreeItem(event.currentTarget, event.target)
+              }
+            }}
+            onKeyDown={(event) => {
+              if (
+                !(event.target instanceof HTMLElement) ||
+                !event.target.matches('[role="treeitem"]')
+              )
+                return
+              if (!navigateSidebarTree(event.currentTarget, event.target, event.key)) return
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+          >
             {topLevel.map((page) => (
               <PageRow
                 key={page.id}
                 page={page}
                 isEditorSurface={activeSurface === 'editor'}
+                tabStopPageId={tabStopPageId}
                 onPageOpen={onPageOpen}
               />
             ))}

@@ -113,6 +113,37 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('dialog', { name: '选择页面模板' })).not.toBeInTheDocument()
   })
 
+  it('navigates the visible page tree with a single keyboard tab stop', () => {
+    renderSidebar()
+    const welcome = screen.getByRole('treeitem', { name: /从这里开始/u })
+    const projects = screen.getByRole('treeitem', { name: /产品路线/u })
+
+    expect(welcome).toHaveAttribute('tabindex', '0')
+    expect(projects).toHaveAttribute('tabindex', '-1')
+    projects.focus()
+    expect(projects).toHaveAttribute('tabindex', '0')
+    expect(welcome).toHaveAttribute('tabindex', '-1')
+
+    fireEvent.keyDown(projects, { key: 'ArrowLeft' })
+    expect(screen.queryByRole('treeitem', { name: /本周计划/u })).not.toBeInTheDocument()
+    fireEvent.keyDown(projects, { key: 'ArrowRight' })
+    const weekly = screen.getByRole('treeitem', { name: /本周计划/u })
+    fireEvent.keyDown(projects, { key: 'ArrowRight' })
+    expect(weekly).toHaveFocus()
+
+    fireEvent.keyDown(weekly, { key: 'ArrowLeft' })
+    expect(projects).toHaveFocus()
+    fireEvent.keyDown(projects, { key: 'End' })
+    const knowledge = screen.getByRole('treeitem', { name: /知识库/u })
+    expect(knowledge).toHaveFocus()
+    fireEvent.keyDown(knowledge, { key: 'ArrowDown' })
+    expect(knowledge).toHaveFocus()
+    fireEvent.keyDown(knowledge, { key: 'Home' })
+    expect(welcome).toHaveFocus()
+    fireEvent.keyDown(welcome, { key: 'ArrowUp' })
+    expect(welcome).toHaveFocus()
+  })
+
   it('routes AI and help controls to real application actions', () => {
     const props = renderSidebar()
 
