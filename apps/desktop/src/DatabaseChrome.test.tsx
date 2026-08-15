@@ -69,4 +69,54 @@ describe('database prototype chrome', () => {
       expect(trigger).toHaveFocus()
     }
   })
+
+  it('connects modal tool triggers to their dialogs', async () => {
+    render(<DatabaseBlock pageId="projects" initialSnapshot={snapshot} />)
+    const cases = [
+      [/^属性/u, '数据库属性管理', '关闭属性管理'],
+      [/^筛选/u, '视图规则工作台', '关闭视图规则'],
+      [/^排序/u, '视图规则工作台', '关闭视图规则'],
+      [/^分组/u, '视图规则工作台', '关闭视图规则'],
+      [/^导入$/u, '导入 CSV', '关闭 CSV 导入'],
+      [/^回收站$/u, '数据库记录回收站', '关闭记录回收站'],
+      [/^自动化/u, '数据库自动化', '关闭数据库自动化'],
+    ] as const
+
+    for (const [triggerName, dialogName, closeName] of cases) {
+      const trigger = screen.getByRole('button', { name: triggerName })
+      expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
+      expect(trigger).toHaveAttribute('aria-expanded', 'false')
+      trigger.focus()
+      fireEvent.click(trigger)
+
+      const dialog = await screen.findByRole('dialog', { name: dialogName })
+      expect(trigger).toHaveAttribute('aria-expanded', 'true')
+      expect(trigger).toHaveAttribute('aria-controls', dialog.id)
+      fireEvent.click(screen.getByRole('button', { name: closeName }))
+      expect(trigger).toHaveFocus()
+    }
+  })
+
+  it('connects saved rule summaries to the shared rules dialog', async () => {
+    const configured: DatabaseSnapshot = {
+      ...snapshot,
+      views: [
+        {
+          ...snapshot.views[0]!,
+          config: { filters: [{ propertyId: 'date', operator: 'isNotEmpty', value: '' }] },
+        },
+      ],
+    }
+    render(<DatabaseBlock pageId="projects" initialSnapshot={configured} />)
+    const trigger = screen.getByRole('button', { name: /1 条筛选/u })
+
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = await screen.findByRole('dialog', { name: '视图规则工作台' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(trigger).toHaveAttribute('aria-controls', dialog.id)
+    fireEvent.click(screen.getByRole('button', { name: '关闭视图规则' }))
+    expect(trigger).toHaveFocus()
+  })
 })

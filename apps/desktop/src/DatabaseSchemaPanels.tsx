@@ -13,8 +13,8 @@ const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title'>; label: 
 type PropertyConfig = Partial<Pick<DatabaseProperty, 'options' | 'relation' | 'rollup' | 'formula' | 'constraints'>>
 type DatabaseSource = { id: string; pageId: string; name: string; pageTitle: string; recordCount: number }
 
-export function SchemaPanel({ schema, previewRecord, databaseSources, relationTargets, onClose, onAdd, onRename, onReorder, onConfigure, onDelete }: {
-  schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; relationTargets: RelationTargets; onClose: () => void
+export function SchemaPanel({ id, schema, previewRecord, databaseSources, relationTargets, onClose, onAdd, onRename, onReorder, onConfigure, onDelete }: {
+  id?: string; schema: DatabaseSchema; previewRecord?: DatabaseRecord; databaseSources: DatabaseSource[]; relationTargets: RelationTargets; onClose: () => void
   onAdd: (name: string, type: Exclude<PropertyType, 'title'>) => Promise<void>; onRename: (propertyId: string, name: string) => Promise<void>; onReorder: (propertyIds: string[]) => Promise<void>
   onConfigure: (propertyId: string, config: PropertyConfig) => Promise<void>; onDelete: (propertyId: string) => Promise<void>
 }) {
@@ -38,7 +38,7 @@ export function SchemaPanel({ schema, previewRecord, databaseSources, relationTa
     ids.splice(to, 0, ids.splice(from, 1)[0]!)
     setDraggingPropertyId(null); void onReorder(ids)
   }
-  return <div className="schema-panel-backdrop" onMouseDown={onClose}><section ref={dialogRef} className={`schema-panel ${editingProperty ? 'is-configuring' : ''}`} role="dialog" aria-modal="true" aria-label="数据库属性管理" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="schema-panel-backdrop" onMouseDown={onClose}><section id={id} ref={dialogRef} className={`schema-panel ${editingProperty ? 'is-configuring' : ''}`} role="dialog" aria-modal="true" aria-label="数据库属性管理" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
     <header><div><small>{schema.name}</small><strong>属性</strong></div><button aria-label="关闭属性管理" onClick={onClose}><X size={15} /></button></header>
     <main className="schema-workbench"><section className="schema-ledger"><div className="schema-ledger-head"><span>序号</span><span>属性名称</span><span>类型</span><span>操作</span></div>{schema.properties.map((property, index) => {
       const configurable = true
@@ -128,17 +128,17 @@ export function propertyTypeName(type: PropertyType) {
   return ({ title: '标题', text: '文本', number: '数字', checkbox: '复选框', select: '单选', multiSelect: '多选', date: '日期', url: '网址', relation: '关联', rollup: '汇总', formula: '公式' } as const)[type]
 }
 
-export function ViewRuleSummary({ config, schema, onOpen }: { config: DatabaseViewConfig; schema: DatabaseSchema; onOpen: (tab: 'filters' | 'sorts' | 'group') => void }) {
+export function ViewRuleSummary({ config, schema, dialogId, openTab, onOpen }: { config: DatabaseViewConfig; schema: DatabaseSchema; dialogId?: string; openTab?: 'filters' | 'sorts' | 'group' | null; onOpen: (tab: 'filters' | 'sorts' | 'group') => void }) {
   if (!config.filters?.length && !config.sorts?.length && !config.groupByPropertyId) return null
   return <div className="view-rule-summary">
     <span>已保存视图</span>
-    {config.filters?.length ? <button onClick={() => onOpen('filters')}><Filter size={10} />{config.filters.length} 条筛选 · {config.filterMode === 'or' ? '任一' : '全部'}</button> : null}
-    {config.sorts?.length ? <button onClick={() => onOpen('sorts')}><ArrowUpDown size={10} />{config.sorts.map((sort) => propertyName(schema.properties, sort.propertyId)).join(' → ')}</button> : null}
-    {config.groupByPropertyId ? <button onClick={() => onOpen('group')}><Layers3 size={10} />按 {propertyName(schema.properties, config.groupByPropertyId)} 分组</button> : null}
+    {config.filters?.length ? <button aria-haspopup="dialog" aria-expanded={openTab === 'filters'} aria-controls={dialogId} onClick={() => onOpen('filters')}><Filter size={10} />{config.filters.length} 条筛选 · {config.filterMode === 'or' ? '任一' : '全部'}</button> : null}
+    {config.sorts?.length ? <button aria-haspopup="dialog" aria-expanded={openTab === 'sorts'} aria-controls={dialogId} onClick={() => onOpen('sorts')}><ArrowUpDown size={10} />{config.sorts.map((sort) => propertyName(schema.properties, sort.propertyId)).join(' → ')}</button> : null}
+    {config.groupByPropertyId ? <button aria-haspopup="dialog" aria-expanded={openTab === 'group'} aria-controls={dialogId} onClick={() => onOpen('group')}><Layers3 size={10} />按 {propertyName(schema.properties, config.groupByPropertyId)} 分组</button> : null}
   </div>
 }
 
-export function ViewRulesPanel({ schema, config, initialTab, onClose, onSave }: { schema: DatabaseSchema; config: DatabaseViewConfig; initialTab: 'filters' | 'sorts' | 'group'; onClose: () => void; onSave: (config: DatabaseViewConfig) => void }) {
+export function ViewRulesPanel({ id, schema, config, initialTab, onClose, onSave }: { id?: string; schema: DatabaseSchema; config: DatabaseViewConfig; initialTab: 'filters' | 'sorts' | 'group'; onClose: () => void; onSave: (config: DatabaseViewConfig) => void }) {
   const dialogRef = useDialogFocus<HTMLElement>()
   const [tab, setTab] = useState(initialTab)
   const [draft, setDraft] = useState<DatabaseViewConfig>(() => structuredClone(config))
@@ -152,7 +152,7 @@ export function ViewRulesPanel({ schema, config, initialTab, onClose, onSave }: 
     if (property) setDraft((current) => ({ ...current, sorts: [...(current.sorts ?? []), { propertyId: property.id, direction: 'asc' }] }))
   }
   return <div className="view-rules-backdrop" onMouseDown={onClose}>
-    <section ref={dialogRef} className="view-rules-panel" role="dialog" aria-modal="true" aria-label="视图规则工作台" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
+    <section id={id} ref={dialogRef} className="view-rules-panel" role="dialog" aria-modal="true" aria-label="视图规则工作台" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
       <header><div><small>{schema.name}</small><strong>筛选、排序与分组</strong></div><button aria-label="关闭视图规则" onClick={onClose}><X size={15} /></button></header>
       <nav aria-label="视图规则分类" role="tablist">{(['filters', 'sorts', 'group'] as const).map((item) => <button aria-selected={tab === item} className={tab === item ? 'is-active' : ''} key={item} role="tab" onClick={() => setTab(item)}>{item === 'filters' ? <Filter size={12} /> : item === 'sorts' ? <ArrowUpDown size={12} /> : <Layers3 size={12} />}{item === 'filters' ? `筛选 ${filters.length}` : item === 'sorts' ? `排序 ${sorts.length}` : '分组'}</button>)}</nav>
       <main>
