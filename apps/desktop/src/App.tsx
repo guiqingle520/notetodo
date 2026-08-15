@@ -11,18 +11,14 @@ import { WorkspacePageList } from './WorkspacePageList'
 import { WorkspaceSearchPalette } from './WorkspaceSearchPalette'
 import { HelpPanel } from './AppHelpPanel'
 import { useCompactShell } from './use-compact-shell'
+import { useAppDialogState } from './use-app-dialog-state'
 
 type AppSurface = 'home' | 'pages' | 'editor'
 
 export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [aiOpen, setAiOpen] = useState(true)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [archiveOpen, setArchiveOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
+  const { activeDialog, openDialog, closeDialog } = useAppDialogState()
   const searchDialogId = useId()
   const archiveDialogId = useId()
   const settingsDialogId = useId()
@@ -83,20 +79,15 @@ export function App() {
     const handleGlobalShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'k') {
         event.preventDefault()
-        setSearchOpen(true)
+        openDialog('search')
       }
       if (event.key === 'Escape') {
-        setSearchOpen(false)
-        setArchiveOpen(false)
-        setSettingsOpen(false)
-        setNotificationsOpen(false)
-        setImportOpen(false)
-        setHelpOpen(false)
+        closeDialog()
       }
     }
     window.addEventListener('keydown', handleGlobalShortcut)
     return () => window.removeEventListener('keydown', handleGlobalShortcut)
-  }, [])
+  }, [closeDialog, openDialog])
 
   return (
     <div className="app-shell">
@@ -110,29 +101,29 @@ export function App() {
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((value) => !value)}
-          onSearch={() => setSearchOpen(true)}
-          onArchive={() => setArchiveOpen(true)}
-          onSettings={() => setSettingsOpen(true)}
-          onNotifications={() => setNotificationsOpen(true)}
-          onImport={() => setImportOpen(true)}
+          onSearch={() => openDialog('search')}
+          onArchive={() => openDialog('archive')}
+          onSettings={() => openDialog('settings')}
+          onNotifications={() => openDialog('notifications')}
+          onImport={() => openDialog('import')}
           onAI={() => {
             setSurface('editor')
             setAiOpen(true)
           }}
-          onHelp={() => setHelpOpen(true)}
+          onHelp={() => openDialog('help')}
           notificationCount={notificationCount}
           activeSurface={surface}
           onHome={() => setSurface('home')}
           onAllPages={() => setSurface('pages')}
           onPageOpen={() => setSurface('editor')}
           panels={{
-            search: { id: searchDialogId, open: searchOpen },
-            notifications: { id: notificationsDialogId, open: notificationsOpen },
-            settings: { id: settingsDialogId, open: settingsOpen },
+            search: { id: searchDialogId, open: activeDialog === 'search' },
+            notifications: { id: notificationsDialogId, open: activeDialog === 'notifications' },
+            settings: { id: settingsDialogId, open: activeDialog === 'settings' },
             ai: { id: aiPanelId, open: surface === 'editor' && aiOpen },
-            import: { id: importDialogId, open: importOpen },
-            archive: { id: archiveDialogId, open: archiveOpen },
-            help: { id: helpDialogId, open: helpOpen },
+            import: { id: importDialogId, open: activeDialog === 'import' },
+            archive: { id: archiveDialogId, open: activeDialog === 'archive' },
+            help: { id: helpDialogId, open: activeDialog === 'help' },
           }}
         />
         {sidebarCollapsed && (
@@ -175,32 +166,24 @@ export function App() {
               <Sparkles size={14} />
             </button>
           ))}
-        {searchOpen && (
-          <WorkspaceSearchPalette
-            id={searchDialogId}
-            onClose={() => setSearchOpen(false)}
-            onOpenPage={openPage}
-          />
+        {activeDialog === 'search' && (
+          <WorkspaceSearchPalette id={searchDialogId} onClose={closeDialog} onOpenPage={openPage} />
         )}
-        {archiveOpen && <ArchivePanel id={archiveDialogId} onClose={() => setArchiveOpen(false)} />}
-        {settingsOpen && (
-          <ModelSettingsPanel id={settingsDialogId} onClose={() => setSettingsOpen(false)} />
+        {activeDialog === 'archive' && <ArchivePanel id={archiveDialogId} onClose={closeDialog} />}
+        {activeDialog === 'settings' && (
+          <ModelSettingsPanel id={settingsDialogId} onClose={closeDialog} />
         )}
-        {notificationsOpen && (
+        {activeDialog === 'notifications' && (
           <NotificationPanel
             id={notificationsDialogId}
-            onClose={() => setNotificationsOpen(false)}
+            onClose={closeDialog}
             onCountChange={setNotificationCount}
           />
         )}
-        {importOpen && (
-          <ImportPanel
-            id={importDialogId}
-            onClose={() => setImportOpen(false)}
-            onImported={hydrate}
-          />
+        {activeDialog === 'import' && (
+          <ImportPanel id={importDialogId} onClose={closeDialog} onImported={hydrate} />
         )}
-        {helpOpen && <HelpPanel id={helpDialogId} onClose={() => setHelpOpen(false)} />}
+        {activeDialog === 'help' && <HelpPanel id={helpDialogId} onClose={closeDialog} />}
       </div>
     </div>
   )
