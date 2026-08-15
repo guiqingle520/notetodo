@@ -202,7 +202,15 @@ export function NotificationPanel({
   )
 }
 
-export function SharePanel({ pageId, onClose }: { pageId: string; onClose: () => void }) {
+export function SharePanel({
+  pageId,
+  id,
+  onClose,
+}: {
+  pageId: string
+  id?: string
+  onClose: () => void
+}) {
   const dialogRef = useDialogFocus<HTMLElement>()
   const [permissions, setPermissions] = useState<PagePermission[]>([])
   const [name, setName] = useState('')
@@ -232,6 +240,7 @@ export function SharePanel({ pageId, onClose }: { pageId: string; onClose: () =>
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        id={id}
         ref={dialogRef}
         className="share-panel"
         role="dialog"
@@ -313,10 +322,12 @@ export function SharePanel({ pageId, onClose }: { pageId: string; onClose: () =>
 
 export function CommentsPanel({
   pageId,
+  id,
   editor,
   onClose,
 }: {
   pageId: string
+  id?: string
   editor: Editor | null
   onClose: () => void
 }) {
@@ -374,6 +385,7 @@ export function CommentsPanel({
 
   return (
     <aside
+      id={id}
       ref={dialogRef}
       className="comments-panel"
       role="dialog"

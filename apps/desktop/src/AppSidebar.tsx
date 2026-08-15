@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { useEffect, useId, useRef, useState, type ComponentType } from 'react'
 import {
   Archive,
   Bell,
@@ -80,13 +80,11 @@ function PageRow({
               setOpen((value) => !value)
             }}
           >
-            {open ? (
-              <ChevronDown size={13} />
-            ) : (
-              <ChevronRight size={13} />
-            )}
+            {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           </button>
-        ) : <span className="row-disclosure" aria-hidden="true" />}
+        ) : (
+          <span className="row-disclosure" aria-hidden="true" />
+        )}
         <Icon size={15} />
         <span>{page.title}</span>
         <button
@@ -148,6 +146,7 @@ export function Sidebar({
 }) {
   const { pages, addPage, setActivePage } = useWorkspace()
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false)
+  const templateMenuId = useId()
   const templateMenuRef = useRef<HTMLDivElement>(null)
   const templateTriggerRef = useRef<HTMLButtonElement>(null)
   const topLevel = pages.filter((page) => page.parentId === null && !page.archivedAt)
@@ -161,7 +160,12 @@ export function Sidebar({
       templateTriggerRef.current?.focus()
     }
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (event.target instanceof Node && !templateMenuRef.current?.contains(event.target) && !templateTriggerRef.current?.contains(event.target)) setTemplateMenuOpen(false)
+      if (
+        event.target instanceof Node &&
+        !templateMenuRef.current?.contains(event.target) &&
+        !templateTriggerRef.current?.contains(event.target)
+      )
+        setTemplateMenuOpen(false)
     }
     window.addEventListener('keydown', closeOnEscape)
     window.addEventListener('pointerdown', closeOnOutsidePointer)
@@ -224,8 +228,9 @@ export function Sidebar({
             <button
               ref={templateTriggerRef}
               aria-label="从模板新建页面"
+              aria-haspopup="dialog"
               aria-expanded={templateMenuOpen}
-              aria-controls="sidebar-template-menu"
+              aria-controls={templateMenuId}
               onClick={() => setTemplateMenuOpen((value) => !value)}
             >
               <Plus size={14} />
@@ -234,7 +239,7 @@ export function Sidebar({
           {templateMenuOpen && (
             <div
               className="template-quick-menu"
-              id="sidebar-template-menu"
+              id={templateMenuId}
               ref={templateMenuRef}
               role="dialog"
               aria-label="选择页面模板"

@@ -14,6 +14,11 @@ interface PageHeaderActionsProps {
   onShare: () => void
   onToggleFavorite: () => void
   onArchive: () => void
+  dialogs?: {
+    comments: { id: string; open: boolean }
+    history: { id: string; open: boolean }
+    share: { id: string; open: boolean }
+  }
 }
 
 function syncLabel(state: PageHeaderActionsProps['syncState']) {
@@ -47,6 +52,7 @@ export function PageHeaderActions({
   onShare,
   onToggleFavorite,
   onArchive,
+  dialogs,
 }: PageHeaderActionsProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const moreMenuId = useId()
@@ -94,13 +100,32 @@ export function PageHeaderActions({
           ))}
         </span>
       </div>
-      <button onClick={onComments} aria-label="页面评论">
+      <button
+        onClick={onComments}
+        aria-label="页面评论"
+        aria-haspopup="dialog"
+        aria-expanded={dialogs?.comments.open}
+        aria-controls={dialogs?.comments.id}
+      >
         <MessageSquare size={15} />
       </button>
-      <button onClick={onHistory} aria-label="页面历史">
+      <button
+        onClick={onHistory}
+        aria-label="页面历史"
+        aria-haspopup="dialog"
+        aria-expanded={dialogs?.history.open}
+        aria-controls={dialogs?.history.id}
+      >
         <History size={15} />
       </button>
-      <button onClick={onShare}>分享</button>
+      <button
+        onClick={onShare}
+        aria-haspopup="dialog"
+        aria-expanded={dialogs?.share.open}
+        aria-controls={dialogs?.share.id}
+      >
+        分享
+      </button>
       <button
         className={favorite ? 'is-starred' : ''}
         onClick={onToggleFavorite}

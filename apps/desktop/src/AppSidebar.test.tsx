@@ -63,8 +63,12 @@ describe('Sidebar', () => {
     const trigger = screen.getByRole('button', { name: '从模板新建页面' })
 
     fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('dialog', { name: '选择页面模板' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '选择页面模板' })).toHaveAttribute(
+      'id',
+      trigger.getAttribute('aria-controls'),
+    )
     expect(screen.getByText('本地模板')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /空白页/ })).toHaveFocus()
 

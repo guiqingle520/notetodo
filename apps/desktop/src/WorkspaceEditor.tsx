@@ -56,8 +56,11 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
   const [collaborationState, setCollaborationState] = useState<'local' | 'connecting' | 'online' | 'offline'>('local')
   const [collaborators, setCollaborators] = useState<RemoteCursor[]>([])
   const [shareOpen, setShareOpen] = useState(false)
+  const shareDialogId = useId()
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const commentsDialogId = useId()
   const [historyOpen, setHistoryOpen] = useState(false)
+  const historyDialogId = useId()
   const [pageRole, setPageRole] = useState<'viewer' | 'commenter' | 'editor' | 'owner'>('owner')
   const [blockToolbar, setBlockToolbar] = useState<null | { index: number; top: number }>(null)
   const [descriptionOpen, setDescriptionOpen] = useState(Boolean(page.description))
@@ -403,7 +406,7 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
     <main className="workspace">
       <header className="topbar">
         <PageBreadcrumbs pages={breadcrumbs} onNavigate={setActivePage} />
-        <PageHeaderActions syncState={syncState} collaborationState={collaborationState} collaborators={collaborators} favorite={Boolean(page.favorite)} onComments={() => setCommentsOpen(true)} onHistory={() => setHistoryOpen(true)} onShare={() => setShareOpen(true)} onToggleFavorite={() => toggleFavorite(page.id)} onArchive={() => archivePage(page.id)} />
+        <PageHeaderActions syncState={syncState} collaborationState={collaborationState} collaborators={collaborators} favorite={Boolean(page.favorite)} onComments={() => setCommentsOpen(true)} onHistory={() => setHistoryOpen(true)} onShare={() => setShareOpen(true)} onToggleFavorite={() => toggleFavorite(page.id)} onArchive={() => archivePage(page.id)} dialogs={{ comments: { id: commentsDialogId, open: commentsOpen }, history: { id: historyDialogId, open: historyOpen }, share: { id: shareDialogId, open: shareOpen } }} />
       </header>
 
       <div className="editor-scroll" onScroll={dismissEditorMenus}>
@@ -457,10 +460,11 @@ function WorkspaceEditorContent({ page, onEditorReady, onSelectionChange }: { pa
           )}
         </article>
       </div>
-      {shareOpen && <SharePanel pageId={page.id} onClose={() => setShareOpen(false)} />}
-      {commentsOpen && <CommentsPanel pageId={page.id} editor={editor} onClose={() => setCommentsOpen(false)} />}
+      {shareOpen && <SharePanel id={shareDialogId} pageId={page.id} onClose={() => setShareOpen(false)} />}
+      {commentsOpen && <CommentsPanel id={commentsDialogId} pageId={page.id} editor={editor} onClose={() => setCommentsOpen(false)} />}
       {historyOpen && (
         <PageHistoryPanel
+          id={historyDialogId}
           page={page}
           canRestore={Boolean(editor?.isEditable)}
           onClose={() => setHistoryOpen(false)}

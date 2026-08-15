@@ -12,6 +12,7 @@ type PageVersionDetail = NonNullable<
 >
 
 interface PageHistoryPanelProps {
+  id?: string
   page: WorkspacePage
   canRestore: boolean
   onRestored: (page: WorkspacePage) => void
@@ -23,7 +24,13 @@ function errorMessage(reason: unknown, fallback: string) {
   return reason.message.split('Error: ').at(-1) ?? reason.message
 }
 
-export function PageHistoryPanel({ page, canRestore, onRestored, onClose }: PageHistoryPanelProps) {
+export function PageHistoryPanel({
+  id,
+  page,
+  canRestore,
+  onRestored,
+  onClose,
+}: PageHistoryPanelProps) {
   const dialogRef = useDialogFocus<HTMLElement>()
   const [versions, setVersions] = useState<PageVersionSummary[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -108,6 +115,7 @@ export function PageHistoryPanel({ page, canRestore, onRestored, onClose }: Page
   return (
     <div className="modal-backdrop history-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        id={id}
         ref={dialogRef}
         className="history-panel"
         role="dialog"

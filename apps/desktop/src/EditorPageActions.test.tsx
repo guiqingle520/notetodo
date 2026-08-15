@@ -19,12 +19,33 @@ describe('editor page actions', () => {
         onShare={vi.fn()}
         onToggleFavorite={onToggleFavorite}
         onArchive={vi.fn()}
+        dialogs={{
+          comments: { id: 'comments-dialog', open: true },
+          history: { id: 'history-dialog', open: false },
+          share: { id: 'share-dialog', open: false },
+        }}
       />,
     )
 
     expect(screen.getByRole('toolbar', { name: '页面操作' })).toBeInTheDocument()
     expect(screen.getByRole('status', { name: '同步状态：本机 CRDT 已同步' })).toBeInTheDocument()
     expect(screen.getByRole('status', { name: '协作状态：当前为本机模式' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '页面评论' })).toHaveAttribute(
+      'aria-controls',
+      'comments-dialog',
+    )
+    expect(screen.getByRole('button', { name: '页面评论' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: '页面历史' })).toHaveAttribute(
+      'aria-controls',
+      'history-dialog',
+    )
+    expect(screen.getByRole('button', { name: '分享' })).toHaveAttribute(
+      'aria-controls',
+      'share-dialog',
+    )
     const menuTrigger = screen.getByRole('button', { name: '更多页面操作' })
     fireEvent.click(menuTrigger)
     expect(screen.getByRole('menu', { name: '更多页面操作' })).toHaveAttribute(

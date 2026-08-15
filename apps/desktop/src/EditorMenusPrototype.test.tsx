@@ -19,9 +19,12 @@ const page: WorkspacePage = {
 describe('editor interaction surfaces', () => {
   it('exposes the comments drawer as a labelled dialog with a labelled composer', () => {
     const onClose = vi.fn()
-    render(<CommentsPanel pageId={page.id} editor={null} onClose={onClose} />)
+    render(<CommentsPanel id="comments-dialog" pageId={page.id} editor={null} onClose={onClose} />)
 
-    expect(screen.getByRole('dialog', { name: '页面讨论' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '页面讨论' })).toHaveAttribute(
+      'id',
+      'comments-dialog',
+    )
     expect(screen.getByRole('textbox', { name: '评论内容' })).toHaveFocus()
     expect(screen.getByRole('status')).toHaveTextContent('还没有讨论')
     expect(screen.getByRole('button', { name: '发布评论' })).toBeDisabled()
@@ -32,10 +35,16 @@ describe('editor interaction surfaces', () => {
   it('keeps page history as a modal dialog with an explicit close action', () => {
     const onClose = vi.fn()
     render(
-      <PageHistoryPanel page={page} canRestore={false} onRestored={vi.fn()} onClose={onClose} />,
+      <PageHistoryPanel
+        id="history-dialog"
+        page={page}
+        canRestore={false}
+        onRestored={vi.fn()}
+        onClose={onClose}
+      />,
     )
 
-    expect(screen.getByRole('dialog', { name: '页面历史' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '页面历史' })).toHaveAttribute('id', 'history-dialog')
     expect(screen.getByText('页面历史')).toBeInTheDocument()
     expect(screen.getByText('产品路线图 · 最多保留 200 版')).toBeInTheDocument()
     expect(screen.getByText(/正在加载历史版本|还没有历史版本/u)).toBeInTheDocument()
