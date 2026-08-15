@@ -45,4 +45,24 @@ describe('settings prototype surface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'API 访问' }))
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth' })
   })
+
+  it('moves through settings categories with vertical navigation keys', () => {
+    render(<ModelSettingsPanel onClose={vi.fn()} />)
+    const model = screen.getByRole('button', { name: '模型与 AI' })
+    const tokens = screen.getByRole('button', { name: 'API 访问' })
+    const webhooks = screen.getByRole('button', { name: 'Webhook' })
+
+    expect(model).toHaveAttribute('tabindex', '0')
+    expect(tokens).toHaveAttribute('tabindex', '-1')
+    expect(model).toHaveAttribute('aria-controls', 'settings-model')
+    expect(document.getElementById('settings-model')).toHaveAttribute('aria-labelledby', model.id)
+
+    fireEvent.keyDown(model, { key: 'ArrowDown' })
+    expect(tokens).toHaveFocus()
+    expect(tokens).toHaveAttribute('aria-current', 'page')
+    fireEvent.keyDown(tokens, { key: 'End' })
+    expect(webhooks).toHaveFocus()
+    fireEvent.keyDown(webhooks, { key: 'ArrowDown' })
+    expect(model).toHaveFocus()
+  })
 })

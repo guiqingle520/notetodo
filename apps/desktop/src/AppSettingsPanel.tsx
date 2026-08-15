@@ -187,7 +187,7 @@ export function ModelSettingsPanel({ id, onClose }: { id?: string; onClose: () =
             <X size={18} />
           </button>
         </header>
-        <section className="settings-card" id="settings-model">
+        <section className="settings-card" id="settings-model" aria-labelledby="settings-nav-model">
           <div className="settings-card-title">
             <Cpu size={17} />
             <span>
@@ -257,7 +257,11 @@ export function ModelSettingsPanel({ id, onClose }: { id?: string; onClose: () =
             </button>
           </footer>
         </section>
-        <section className="settings-card platform-token-card" id="settings-tokens">
+        <section
+          className="settings-card platform-token-card"
+          id="settings-tokens"
+          aria-labelledby="settings-nav-tokens"
+        >
           <div className="settings-card-title">
             <KeyRound size={17} />
             <span>
@@ -345,7 +349,11 @@ export function ModelSettingsPanel({ id, onClose }: { id?: string; onClose: () =
             {!tokens.length && <p>尚未签发任何访问令牌。</p>}
           </div>
         </section>
-        <section className="settings-card webhook-card" id="settings-webhooks">
+        <section
+          className="settings-card webhook-card"
+          id="settings-webhooks"
+          aria-labelledby="settings-nav-webhooks"
+        >
           <div className="settings-card-title">
             <Webhook size={17} />
             <span>
