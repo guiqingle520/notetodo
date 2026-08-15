@@ -31,6 +31,7 @@ describe('database prototype dialogs', () => {
     )
 
     expect(screen.getByRole('dialog', { name: '数据库属性管理' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '新属性名称' })).toHaveFocus()
     expect(screen.getByText('属性')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '关闭属性管理' }))
     expect(onClose).toHaveBeenCalledOnce()
@@ -69,6 +70,7 @@ describe('database prototype dialogs', () => {
     )
 
     expect(screen.getByRole('dialog', { name: '数据库自动化' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '关闭数据库自动化' })).toHaveFocus()
     expect(screen.getByRole('tab', { name: '规则 0' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: '运行 0' })).toHaveAttribute('aria-selected', 'false')
     fireEvent.click(screen.getByRole('button', { name: '关闭数据库自动化' }))
@@ -87,6 +89,7 @@ describe('database prototype dialogs', () => {
     )
     expect(screen.getByRole('dialog', { name: '编辑数据库模板' })).toBeInTheDocument()
     expect(screen.getByText('新建模板')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '模板名称' })).toHaveFocus()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(closeTemplate).toHaveBeenCalledOnce()
     template.unmount()
@@ -94,7 +97,7 @@ describe('database prototype dialogs', () => {
     const closeCsv = vi.fn()
     render(<CsvImportPanel schema={schema} onClose={closeCsv} onImport={vi.fn()} />)
     expect(screen.getByRole('dialog', { name: '导入 CSV' })).toBeInTheDocument()
-    expect(screen.getByLabelText('选择 CSV 文件')).toBeInTheDocument()
+    expect(screen.getByLabelText('选择 CSV 文件')).toHaveFocus()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(closeCsv).toHaveBeenCalledOnce()
   })

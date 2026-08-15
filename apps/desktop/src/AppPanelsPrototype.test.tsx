@@ -50,6 +50,7 @@ describe('prototype modal surfaces', () => {
     )
     expect(screen.getByText('Notion 导出包 · 本地安全预检')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '选择 Notion 导出包' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '选择 Notion 导出包' })).toHaveFocus()
 
     fireEvent.click(screen.getByRole('button', { name: '关闭导入工作区' }))
     expect(onClose).toHaveBeenCalledOnce()

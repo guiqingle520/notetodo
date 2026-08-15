@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import { Activity, ArrowRight, CalendarDays, ChartNoAxesGantt, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Images, Plus, RotateCcw, X, Zap } from 'lucide-react'
 import { buildCalendarMonth, groupRecordsByDate, layoutTimelineRecords, prepareGalleryRecords, safeGalleryCover, timelineDays, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type PropertyValue } from '@notetodo/database-core'
 import type { AutomationRule, AutomationValue } from '@notetodo/automation-core'
+import { useDialogFocus } from './use-dialog-focus'
 
 const statuses = [{ id: 'todo', label: '待开始' }, { id: 'doing', label: '进行中' }, { id: 'done', label: '已完成' }]
 type AutomationRun = Awaited<ReturnType<NonNullable<typeof window.notetodo>['automations']['listRuns']>>[number]
@@ -132,6 +133,7 @@ export function CalendarView({ records, schema, datePropertyId, updateCell }: { 
 }
 
 export function AutomationPanel({ schema, rules, runs, onClose, onSave, onToggle, onReplay }: { schema: DatabaseSchema; rules: AutomationRule[]; runs: AutomationRun[]; onClose: () => void; onSave: (rule: AutomationRule) => Promise<void>; onToggle: (rule: AutomationRule) => Promise<void>; onReplay: (runId: string) => Promise<void> }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const writable = schema.properties.filter((property) => property.type !== 'formula' && property.type !== 'rollup')
   const defaultTrigger = schema.properties.find((property) => property.type === 'select') ?? writable[0]!
   const defaultAction = schema.properties.find((property) => property.type === 'number') ?? writable[0]!
@@ -163,7 +165,7 @@ export function AutomationPanel({ schema, rules, runs, onClose, onSave, onToggle
   }
 
   return <div className="automation-backdrop" onMouseDown={onClose}>
-    <section className="automation-panel" role="dialog" aria-modal="true" aria-label="数据库自动化" onMouseDown={(event) => event.stopPropagation()}>
+    <section ref={dialogRef} className="automation-panel" role="dialog" aria-modal="true" aria-label="数据库自动化" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
       <header><div><span><Zap size={15} /></span><div><small>{schema.name}</small><strong>数据库自动化</strong></div></div><button aria-label="关闭数据库自动化" onClick={onClose}><X size={16} /></button></header>
       <nav aria-label="自动化视图" role="tablist"><button aria-selected={tab === 'rules'} className={tab === 'rules' ? 'is-active' : ''} role="tab" onClick={() => setTab('rules')}><Zap size={12} />规则 {rules.length}</button><button aria-selected={tab === 'runs'} className={tab === 'runs' ? 'is-active' : ''} role="tab" onClick={() => setTab('runs')}><Activity size={12} />运行 {runs.length}</button></nav>
       {tab === 'rules' ? <div className="automation-layout">

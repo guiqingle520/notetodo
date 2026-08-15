@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowUpDown, ChevronDown, ChevronRight, Filter, GripVertical, Layers3, Link2, Plus, Settings2, Sigma, Trash2, X } from 'lucide-react'
 import { evaluateFormula, validateFormulaExpression, type DatabaseProperty, type DatabaseRecord, type DatabaseSchema, type DatabaseViewConfig, type FilterRule, type PropertyType, type PropertyValue, type SelectOption, type SortRule } from '@notetodo/database-core'
 import { propertyTypeLabel, type RelationTargets } from './DatabaseViews'
+import { useDialogFocus } from './use-dialog-focus'
 
 const writablePropertyTypes: Array<{ id: Exclude<PropertyType, 'title'>; label: string }> = [
   { id: 'text', label: '文本' }, { id: 'number', label: '数字' }, { id: 'checkbox', label: '复选框' },
@@ -17,6 +18,7 @@ export function SchemaPanel({ schema, previewRecord, databaseSources, relationTa
   onAdd: (name: string, type: Exclude<PropertyType, 'title'>) => Promise<void>; onRename: (propertyId: string, name: string) => Promise<void>; onReorder: (propertyIds: string[]) => Promise<void>
   onConfigure: (propertyId: string, config: PropertyConfig) => Promise<void>; onDelete: (propertyId: string) => Promise<void>
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const [name, setName] = useState('')
   const [type, setType] = useState<(typeof writablePropertyTypes)[number]['id']>('text')
   const [busy, setBusy] = useState(false)
@@ -36,13 +38,13 @@ export function SchemaPanel({ schema, previewRecord, databaseSources, relationTa
     ids.splice(to, 0, ids.splice(from, 1)[0]!)
     setDraggingPropertyId(null); void onReorder(ids)
   }
-  return <div className="schema-panel-backdrop" onMouseDown={onClose}><section className={`schema-panel ${editingProperty ? 'is-configuring' : ''}`} role="dialog" aria-modal="true" aria-label="数据库属性管理" onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="schema-panel-backdrop" onMouseDown={onClose}><section ref={dialogRef} className={`schema-panel ${editingProperty ? 'is-configuring' : ''}`} role="dialog" aria-modal="true" aria-label="数据库属性管理" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
     <header><div><small>{schema.name}</small><strong>属性</strong></div><button aria-label="关闭属性管理" onClick={onClose}><X size={15} /></button></header>
     <main className="schema-workbench"><section className="schema-ledger"><div className="schema-ledger-head"><span>序号</span><span>属性名称</span><span>类型</span><span>操作</span></div>{schema.properties.map((property, index) => {
       const configurable = true
       return <div className={`schema-ledger-row ${editingPropertyId === property.id ? 'is-selected' : ''} ${draggingPropertyId === property.id ? 'is-dragging' : ''}`} key={property.id} onDragOver={(event) => event.preventDefault()} onDrop={() => reorder(property.id)}><em><button draggable aria-label={`拖动排序 ${property.name}`} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDraggingPropertyId(property.id) }} onDragEnd={() => setDraggingPropertyId(null)}><GripVertical size={13} /></button>{String(index + 1).padStart(2, '0')}</em><input aria-label={`${property.name} 属性名称`} defaultValue={property.name} maxLength={100} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== property.name) void onRename(property.id, next) }} /><span><i>{propertyTypeLabel(property.type)}</i>{propertyTypeName(property.type)}</span><div>{configurable && <button aria-label={`配置 ${property.name}`} onClick={() => setEditingPropertyId(property.id)}><Settings2 size={12} /></button>}{property.type === 'title' ? <small>主属性</small> : <button aria-label={`删除属性 ${property.name}`} className={deletePending === property.id ? 'is-confirm' : ''} onClick={() => { if (deletePending !== property.id) { setDeleteError(null); return setDeletePending(property.id) } void onDelete(property.id).then(() => setDeletePending(null)).catch((error) => { setDeletePending(null); setDeleteError(error instanceof Error ? error.message : '无法删除属性。') }) }}><Trash2 size={11} /></button>}</div></div>
     })}</section>{editingProperty && <PropertyConfigEditor key={editingProperty.id} property={editingProperty} schema={schema} previewRecord={previewRecord} databaseSources={databaseSources} relationTargets={relationTargets} onClose={() => setEditingPropertyId(null)} onSave={async (config) => { setBusy(true); try { await onConfigure(editingProperty.id, config); setEditingPropertyId(null) } finally { setBusy(false) } }} />}</main>
-    <footer><div><input aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option disabled={candidate.id === 'rollup' && !schema.properties.some((property) => property.type === 'relation')} key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50 || (type === 'rollup' && !schema.properties.some((property) => property.type === 'relation'))} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span className={deleteError ? 'property-config-error' : ''}>{deleteError ?? `${schema.properties.length} / 50 个属性 · 拖动手柄调整顺序 · 标题属性受保护`}</span></footer>
+    <footer><div><input autoFocus aria-label="新属性名称" placeholder="属性名称" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void add() }} /><select aria-label="新属性类型" value={type} onChange={(event) => setType(event.target.value as typeof type)}>{writablePropertyTypes.map((candidate) => <option disabled={candidate.id === 'rollup' && !schema.properties.some((property) => property.type === 'relation')} key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select><button disabled={!name.trim() || busy || schema.properties.length >= 50 || (type === 'rollup' && !schema.properties.some((property) => property.type === 'relation'))} onClick={() => void add()}><Plus size={12} />{busy ? '添加中' : '添加属性'}</button></div><span className={deleteError ? 'property-config-error' : ''}>{deleteError ?? `${schema.properties.length} / 50 个属性 · 拖动手柄调整顺序 · 标题属性受保护`}</span></footer>
   </section></div>
 }
 
@@ -137,6 +139,7 @@ export function ViewRuleSummary({ config, schema, onOpen }: { config: DatabaseVi
 }
 
 export function ViewRulesPanel({ schema, config, initialTab, onClose, onSave }: { schema: DatabaseSchema; config: DatabaseViewConfig; initialTab: 'filters' | 'sorts' | 'group'; onClose: () => void; onSave: (config: DatabaseViewConfig) => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const [tab, setTab] = useState(initialTab)
   const [draft, setDraft] = useState<DatabaseViewConfig>(() => structuredClone(config))
   const filters = draft.filters ?? []; const sorts = draft.sorts ?? []
@@ -149,7 +152,7 @@ export function ViewRulesPanel({ schema, config, initialTab, onClose, onSave }: 
     if (property) setDraft((current) => ({ ...current, sorts: [...(current.sorts ?? []), { propertyId: property.id, direction: 'asc' }] }))
   }
   return <div className="view-rules-backdrop" onMouseDown={onClose}>
-    <section className="view-rules-panel" role="dialog" aria-modal="true" aria-label="视图规则工作台" onMouseDown={(event) => event.stopPropagation()}>
+    <section ref={dialogRef} className="view-rules-panel" role="dialog" aria-modal="true" aria-label="视图规则工作台" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
       <header><div><small>{schema.name}</small><strong>筛选、排序与分组</strong></div><button aria-label="关闭视图规则" onClick={onClose}><X size={15} /></button></header>
       <nav aria-label="视图规则分类" role="tablist">{(['filters', 'sorts', 'group'] as const).map((item) => <button aria-selected={tab === item} className={tab === item ? 'is-active' : ''} key={item} role="tab" onClick={() => setTab(item)}>{item === 'filters' ? <Filter size={12} /> : item === 'sorts' ? <ArrowUpDown size={12} /> : <Layers3 size={12} />}{item === 'filters' ? `筛选 ${filters.length}` : item === 'sorts' ? `排序 ${sorts.length}` : '分组'}</button>)}</nav>
       <main>

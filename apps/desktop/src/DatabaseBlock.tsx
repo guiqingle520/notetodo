@@ -14,6 +14,7 @@ import { ViewLayoutMenu } from './DatabaseViewLayoutMenu'
 import { ViewManagementMenu } from './DatabaseViewManagementMenu'
 import { GroupLedger, SchemaPanel, ViewRuleSummary, ViewRulesPanel, propertyTypeName } from './DatabaseSchemaPanels'
 import { AutomationPanel, CalendarView, GalleryView, TimelineView } from './DatabaseSpecialViews'
+import { useDialogFocus } from './use-dialog-focus'
 export { BoardView, GenericTable, ListView, RecordDetailPanel, VirtualTable } from './DatabaseViews'
 export { QuickFilterMenu } from './DatabaseQuickFilter'
 export { ViewLayoutMenu } from './DatabaseViewLayoutMenu'
@@ -347,13 +348,14 @@ export function TemplateEditorPanel({ schema, template, onClose, onSave }: {
   schema: DatabaseSchema; template: DatabaseTemplate | null; onClose: () => void
   onSave: (draft: Pick<DatabaseTemplate, 'name' | 'values' | 'content'>) => Promise<void>
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const properties = schema.properties.filter((property) => !['title', 'formula', 'rollup', 'relation'].includes(property.type))
   const [name, setName] = useState(template?.name ?? '新模板')
   const [values, setValues] = useState<Record<string, PropertyValue>>(() => Object.fromEntries(properties.map((property) => [property.id, template?.values[property.id] ?? defaultPropertyValue(property)])))
   const [content, setContent] = useState(template?.content ?? '')
   const [busy, setBusy] = useState(false)
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [busy, onClose])
-  return <div className="schema-panel-backdrop template-editor-backdrop" onMouseDown={onClose}><section className="template-editor-panel" role="dialog" aria-modal="true" aria-label="编辑数据库模板" onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="schema-panel-backdrop template-editor-backdrop" onMouseDown={onClose}><section ref={dialogRef} className="template-editor-panel" role="dialog" aria-modal="true" aria-label="编辑数据库模板" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
     <header><div><span className="template-editor-icon"><LayoutTemplate size={18} /></span><span><small>{template ? '数据库模板' : '新建模板'}</small><strong>{template ? '编辑记录模板' : '创建记录模板'}</strong></span></div><button aria-label="关闭模板编辑器" onClick={onClose}><X size={15} /></button></header>
     <main>
       <label className="template-name-field"><span>模板名称</span><input autoFocus maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>
@@ -384,6 +386,7 @@ function TemplateValueInput({ property, value, onChange }: { property: DatabaseP
 export function CsvImportPanel({ schema, onClose, onImport }: {
   schema: DatabaseSchema; onClose: () => void; onImport: (rows: Array<Record<string, PropertyValue>>) => Promise<void>
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const writable = schema.properties.filter((property) => !['formula', 'rollup', 'relation'].includes(property.type))
   const [fileName, setFileName] = useState('')
   const [parsed, setParsed] = useState<ParsedDatabaseCsv | null>(null)
@@ -410,10 +413,10 @@ export function CsvImportPanel({ schema, onClose, onImport }: {
     setBusy(true); setError('')
     try { await onImport(rows) } catch (reason) { setError(reason instanceof Error ? reason.message.split('Error: ').at(-1) ?? reason.message : '导入失败。'); setBusy(false) }
   }
-  return <div className="schema-panel-backdrop csv-import-backdrop" onMouseDown={onClose}><section className="csv-import-panel" role="dialog" aria-modal="true" aria-label="导入 CSV" onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="schema-panel-backdrop csv-import-backdrop" onMouseDown={onClose}><section ref={dialogRef} className="csv-import-panel" role="dialog" aria-modal="true" aria-label="导入 CSV" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
     <header><div><span><FileUp size={18} /></span><div><small>从文件导入</small><strong>把表格带进数据库</strong></div></div><button aria-label="关闭 CSV 导入" onClick={onClose}><X size={15} /></button></header>
     <main>
-      <label className={`csv-dropzone ${parsed ? 'has-file' : ''}`}><input aria-label="选择 CSV 文件" type="file" accept=".csv,text/csv" onChange={(event) => void choose(event.target.files?.[0])} /><span>{parsed ? <CheckCircle2 size={20} /> : <FileUp size={20} />}</span><strong>{parsed ? fileName : '选择 CSV 文件'}</strong><small>{parsed ? `${parsed.rows.length} 行 · ${parsed.headers.length} 列${parsed.truncated ? ' · 已截取前 10,000 行' : ''}` : '支持 Excel、Numbers 与 Notion 导出的 UTF-8 CSV，最大 10 MB'}</small></label>
+      <label className={`csv-dropzone ${parsed ? 'has-file' : ''}`}><input autoFocus aria-label="选择 CSV 文件" type="file" accept=".csv,text/csv" onChange={(event) => void choose(event.target.files?.[0])} /><span>{parsed ? <CheckCircle2 size={20} /> : <FileUp size={20} />}</span><strong>{parsed ? fileName : '选择 CSV 文件'}</strong><small>{parsed ? `${parsed.rows.length} 行 · ${parsed.headers.length} 列${parsed.truncated ? ' · 已截取前 10,000 行' : ''}` : '支持 Excel、Numbers 与 Notion 导出的 UTF-8 CSV，最大 10 MB'}</small></label>
       {parsed && <><section className="csv-mapping"><div className="csv-mapping-head"><span>CSV 列</span><span>示例</span><span>数据库属性</span></div>{parsed.headers.map((header, index) => <label key={`${header}-${index}`}><strong>{header}</strong><span>{parsed.rows[0]?.[index] || '—'}</span><select aria-label={`${header} 映射属性`} value={mappings[index] ?? ''} onChange={(event) => setMappings((current) => current.map((value, candidate) => candidate === index ? event.target.value || null : value))}><option value="">不导入</option>{writable.map((property) => <option key={property.id} value={property.id}>{property.name} · {propertyTypeName(property.type)}</option>)}</select></label>)}</section><div className="csv-import-note"><CircleAlert size={14} /><span>导入会新增 {parsed.rows.length} 条记录，不覆盖已有内容。全部写入在一个本地事务中完成。</span></div></>}
       {error && <p className="csv-import-error">{error}</p>}
     </main>
@@ -448,6 +451,7 @@ export function BulkEditToolbar({ schema, count, onClear, onApply, onDuplicate, 
 }
 
 export function RecordTrashPanel({ records, onClose, onRestore, onDeletePermanently }: { records: DatabaseTrashRecord[]; onClose: () => void; onRestore: (recordIds: string[]) => Promise<void>; onDeletePermanently: (recordIds: string[]) => Promise<void> }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [onClose])
@@ -456,7 +460,7 @@ export function RecordTrashPanel({ records, onClose, onRestore, onDeletePermanen
     if (confirmId !== id) { setConfirmId(id); return }
     setBusyId(id); try { await onDeletePermanently([id]); setConfirmId(null) } finally { setBusyId(null) }
   }
-  return <div className="record-trash-backdrop" role="presentation" onMouseDown={onClose}><section className="record-trash-panel" role="dialog" aria-modal="true" aria-label="数据库记录回收站" onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="record-trash-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} className="record-trash-panel" role="dialog" aria-modal="true" aria-label="数据库记录回收站" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
     <header><span><Trash2 size={15} /><div><small>数据库记录</small><strong>记录回收站</strong></div></span><button aria-label="关闭记录回收站" onClick={onClose}><X size={15} /></button></header>
     <main>{records.map((record) => <article key={record.id}><span><strong>{record.title || '无标题'}</strong><small>删除于 {new Date(record.trashedAt).toLocaleString('zh-CN')}</small></span><button disabled={busyId !== null} onClick={() => void restore(record.id)}><RotateCcw size={12} />恢复</button><button className={confirmId === record.id ? 'is-confirm' : ''} disabled={busyId !== null} onClick={() => void remove(record.id)}><Trash2 size={12} />{confirmId === record.id ? '确认永久删除' : '永久删除'}</button></article>)}{!records.length && <div className="record-trash-empty"><Trash2 size={20} /><strong>回收站是空的</strong><span>删除的数据库记录会保留在这里，直到永久删除。</span></div>}</main>
     <footer><span>{records.length} 条已删除记录</span><button onClick={onClose}>完成</button></footer>

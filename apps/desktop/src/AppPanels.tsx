@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, FileArchive, FileText, Grid2X2, ShieldCheck, Upload, X } from 'lucide-react'
+import { useDialogFocus } from './use-dialog-focus'
 
 type ImportInspection = NonNullable<Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['pickAndInspect']>>>
 type ImportJob = Awaited<ReturnType<NonNullable<typeof window.notetodo>['imports']['listJobs']>>[number]
@@ -8,6 +9,7 @@ export { PageHistoryPanel } from './AppHistoryPanel'
 export { ModelSettingsPanel } from './AppSettingsPanel'
 
 export function ImportPanel({ onClose, onImported }: { onClose: () => void; onImported: () => Promise<void> }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const [inspection, setInspection] = useState<ImportInspection | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'importing' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
@@ -68,7 +70,7 @@ export function ImportPanel({ onClose, onImported }: { onClose: () => void; onIm
 
   return (
     <div className="modal-backdrop import-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="import-panel" role="dialog" aria-modal="true" aria-label="导入工作区" aria-busy={status === 'loading' || status === 'importing'} onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={dialogRef} className="import-panel" role="dialog" aria-modal="true" aria-label="导入工作区" aria-busy={status === 'loading' || status === 'importing'} tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
         <header>
           <div><FileArchive size={19} /><span><strong>导入工作区</strong><small>Notion 导出包 · 本地安全预检</small></span></div>
           <button className="icon-button" onClick={onClose} aria-label="关闭导入工作区"><X size={16} /></button>
@@ -80,7 +82,7 @@ export function ImportPanel({ onClose, onImported }: { onClose: () => void; onIm
             <p className="import-kicker">导入 Notion 内容</p>
             <h2>先检查，再导入</h2>
             <p>选择 Notion 导出的 ZIP。NoteTodo 只读取目录元数据完成安全预检，此阶段不会解压或改动当前工作区。</p>
-            <button className="import-primary" onClick={() => void pickArchive()} disabled={status === 'loading'}>
+            <button autoFocus className="import-primary" onClick={() => void pickArchive()} disabled={status === 'loading'}>
               <Upload size={15} />{status === 'loading' ? '正在读取目录…' : '选择 Notion 导出包'}
             </button>
             <div className="import-footnote"><ShieldCheck size={13} />路径逃逸、重复文件和解压体积会在写入前被拦截</div>
