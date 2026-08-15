@@ -6,6 +6,7 @@ import type {
   FilterRule,
   PropertyValue,
 } from '@notetodo/database-core'
+import { useDialogFocus } from './use-dialog-focus'
 
 /** Compact filter composer used by the database toolbar for the most common one-value rules. */
 export function QuickFilterMenu({
@@ -19,6 +20,7 @@ export function QuickFilterMenu({
   onClose: () => void
   onChange: (filters: FilterRule[]) => void
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>({ trap: false })
   const available = schema.properties.filter(
     (property) => !filters.some((filter) => filter.propertyId === property.id),
   )
@@ -64,7 +66,13 @@ export function QuickFilterMenu({
     if (nextProperty) selectProperty(nextProperty.id)
   }
   return (
-    <section className="quick-filter-menu" role="dialog" aria-label="快速筛选">
+    <section
+      ref={dialogRef}
+      className="quick-filter-menu"
+      role="dialog"
+      aria-label="快速筛选"
+      tabIndex={-1}
+    >
       <header>
         <span>
           <Filter size={13} />
@@ -92,6 +100,7 @@ export function QuickFilterMenu({
       {property && available.length > 0 && filters.length < 5 ? (
         <div className="quick-filter-composer">
           <select
+            autoFocus
             aria-label="快速筛选属性"
             value={property.id}
             onChange={(event) => selectProperty(event.target.value)}

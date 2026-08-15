@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import type { DatabaseView } from '@notetodo/database-core'
+import { useDialogFocus } from './use-dialog-focus'
 
 interface ViewManagementMenuProps {
   mode: 'create' | 'manage'
@@ -62,6 +63,7 @@ export function ViewManagementMenu({
   onDelete,
   onSetDefault,
 }: ViewManagementMenuProps) {
+  const dialogRef = useDialogFocus<HTMLElement>({ trap: false })
   const [name, setName] = useState(mode === 'create' ? '新视图' : activeView.name)
   const [type, setType] = useState<DatabaseView['type']>('table')
   const [isBusy, setIsBusy] = useState(false)
@@ -95,7 +97,13 @@ export function ViewManagementMenu({
     const createView = () => runAction(() => onCreate(name.trim(), type))
 
     return (
-      <section className="database-view-menu is-create" role="dialog" aria-label="新建数据库视图">
+      <section
+        ref={dialogRef}
+        className="database-view-menu is-create"
+        role="dialog"
+        aria-label="新建数据库视图"
+        tabIndex={-1}
+      >
         <header>
           <strong>新建视图</strong>
           <button aria-label="关闭新建视图" onClick={onClose}>
@@ -148,7 +156,13 @@ export function ViewManagementMenu({
   const canRename = Boolean(trimmedName) && trimmedName !== activeView.name
 
   return (
-    <section className="database-view-menu is-manage" role="dialog" aria-label="管理数据库视图">
+    <section
+      ref={dialogRef}
+      className="database-view-menu is-manage"
+      role="dialog"
+      aria-label="管理数据库视图"
+      tabIndex={-1}
+    >
       <header>
         <strong>视图选项</strong>
         <button aria-label="关闭视图选项" onClick={onClose}>

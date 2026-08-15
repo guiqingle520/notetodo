@@ -321,6 +321,7 @@ export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCrea
   templates: DatabaseTemplate[]; selectedCount: number; onClose: () => void; onCreateBlank: () => void
   onApply: (templateId: string) => Promise<void>; onEdit: (template: DatabaseTemplate | null) => void; onSaveSelection: (name: string) => Promise<void>; onDelete: (templateId: string) => Promise<void>
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>({ trap: false })
   const [name, setName] = useState('新模板')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -331,7 +332,7 @@ export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCrea
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [busy, onClose])
   const run = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); try { await action() } finally { setBusy(false) } }
-  return <section className="database-template-menu" role="dialog" aria-label="数据库模板">
+  return <section ref={dialogRef} className="database-template-menu" role="dialog" aria-label="数据库模板" tabIndex={-1}>
     <header><strong>新建记录</strong><button aria-label="关闭数据库模板" onClick={onClose}><X size={14} /></button></header>
     <button className="template-blank" onClick={() => { onCreateBlank(); onClose() }}><Plus size={15} /><span><strong>空白记录</strong><small>使用数据库默认值</small></span></button>
     <button className="template-blank is-template" onClick={() => onEdit(null)}><LayoutTemplate size={15} /><span><strong>新建模板</strong><small>编辑属性预设与页面正文</small></span></button>

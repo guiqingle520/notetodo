@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useDialogFocus } from './use-dialog-focus'
 
-function DialogFixture() {
-  const dialogRef = useDialogFocus<HTMLDivElement>()
+function DialogFixture({ trap = true }: { trap?: boolean }) {
+  const dialogRef = useDialogFocus<HTMLDivElement>({ trap })
   return (
     <div ref={dialogRef} role="dialog" aria-label="焦点测试" tabIndex={-1}>
       <button autoFocus>第一个</button>
@@ -41,5 +41,14 @@ describe('useDialogFocus', () => {
 
     expect(trigger).toHaveFocus()
     trigger.remove()
+  })
+
+  it('allows Tab to leave a non-modal dialog', () => {
+    render(<DialogFixture trap={false} />)
+    const last = screen.getByRole('button', { name: '最后一个' })
+    last.focus()
+
+    expect(fireEvent.keyDown(last, { key: 'Tab' })).toBe(true)
+    expect(last).toHaveFocus()
   })
 })

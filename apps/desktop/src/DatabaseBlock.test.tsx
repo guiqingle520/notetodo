@@ -77,6 +77,7 @@ describe('database quick queries and groups', () => {
     const onChange = vi.fn()
     const onClose = vi.fn()
     const menu = render(<QuickFilterMenu schema={querySchema} filters={[]} onClose={onClose} onChange={onChange} />)
+    expect(menu.getByRole('combobox', { name: '快速筛选属性' })).toHaveFocus()
     fireEvent.change(menu.getByRole('combobox', { name: '快速筛选值' }), { target: { value: 'doing' } })
     fireEvent.click(menu.getByRole('button', { name: '添加' }))
     expect(onChange).toHaveBeenCalledWith([{ propertyId: 'status', operator: 'equals', value: 'doing' }])
@@ -122,6 +123,7 @@ describe('table view layout', () => {
   it('persists per-view property visibility and density choices', () => {
     const onSave = vi.fn()
     const { getByRole } = render(<ViewLayoutMenu schema={layoutSchema} config={{}} onClose={vi.fn()} onSave={onSave} />)
+    expect(getByRole('button', { name: '关闭表格布局' })).toHaveFocus()
     fireEvent.click(getByRole('button', { name: '隐藏属性 状态' }))
     expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ visiblePropertyIds: ['title', 'score'] }))
     fireEvent.click(getByRole('button', { name: '宽松' }))
@@ -338,6 +340,7 @@ describe('database authoring', () => {
     const onEdit = vi.fn()
     const closeTemplates = vi.fn()
     const templates = render(<DatabaseTemplateMenu templates={[]} selectedCount={1} onClose={closeTemplates} onCreateBlank={vi.fn()} onApply={vi.fn()} onEdit={onEdit} onSaveSelection={onSaveSelection} onDelete={vi.fn()} />)
+    expect(templates.getByRole('button', { name: '关闭数据库模板' })).toHaveFocus()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(closeTemplates).toHaveBeenCalledOnce()
     fireEvent.click(templates.getByRole('button', { name: /新建模板/u }))

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye, EyeOff, GripVertical, Lock, Rows3, X } from 'lucide-react'
 import type { DatabaseSchema, DatabaseViewConfig } from '@notetodo/database-core'
 import { propertyTypeLabel } from './DatabaseViews'
+import { useDialogFocus } from './use-dialog-focus'
 
 /** Persists table-only density, visibility, order, and frozen-column preferences on the active view. */
 export function ViewLayoutMenu({
@@ -15,6 +16,7 @@ export function ViewLayoutMenu({
   onClose: () => void
   onSave: (config: DatabaseViewConfig) => void
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>({ trap: false })
   const [draft, setDraft] = useState<DatabaseViewConfig>(() => structuredClone(config))
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const titleId = schema.properties.find((property) => property.type === 'title')?.id
@@ -69,7 +71,13 @@ export function ViewLayoutMenu({
   }
   const visibleCount = schema.properties.filter((property) => visible.has(property.id)).length
   return (
-    <section className="database-layout-menu" role="dialog" aria-label="表格布局">
+    <section
+      ref={dialogRef}
+      className="database-layout-menu"
+      role="dialog"
+      aria-label="表格布局"
+      tabIndex={-1}
+    >
       <header>
         <div>
           <strong>表格布局</strong>

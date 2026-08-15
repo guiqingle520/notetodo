@@ -15,8 +15,8 @@ function focusableElements(container: HTMLElement) {
   )
 }
 
-/** 将键盘焦点限制在模态对话框内，并在关闭后还原到原触发控件。 */
-export function useDialogFocus<T extends HTMLElement>() {
+/** 管理对话框初始焦点与关闭后的焦点还原；模态对话框默认限制 Tab 导航。 */
+export function useDialogFocus<T extends HTMLElement>({ trap = true }: { trap?: boolean } = {}) {
   const dialogRef = useRef<T>(null)
   // React 会在 effect 之前处理 autoFocus，因此必须在首次渲染时保存外部焦点。
   const previousFocusRef = useRef<HTMLElement | null>(
@@ -53,12 +53,12 @@ export function useDialogFocus<T extends HTMLElement>() {
       }
     }
 
-    dialog.addEventListener('keydown', keepFocusInside)
+    if (trap) dialog.addEventListener('keydown', keepFocusInside)
     return () => {
-      dialog.removeEventListener('keydown', keepFocusInside)
+      if (trap) dialog.removeEventListener('keydown', keepFocusInside)
       if (previousFocusRef.current?.isConnected) previousFocusRef.current.focus()
     }
-  }, [])
+  }, [trap])
 
   return dialogRef
 }
