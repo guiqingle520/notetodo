@@ -323,8 +323,8 @@ function createWindow() {
     show: process.env.NOTETODO_SMOKE_TEST !== '1',
     width: 1480,
     height: 940,
-    minWidth: 1040,
-    minHeight: 680,
+    minWidth: 720, // 与 renderer 的紧凑布局断点配合，允许窗口进入紧凑模式。
+    minHeight: 560,
     backgroundColor: '#f4f0e8',
     titleBarStyle: 'hidden',
     titleBarOverlay: {

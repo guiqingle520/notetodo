@@ -15,7 +15,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 1040px; min-height: 680px; overflow: hidden; }
+body { margin: 0; min-width: 720px; min-height: 560px; overflow: hidden; }
 button, input, textarea { font: inherit; }
 button { color: inherit; }
 

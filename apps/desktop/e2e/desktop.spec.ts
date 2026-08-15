@@ -63,3 +63,54 @@ test('edits and restores a page through the sandboxed Electron application', asy
     rmSync(dataDirectory, { recursive: true, force: true })
   }
 })
+
+test('keeps the editor usable in the compact desktop window', async () => {
+  const dataDirectory = mkdtempSync(join(tmpdir(), 'notetodo-compact-playwright-'))
+  const application = await electron.launch({
+    args: [desktopDirectory],
+    cwd: desktopDirectory,
+    env: {
+      ...process.env,
+      NOTETODO_E2E_TEST: '1',
+      NOTETODO_E2E_DATA_DIR: dataDirectory,
+    },
+  })
+
+  try {
+    const window = await application.firstWindow()
+    await application.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setSize(820, 720)
+    })
+
+    await expect(window.locator('.sidebar-collapsed')).toBeVisible()
+    await window.getByRole('button', { name: '搜索' }).click()
+    await window.getByRole('option', { name: '打开搜索结果：从这里开始' }).click()
+
+    await expect(window.getByLabel('页面标题')).toHaveValue('从这里开始')
+    await expect(window.getByRole('button', { name: '打开 AI 助手' })).toBeVisible()
+    await expect(window.locator('.ai-panel')).toHaveCount(0)
+
+    // 最小窗口下根节点不能产生横向滚动，否则主编辑区会被窗口裁切。
+    await application.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setSize(720, 600)
+    })
+    await expect.poll(() => window.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(720)
+    const layout = await window.evaluate(() => ({
+      bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+      rootOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      documentRight: document.querySelector<HTMLElement>('.document')?.getBoundingClientRect().right ?? 0,
+      viewportWidth: window.innerWidth,
+    }))
+    expect(layout.bodyOverflow).toBeLessThanOrEqual(1)
+    expect(layout.rootOverflow).toBeLessThanOrEqual(1)
+    expect(layout.documentRight).toBeLessThanOrEqual(layout.viewportWidth + 1)
+
+    await window.emulateMedia({ reducedMotion: 'reduce' })
+    await expect.poll(() => window.locator('.document').evaluate((element) => (
+      getComputedStyle(element).animationName
+    ))).toBe('none')
+  } finally {
+    await application.close()
+    rmSync(dataDirectory, { recursive: true, force: true })
+  }
+})
