@@ -13,6 +13,8 @@ import type { WorkspacePage } from './domain'
 afterEach(cleanup)
 
 const menuState: EditorMenuState = { from: 1, left: 10, top: 20, query: '', index: 0 }
+const slashMenuId = 'slash-command-menu'
+const mentionMenuId = 'page-mention-menu'
 
 describe('EditorFloatingSurfaces', () => {
   it('renders progress and dispatches available block actions', () => {
@@ -55,8 +57,21 @@ describe('EditorFloatingSurfaces', () => {
       icon: FileText,
       run: vi.fn(),
     }
-    render(<SlashCommandMenu state={menuState} commands={[command]} onSelect={onSelect} onHighlight={vi.fn()} />)
+    render(
+      <SlashCommandMenu
+        id={slashMenuId}
+        state={menuState}
+        commands={[command]}
+        onSelect={onSelect}
+        onHighlight={vi.fn()}
+      />,
+    )
 
+    expect(screen.getByRole('menu', { name: '插入内容块' })).toHaveAttribute('id', slashMenuId)
+    expect(screen.getByRole('menuitem', { name: /文本/u })).toHaveAttribute(
+      'id',
+      `${slashMenuId}-item-0`,
+    )
     fireEvent.mouseDown(screen.getByRole('menuitem', { name: /文本/u }))
     expect(onSelect).toHaveBeenCalledWith(command)
   })
@@ -72,6 +87,7 @@ describe('EditorFloatingSurfaces', () => {
     }
     render(
       <SlashCommandMenu
+        id={slashMenuId}
         state={menuState}
         commands={[command]}
         onSelect={onSelect}
@@ -104,11 +120,18 @@ describe('EditorFloatingSurfaces', () => {
     }))
 
     const { rerender } = render(
-      <SlashCommandMenu state={menuState} commands={commands} onSelect={vi.fn()} onHighlight={vi.fn()} />,
+      <SlashCommandMenu
+        id={slashMenuId}
+        state={menuState}
+        commands={commands}
+        onSelect={vi.fn()}
+        onHighlight={vi.fn()}
+      />,
     )
     scrollIntoView.mockClear()
     rerender(
       <SlashCommandMenu
+        id={slashMenuId}
         state={{ ...menuState, index: 2 }}
         commands={commands}
         onSelect={vi.fn()}
@@ -146,15 +169,28 @@ describe('EditorFloatingSurfaces', () => {
       },
     ]
     render(
-      <PageMentionMenu state={menuState} pages={[pages[1]!]} allPages={pages} onSelect={vi.fn()} onHighlight={vi.fn()} />,
+      <PageMentionMenu
+        id={mentionMenuId}
+        state={menuState}
+        pages={[pages[1]!]}
+        allPages={pages}
+        onSelect={vi.fn()}
+        onHighlight={vi.fn()}
+      />,
     )
 
+    expect(screen.getByRole('menu', { name: '链接到页面' })).toHaveAttribute('id', mentionMenuId)
+    expect(screen.getByRole('menuitem', { name: /规范/u })).toHaveAttribute(
+      'id',
+      `${mentionMenuId}-item-0`,
+    )
     expect(screen.getByText('知识库 / 规范')).toBeInTheDocument()
   })
 
   it('announces an informative empty menu and replaces unavailable keyboard actions', () => {
     render(
       <PageMentionMenu
+        id={mentionMenuId}
         state={{ ...menuState, query: '不存在' }}
         pages={[]}
         allPages={[]}
@@ -180,6 +216,7 @@ describe('EditorFloatingSurfaces', () => {
     }))
     render(
       <SlashCommandMenu
+        id={slashMenuId}
         state={menuState}
         commands={commands}
         onSelect={vi.fn()}

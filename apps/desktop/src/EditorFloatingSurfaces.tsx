@@ -135,11 +135,17 @@ function MenuFrame({
       <footer>
         {hasResults ? (
           <>
-            <span><kbd>↑↓</kbd> 选择</span>
-            <span><kbd>Enter</kbd> {actionLabel}</span>
+            <span>
+              <kbd>↑↓</kbd> 选择
+            </span>
+            <span>
+              <kbd>Enter</kbd> {actionLabel}
+            </span>
           </>
         ) : (
-          <span><kbd>Esc</kbd> 关闭</span>
+          <span>
+            <kbd>Esc</kbd> 关闭
+          </span>
         )}
       </footer>
     </>
@@ -147,11 +153,13 @@ function MenuFrame({
 }
 
 export function SlashCommandMenu({
+  id,
   state,
   commands,
   onSelect,
   onHighlight,
 }: {
+  id: string
   state: EditorMenuState
   commands: SlashCommand[]
   onSelect: (command: SlashCommand) => void
@@ -164,16 +172,23 @@ export function SlashCommandMenu({
 
   return (
     <div
+      id={id}
       className="slash-menu"
       style={{ left: state.left, top: state.top }}
       role="menu"
       aria-label="插入内容块"
     >
-      <MenuFrame label="插入内容块" trigger="/" actionLabel="插入" hasResults={Boolean(commands.length)}>
+      <MenuFrame
+        label="插入内容块"
+        trigger="/"
+        actionLabel="插入"
+        hasResults={Boolean(commands.length)}
+      >
         {commands.map((command, index) => {
           const Icon = command.icon
           return (
             <button
+              id={`${id}-item-${index}`}
               type="button"
               className={index === state.index ? 'is-selected' : ''}
               aria-current={index === state.index ? 'true' : undefined}
@@ -211,12 +226,14 @@ export function SlashCommandMenu({
 }
 
 export function PageMentionMenu({
+  id,
   state,
   pages,
   allPages,
   onSelect,
   onHighlight,
 }: {
+  id: string
   state: EditorMenuState
   pages: WorkspacePage[]
   allPages: WorkspacePage[]
@@ -230,16 +247,23 @@ export function PageMentionMenu({
 
   return (
     <div
+      id={id}
       className="page-mention-menu"
       style={{ left: state.left, top: state.top }}
       role="menu"
       aria-label="链接到页面"
     >
-      <MenuFrame label="链接到页面" trigger="@" actionLabel="链接" hasResults={Boolean(pages.length)}>
+      <MenuFrame
+        label="链接到页面"
+        trigger="@"
+        actionLabel="链接"
+        hasResults={Boolean(pages.length)}
+      >
         {pages.map((page, index) => {
           const Icon = iconMap[page.icon]
           return (
             <button
+              id={`${id}-item-${index}`}
               type="button"
               className={index === state.index ? 'is-selected' : ''}
               aria-current={index === state.index ? 'true' : undefined}
