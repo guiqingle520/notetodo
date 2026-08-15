@@ -46,6 +46,37 @@ describe('database prototype chrome', () => {
     expect(screen.getByRole('button', { name: '新建' })).toBeInTheDocument()
   })
 
+  it('switches views through a roving keyboard tab list', () => {
+    const multipleViews: DatabaseSnapshot = {
+      ...snapshot,
+      views: [
+        snapshot.views[0]!,
+        { id: 'board-view', databaseId: 'prototype-db', name: '看板', type: 'board', config: {} },
+        { id: 'list-view', databaseId: 'prototype-db', name: '列表', type: 'list', config: {} },
+      ],
+    }
+    render(<DatabaseBlock pageId="projects" initialSnapshot={multipleViews} />)
+
+    const tableTab = screen.getByRole('tab', { name: '表格' })
+    expect(screen.getByRole('tablist', { name: '视图类型' })).toContainElement(tableTab)
+    expect(tableTab).toHaveAttribute('aria-selected', 'true')
+    expect(tableTab).toHaveAttribute('tabindex', '0')
+
+    fireEvent.keyDown(tableTab, { key: 'ArrowRight' })
+    const boardTab = screen.getByRole('tab', { name: '看板' })
+    expect(boardTab).toHaveFocus()
+    expect(boardTab).toHaveAttribute('aria-selected', 'true')
+    expect(boardTab).toHaveAttribute('tabindex', '0')
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', boardTab.id)
+
+    fireEvent.keyDown(boardTab, { key: 'End' })
+    const listTab = screen.getByRole('tab', { name: '列表' })
+    expect(listTab).toHaveFocus()
+    fireEvent.keyDown(listTab, { key: 'ArrowRight' })
+    expect(tableTab).toHaveFocus()
+    expect(tableTab).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('connects anchored dialog triggers to their expanded panels', () => {
     render(<DatabaseBlock pageId="projects" initialSnapshot={snapshot} />)
     const cases = [

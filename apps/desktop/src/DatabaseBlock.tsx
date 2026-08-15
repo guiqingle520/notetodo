@@ -58,6 +58,7 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   const [automations, setAutomations] = useState<AutomationRule[]>([])
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([])
   const [constraintNotice, setConstraintNotice] = useState<string | null>(null)
+  const viewTabListRef = useRef<HTMLDivElement>(null)
   const projectionCache = useRef<{ schemaId: string; records: DatabaseRecord[]; targets: typeof relationTargets }>({ schemaId: '', records: [], targets: {} })
   const changedRecordIds = useRef(new Set<string>())
 
@@ -163,7 +164,17 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
     setSnapshot(next)
     setSelectedRecordIds(new Set())
     setLayoutOpen(false)
-    void databaseRepository.setActiveView(next, viewId)
+    void databaseRepository.setActiveView(next, viewId).catch(() => undefined)
+  }
+
+  const selectViewFromKeyboard = (currentIndex: number, key: string) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return
+    const lastIndex = snapshot.views.length - 1
+    const nextIndex = key === 'Home' ? 0 : key === 'End' ? lastIndex : key === 'ArrowLeft' ? (currentIndex - 1 + snapshot.views.length) % snapshot.views.length : (currentIndex + 1) % snapshot.views.length
+    const nextView = snapshot.views[nextIndex]
+    if (!nextView) return
+    setView(nextView.id)
+    viewTabListRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex]?.focus()
   }
 
   const saveViewConfig = (config: DatabaseViewConfig) => {
@@ -268,10 +279,12 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       </header>
       <div className="database-viewbar">
         <nav className="database-tabs" aria-label="数据库视图">
-          {snapshot.views.map((view) => {
+          <div ref={viewTabListRef} className="database-tab-list" role="tablist" aria-label="视图类型">
+          {snapshot.views.map((view, index) => {
             const Icon = view.type === 'table' ? Table2 : view.type === 'board' ? Columns3 : view.type === 'calendar' ? CalendarDays : view.type === 'timeline' ? ChartNoAxesGantt : view.type === 'gallery' ? Images : List
-            return <button className={view.id === activeView.id ? 'is-active' : ''} key={view.id} onClick={() => setView(view.id)}><Icon size={13} />{view.name}</button>
+            return <button id={`${panelIdPrefix}-view-tab-${index}`} role="tab" aria-selected={view.id === activeView.id} aria-controls={`${panelIdPrefix}-view-panel`} tabIndex={view.id === activeView.id ? 0 : -1} className={view.id === activeView.id ? 'is-active' : ''} key={view.id} onClick={() => setView(view.id)} onKeyDown={(event) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { event.preventDefault(); selectViewFromKeyboard(index, event.key) } }}><Icon size={13} />{view.name}</button>
           })}
+          </div>
           <button className="database-view-add" aria-label="新建数据库视图" aria-haspopup="dialog" aria-expanded={viewMenuOpen === 'create'} aria-controls={viewMenuId} onClick={() => setViewMenuOpen('create')}><Plus size={14} /></button>
         </nav>
         <div className="database-tools" role="toolbar" aria-label="数据库工具">
@@ -297,14 +310,16 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
       </div>
       {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onDuplicate={duplicateSelectedRecord} onTrash={trashSelectedRecords} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
       {(activeView.config.quickFilters?.length || searchQuery) && <div className="database-active-query">{searchQuery && <span><Search size={11} />“{searchQuery}”<button aria-label="清除数据库搜索" onClick={() => setSearchQuery('')}><X size={10} /></button></span>}{activeView.config.quickFilters?.map((filter, index) => <span key={`${filter.propertyId}-${index}`}><Filter size={11} />{quickFilterLabel(snapshot.schema, filter)}<button aria-label={`移除快速筛选 ${index + 1}`} onClick={() => saveViewConfig({ ...activeView.config, quickFilters: activeView.config.quickFilters?.filter((_, candidate) => candidate !== index) })}><X size={10} /></button></span>)}</div>}
-      <ViewRuleSummary config={activeView.config} schema={snapshot.schema} dialogId={rulesDialogId} openTab={rulesOpen} onOpen={setRulesOpen} />
-      {recordGroups.length > 0 && <GroupLedger groups={recordGroups} schema={snapshot.schema} propertyId={activeView.config.groupByPropertyId} collapsedKeys={collapsedGroups} onToggle={toggleGroup} />}
-      {activeView.type === 'table' && <GenericTable records={records} schema={snapshot.schema} config={activeView.config} onConfigChange={saveViewConfig} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} onReorder={(recordId, targetId) => moveRecord(recordId, targetId)} />}
-      {activeView.type === 'board' && <BoardView records={records} schema={snapshot.schema} groupByPropertyId={activeView.config.groupByPropertyId} updateCell={updateCell} onMove={(recordId, groupValue, targetId) => activeView.config.groupByPropertyId && moveRecord(recordId, targetId, { propertyId: activeView.config.groupByPropertyId, value: groupValue })} manualOrderEnabled={!activeView.config.sorts?.length} />}
-      {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
-      {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
-      {activeView.type === 'timeline' && <TimelineView records={records} schema={snapshot.schema} startDatePropertyId={activeView.config.startDatePropertyId} endDatePropertyId={activeView.config.endDatePropertyId} updateCell={updateCell} />}
-      {activeView.type === 'gallery' && <GalleryView records={records} schema={snapshot.schema} coverPropertyId={activeView.config.coverPropertyId} visiblePropertyIds={activeView.config.visiblePropertyIds} cardSize={activeView.config.cardSize} updateCell={updateCell} />}
+      <section id={`${panelIdPrefix}-view-panel`} role="tabpanel" aria-labelledby={`${panelIdPrefix}-view-tab-${snapshot.views.findIndex((view) => view.id === activeView.id)}`} className="database-view-panel">
+        <ViewRuleSummary config={activeView.config} schema={snapshot.schema} dialogId={rulesDialogId} openTab={rulesOpen} onOpen={setRulesOpen} />
+        {recordGroups.length > 0 && <GroupLedger groups={recordGroups} schema={snapshot.schema} propertyId={activeView.config.groupByPropertyId} collapsedKeys={collapsedGroups} onToggle={toggleGroup} />}
+        {activeView.type === 'table' && <GenericTable records={records} schema={snapshot.schema} config={activeView.config} onConfigChange={saveViewConfig} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} updateCell={updateCell} onOpenRecord={setOpenRecordId} selectedIds={selectedRecordIds} onToggleRecord={toggleRecord} onToggleAll={toggleAllRecords} onReorder={(recordId, targetId) => moveRecord(recordId, targetId)} />}
+        {activeView.type === 'board' && <BoardView records={records} schema={snapshot.schema} groupByPropertyId={activeView.config.groupByPropertyId} updateCell={updateCell} onMove={(recordId, groupValue, targetId) => activeView.config.groupByPropertyId && moveRecord(recordId, targetId, { propertyId: activeView.config.groupByPropertyId, value: groupValue })} manualOrderEnabled={!activeView.config.sorts?.length} />}
+        {activeView.type === 'list' && <ListView records={records} updateCell={updateCell} />}
+        {activeView.type === 'calendar' && <CalendarView records={records} schema={snapshot.schema} datePropertyId={activeView.config.datePropertyId} updateCell={updateCell} />}
+        {activeView.type === 'timeline' && <TimelineView records={records} schema={snapshot.schema} startDatePropertyId={activeView.config.startDatePropertyId} endDatePropertyId={activeView.config.endDatePropertyId} updateCell={updateCell} />}
+        {activeView.type === 'gallery' && <GalleryView records={records} schema={snapshot.schema} coverPropertyId={activeView.config.coverPropertyId} visiblePropertyIds={activeView.config.visiblePropertyIds} cardSize={activeView.config.cardSize} updateCell={updateCell} />}
+      </section>
       {rulesOpen && createPortal(<ViewRulesPanel id={rulesDialogId} schema={snapshot.schema} config={activeView.config} initialTab={rulesOpen} onClose={() => setRulesOpen(null)} onSave={(config) => { saveViewConfig(config); setRulesOpen(null) }} />, document.body)}
       {schemaOpen && createPortal(<SchemaPanel id={schemaDialogId} schema={snapshot.schema} previewRecord={derivedRecords[0]} databaseSources={databaseSources} relationTargets={{ ...relationTargets, [snapshot.schema.id]: { schema: snapshot.schema, records: derivedRecords } }} onClose={() => setSchemaOpen(false)} onAdd={async (name, type) => setSnapshot(await databaseRepository.addProperty(snapshot, name, type))} onRename={async (propertyId, name) => setSnapshot(await databaseRepository.renameProperty(snapshot, propertyId, name))} onReorder={async (propertyIds) => setSnapshot(await databaseRepository.reorderProperties(snapshot, propertyIds))} onConfigure={async (propertyId, config) => setSnapshot(await databaseRepository.updatePropertyConfig(snapshot, propertyId, config))} onDelete={async (propertyId) => setSnapshot(await databaseRepository.deleteProperty(snapshot, propertyId))} />, document.body)}
       {editingTemplate && createPortal(<TemplateEditorPanel schema={snapshot.schema} template={editingTemplate === 'new' ? null : editingTemplate} onClose={() => setEditingTemplate(null)} onSave={saveEditedTemplate} />, document.body)}
