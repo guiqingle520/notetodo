@@ -6,11 +6,13 @@ import { useDialogFocus } from './use-dialog-focus'
 
 /** Persists table-only density, visibility, order, and frozen-column preferences on the active view. */
 export function ViewLayoutMenu({
+  id,
   schema,
   config,
   onClose,
   onSave,
 }: {
+  id?: string
   schema: DatabaseSchema
   config: DatabaseViewConfig
   onClose: () => void
@@ -72,6 +74,7 @@ export function ViewLayoutMenu({
   const visibleCount = schema.properties.filter((property) => visible.has(property.id)).length
   return (
     <section
+      id={id}
       ref={dialogRef}
       className="database-layout-menu"
       role="dialog"

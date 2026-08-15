@@ -16,6 +16,7 @@ import type { DatabaseView } from '@notetodo/database-core'
 import { useDialogFocus } from './use-dialog-focus'
 
 interface ViewManagementMenuProps {
+  id?: string
   mode: 'create' | 'manage'
   views: DatabaseView[]
   activeView: DatabaseView
@@ -52,6 +53,7 @@ const databaseViewTypes: Array<{
  * 操作期间禁用重复提交，并将仓储错误留在当前弹层内供用户重试。
  */
 export function ViewManagementMenu({
+  id,
   mode,
   views,
   activeView,
@@ -98,6 +100,7 @@ export function ViewManagementMenu({
 
     return (
       <section
+        id={id}
         ref={dialogRef}
         className="database-view-menu is-create"
         role="dialog"
@@ -157,6 +160,7 @@ export function ViewManagementMenu({
 
   return (
     <section
+      id={id}
       ref={dialogRef}
       className="database-view-menu is-manage"
       role="dialog"

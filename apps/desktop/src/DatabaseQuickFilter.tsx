@@ -10,11 +10,13 @@ import { useDialogFocus } from './use-dialog-focus'
 
 /** Compact filter composer used by the database toolbar for the most common one-value rules. */
 export function QuickFilterMenu({
+  id,
   schema,
   filters,
   onClose,
   onChange,
 }: {
+  id?: string
   schema: DatabaseSchema
   filters: FilterRule[]
   onClose: () => void
@@ -67,6 +69,7 @@ export function QuickFilterMenu({
   }
   return (
     <section
+      id={id}
       ref={dialogRef}
       className="quick-filter-menu"
       role="dialog"

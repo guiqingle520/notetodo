@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -26,6 +26,11 @@ type AutomationRun = Awaited<ReturnType<NonNullable<typeof window.notetodo>['aut
 const previewAutomation: AutomationRule = { id: 'completed-task-priority', name: '完成后归档优先级', enabled: true, trigger: { type: 'propertyChanged', propertyId: 'task-status' }, condition: { propertyId: 'task-status', operator: 'equals', value: 'done' }, actions: [{ type: 'setProperty', propertyId: 'task-score', value: 1 }] }
 
 export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; initialSnapshot?: DatabaseSnapshot }) {
+  const panelIdPrefix = useId()
+  const viewMenuId = `${panelIdPrefix}-view-menu`
+  const layoutMenuId = `${panelIdPrefix}-layout-menu`
+  const quickFilterMenuId = `${panelIdPrefix}-quick-filter-menu`
+  const templateMenuId = `${panelIdPrefix}-template-menu`
   const [snapshot, setSnapshot] = useState<DatabaseSnapshot | null>(initialSnapshot ?? null)
   const [rulesOpen, setRulesOpen] = useState<'filters' | 'sorts' | 'group' | null>(null)
   const [schemaOpen, setSchemaOpen] = useState(false)
@@ -262,28 +267,28 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
             const Icon = view.type === 'table' ? Table2 : view.type === 'board' ? Columns3 : view.type === 'calendar' ? CalendarDays : view.type === 'timeline' ? ChartNoAxesGantt : view.type === 'gallery' ? Images : List
             return <button className={view.id === activeView.id ? 'is-active' : ''} key={view.id} onClick={() => setView(view.id)}><Icon size={13} />{view.name}</button>
           })}
-          <button className="database-view-add" aria-label="新建数据库视图" onClick={() => setViewMenuOpen('create')}><Plus size={14} /></button>
+          <button className="database-view-add" aria-label="新建数据库视图" aria-haspopup="dialog" aria-expanded={viewMenuOpen === 'create'} aria-controls={viewMenuId} onClick={() => setViewMenuOpen('create')}><Plus size={14} /></button>
         </nav>
         <div className="database-tools" role="toolbar" aria-label="数据库工具">
           {searchOpen ? <label className="database-inline-search"><Search size={13} /><input autoFocus aria-label="搜索当前数据库" value={searchQuery} placeholder="搜索" onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') { setSearchQuery(''); setSearchOpen(false) } }} /><button aria-label="关闭数据库搜索" onClick={() => { setSearchQuery(''); setSearchOpen(false) }}><X size={12} /></button></label> : <button aria-label="搜索当前数据库" onClick={() => { setQuickFilterOpen(false); setSearchOpen(true) }}><Search size={13} /></button>}
-          <button className={viewMenuOpen === 'manage' ? 'is-active' : ''} aria-label="管理当前视图" onClick={() => { setLayoutOpen(false); setViewMenuOpen((current) => current === 'manage' ? null : 'manage') }}><MoreHorizontal size={14} /></button>
+          <button className={viewMenuOpen === 'manage' ? 'is-active' : ''} aria-label="管理当前视图" aria-haspopup="dialog" aria-expanded={viewMenuOpen === 'manage'} aria-controls={viewMenuId} onClick={() => { setLayoutOpen(false); setViewMenuOpen((current) => current === 'manage' ? null : 'manage') }}><MoreHorizontal size={14} /></button>
           <button className={schemaOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setSchemaOpen(true) }}><Settings2 size={13} />属性 · {snapshot.schema.properties.length}</button>
-          {activeView.type === 'table' && <button className={layoutOpen ? 'is-active' : ''} onClick={() => { setViewMenuOpen(null); setTemplateMenuOpen(false); setLayoutOpen((open) => !open) }}><SlidersHorizontal size={13} />布局</button>}
+          {activeView.type === 'table' && <button className={layoutOpen ? 'is-active' : ''} aria-haspopup="dialog" aria-expanded={layoutOpen} aria-controls={layoutMenuId} onClick={() => { setViewMenuOpen(null); setTemplateMenuOpen(false); setLayoutOpen((open) => !open) }}><SlidersHorizontal size={13} />布局</button>}
           <button className={activeView.config.filters?.length ? 'is-active' : ''} onClick={() => setRulesOpen('filters')}><Filter size={13} />筛选{activeView.config.filters?.length ? ` · ${activeView.config.filters.length}` : ''}</button>
-          <button className={activeView.config.quickFilters?.length || quickFilterOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setQuickFilterOpen((open) => !open) }}><Zap size={13} />快速{activeView.config.quickFilters?.length ? ` · ${activeView.config.quickFilters.length}` : ''}</button>
+          <button className={activeView.config.quickFilters?.length || quickFilterOpen ? 'is-active' : ''} aria-haspopup="dialog" aria-expanded={quickFilterOpen} aria-controls={quickFilterMenuId} onClick={() => { setLayoutOpen(false); setQuickFilterOpen((open) => !open) }}><Zap size={13} />快速{activeView.config.quickFilters?.length ? ` · ${activeView.config.quickFilters.length}` : ''}</button>
           <button className={activeView.config.sorts?.length ? 'is-active' : ''} onClick={() => setRulesOpen('sorts')}><ArrowUpDown size={13} />排序{activeView.config.sorts?.length ? ` · ${activeView.config.sorts.length}` : ''}</button>
           <button className={activeView.config.groupByPropertyId ? 'is-active' : ''} onClick={() => setRulesOpen('group')}><Layers3 size={13} />分组</button>
-          <button className={templateMenuOpen ? 'is-active' : ''} onClick={() => { setLayoutOpen(false); setTemplateMenuOpen((open) => !open) }}><LayoutTemplate size={13} />模板{snapshot.templates?.length ? ` · ${snapshot.templates.length}` : ''}</button>
+          <button className={templateMenuOpen ? 'is-active' : ''} aria-haspopup="dialog" aria-expanded={templateMenuOpen} aria-controls={templateMenuId} onClick={() => { setLayoutOpen(false); setTemplateMenuOpen((open) => !open) }}><LayoutTemplate size={13} />模板{snapshot.templates?.length ? ` · ${snapshot.templates.length}` : ''}</button>
           <button className={csvImportOpen ? 'is-active' : ''} onClick={() => setCsvImportOpen(true)}><FileUp size={13} />导入</button>
           <button className={recordTrashOpen ? 'is-active' : ''} onClick={() => void openRecordTrash()}><Trash2 size={13} />回收站</button>
           <button onClick={() => void exportCsv()} disabled={exportState === 'working'}><Download size={13} />{exportState === 'working' ? '导出中' : exportState === 'done' ? '已导出' : 'CSV'}</button>
           <button className="database-automation" onClick={() => setAutomationOpen(true)}><Zap size={13} />自动化 · {automations.filter((rule) => rule.enabled).length}</button>
           <button className="database-new" onClick={addRecord}><Plus size={13} />新建</button>
         </div>
-        {viewMenuOpen && <ViewManagementMenu key={`${viewMenuOpen}-${activeView.id}`} mode={viewMenuOpen} views={snapshot.views} activeView={activeView} defaultViewId={snapshot.views[0]!.id} onClose={() => setViewMenuOpen(null)} onCreate={createView} onRename={async (name) => { setSnapshot(await databaseRepository.renameView(snapshot, activeView.id, name)); setViewMenuOpen(null) }} onDuplicate={duplicateView} onDelete={async () => { setSnapshot(await databaseRepository.deleteView(snapshot, activeView.id)); setViewMenuOpen(null) }} onSetDefault={async () => { setSnapshot(await databaseRepository.setDefaultView(snapshot, activeView.id)); setViewMenuOpen(null) }} />}
-        {templateMenuOpen && <DatabaseTemplateMenu templates={snapshot.templates ?? []} selectedCount={selectedRecordIds.size} onClose={() => setTemplateMenuOpen(false)} onCreateBlank={addRecord} onApply={createFromTemplate} onEdit={(template) => { setTemplateMenuOpen(false); setEditingTemplate(template ?? 'new') }} onSaveSelection={saveSelectionAsTemplate} onDelete={async (templateId) => setSnapshot(await databaseRepository.deleteTemplate(snapshot, templateId))} />}
-        {quickFilterOpen && <QuickFilterMenu schema={snapshot.schema} filters={activeView.config.quickFilters ?? []} onClose={() => setQuickFilterOpen(false)} onChange={(quickFilters) => saveViewConfig({ ...activeView.config, quickFilters })} />}
-        {layoutOpen && <ViewLayoutMenu schema={snapshot.schema} config={activeView.config} onClose={() => setLayoutOpen(false)} onSave={saveViewConfig} />}
+        {viewMenuOpen && <ViewManagementMenu id={viewMenuId} key={`${viewMenuOpen}-${activeView.id}`} mode={viewMenuOpen} views={snapshot.views} activeView={activeView} defaultViewId={snapshot.views[0]!.id} onClose={() => setViewMenuOpen(null)} onCreate={createView} onRename={async (name) => { setSnapshot(await databaseRepository.renameView(snapshot, activeView.id, name)); setViewMenuOpen(null) }} onDuplicate={duplicateView} onDelete={async () => { setSnapshot(await databaseRepository.deleteView(snapshot, activeView.id)); setViewMenuOpen(null) }} onSetDefault={async () => { setSnapshot(await databaseRepository.setDefaultView(snapshot, activeView.id)); setViewMenuOpen(null) }} />}
+        {templateMenuOpen && <DatabaseTemplateMenu id={templateMenuId} templates={snapshot.templates ?? []} selectedCount={selectedRecordIds.size} onClose={() => setTemplateMenuOpen(false)} onCreateBlank={addRecord} onApply={createFromTemplate} onEdit={(template) => { setTemplateMenuOpen(false); setEditingTemplate(template ?? 'new') }} onSaveSelection={saveSelectionAsTemplate} onDelete={async (templateId) => setSnapshot(await databaseRepository.deleteTemplate(snapshot, templateId))} />}
+        {quickFilterOpen && <QuickFilterMenu id={quickFilterMenuId} schema={snapshot.schema} filters={activeView.config.quickFilters ?? []} onClose={() => setQuickFilterOpen(false)} onChange={(quickFilters) => saveViewConfig({ ...activeView.config, quickFilters })} />}
+        {layoutOpen && <ViewLayoutMenu id={layoutMenuId} schema={snapshot.schema} config={activeView.config} onClose={() => setLayoutOpen(false)} onSave={saveViewConfig} />}
       </div>
       {selectedRecordIds.size > 0 && <BulkEditToolbar schema={snapshot.schema} count={selectedRecordIds.size} onClear={() => setSelectedRecordIds(new Set())} onDuplicate={duplicateSelectedRecord} onTrash={trashSelectedRecords} onApply={async (propertyId, value) => { setSnapshot(await databaseRepository.bulkUpdate(snapshot, [...selectedRecordIds], propertyId, value)); setSelectedRecordIds(new Set()) }} />}
       {(activeView.config.quickFilters?.length || searchQuery) && <div className="database-active-query">{searchQuery && <span><Search size={11} />“{searchQuery}”<button aria-label="清除数据库搜索" onClick={() => setSearchQuery('')}><X size={10} /></button></span>}{activeView.config.quickFilters?.map((filter, index) => <span key={`${filter.propertyId}-${index}`}><Filter size={11} />{quickFilterLabel(snapshot.schema, filter)}<button aria-label={`移除快速筛选 ${index + 1}`} onClick={() => saveViewConfig({ ...activeView.config, quickFilters: activeView.config.quickFilters?.filter((_, candidate) => candidate !== index) })}><X size={10} /></button></span>)}</div>}
@@ -317,8 +322,8 @@ export function DatabaseBlock({ pageId, initialSnapshot }: { pageId: string; ini
   )
 }
 
-export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCreateBlank, onApply, onEdit, onSaveSelection, onDelete }: {
-  templates: DatabaseTemplate[]; selectedCount: number; onClose: () => void; onCreateBlank: () => void
+export function DatabaseTemplateMenu({ id, templates, selectedCount, onClose, onCreateBlank, onApply, onEdit, onSaveSelection, onDelete }: {
+  id?: string; templates: DatabaseTemplate[]; selectedCount: number; onClose: () => void; onCreateBlank: () => void
   onApply: (templateId: string) => Promise<void>; onEdit: (template: DatabaseTemplate | null) => void; onSaveSelection: (name: string) => Promise<void>; onDelete: (templateId: string) => Promise<void>
 }) {
   const dialogRef = useDialogFocus<HTMLElement>({ trap: false })
@@ -332,7 +337,7 @@ export function DatabaseTemplateMenu({ templates, selectedCount, onClose, onCrea
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [busy, onClose])
   const run = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); try { await action() } finally { setBusy(false) } }
-  return <section ref={dialogRef} className="database-template-menu" role="dialog" aria-label="数据库模板" tabIndex={-1}>
+  return <section id={id} ref={dialogRef} className="database-template-menu" role="dialog" aria-label="数据库模板" tabIndex={-1}>
     <header><strong>新建记录</strong><button aria-label="关闭数据库模板" onClick={onClose}><X size={14} /></button></header>
     <button className="template-blank" onClick={() => { onCreateBlank(); onClose() }}><Plus size={15} /><span><strong>空白记录</strong><small>使用数据库默认值</small></span></button>
     <button className="template-blank is-template" onClick={() => onEdit(null)}><LayoutTemplate size={15} /><span><strong>新建模板</strong><small>编辑属性预设与页面正文</small></span></button>
