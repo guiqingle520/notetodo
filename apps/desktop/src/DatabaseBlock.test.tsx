@@ -145,6 +145,8 @@ describe('table view layout', () => {
     expect(container.querySelector<HTMLElement>('.generic-database-row')?.style.height).toBe('34px')
     expect(container.querySelector('.generic-database-table')?.classList.contains('is-first-column-frozen')).toBe(true)
     expect(container.querySelector('.generic-database-footer output')?.textContent).toBe('3')
+    expect(getByRole('textbox', { name: '编辑文档的名称' })).toBeInTheDocument()
+    expect(getByRole('spinbutton', { name: '编辑文档的分数' })).toBeInTheDocument()
     const viewport = container.querySelector<HTMLElement>('.generic-database-viewport')!; viewport.scrollLeft = 120; fireEvent.scroll(viewport)
     expect([...container.querySelectorAll<HTMLElement>('.generic-database-sync')].every((element) => element.scrollLeft === 120)).toBe(true)
     fireEvent.mouseDown(getByRole('button', { name: '调整列宽 名称' }), { clientX: 100 })
