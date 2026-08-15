@@ -22,8 +22,11 @@ import {
   type SettingsSection,
   type WebhookEndpoint,
 } from './AppSettingsData'
+import { AppSettingsSidebar } from './AppSettingsSidebar'
+import { useDialogFocus } from './use-dialog-focus'
 
 export function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
+  const ref = useDialogFocus<HTMLDivElement>()
   const [activeSection, setActiveSection] = useState<SettingsSection>('model')
   const [form, setForm] = useState<ModelForm>({
     provider: 'ollama',
@@ -164,46 +167,14 @@ export function ModelSettingsPanel({ onClose }: { onClose: () => void }) {
   const modelInvalid = !form.baseUrl.trim() || !form.model.trim()
 
   return (
-    <div className="settings-shell" role="dialog" aria-modal="true" aria-label="模型与 AI 设置">
-      <aside>
-        <div className="settings-brand">
-          <span className="brand-mark">N</span>
-          <strong>设置</strong>
-        </div>
-        <nav aria-label="设置分类">
-          <button
-            className={activeSection === 'model' ? 'is-active' : ''}
-            aria-current={activeSection === 'model' ? 'page' : undefined}
-            onClick={() => showSection('model')}
-          >
-            <Cpu size={15} />
-            模型与 AI
-          </button>
-          <button
-            className={activeSection === 'tokens' ? 'is-active' : ''}
-            aria-current={activeSection === 'tokens' ? 'page' : undefined}
-            onClick={() => showSection('tokens')}
-          >
-            <KeyRound size={15} />
-            API 访问
-          </button>
-          <button
-            className={activeSection === 'webhooks' ? 'is-active' : ''}
-            aria-current={activeSection === 'webhooks' ? 'page' : undefined}
-            onClick={() => showSection('webhooks')}
-          >
-            <Webhook size={15} />
-            Webhook
-          </button>
-        </nav>
-        <div className="settings-trust">
-          <ShieldCheck size={16} />
-          <span>
-            <strong>本地优先</strong>
-            <small>密钥不会进入页面内容</small>
-          </span>
-        </div>
-      </aside>
+    <div
+      ref={ref}
+      className="settings-shell"
+      role="dialog"
+      aria-modal="true"
+      aria-label="模型与 AI 设置"
+    >
+      <AppSettingsSidebar activeSection={activeSection} onSelect={showSection} />
       <main>
         <header>
           <div>

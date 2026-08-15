@@ -2,6 +2,7 @@ import { Clock3, History, RotateCcw, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { diffHistoryHtml, historyTextLines } from './data/page-history'
 import type { WorkspacePage } from './domain'
+import { useDialogFocus } from './use-dialog-focus'
 
 type PageVersionSummary = Awaited<
   ReturnType<NonNullable<typeof window.notetodo>['history']['list']>
@@ -23,6 +24,7 @@ function errorMessage(reason: unknown, fallback: string) {
 }
 
 export function PageHistoryPanel({ page, canRestore, onRestored, onClose }: PageHistoryPanelProps) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const [versions, setVersions] = useState<PageVersionSummary[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<PageVersionDetail | null>(null)
@@ -106,10 +108,12 @@ export function PageHistoryPanel({ page, canRestore, onRestored, onClose }: Page
   return (
     <div className="modal-backdrop history-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         className="history-panel"
         role="dialog"
         aria-modal="true"
         aria-label="页面历史"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>

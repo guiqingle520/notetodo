@@ -1,5 +1,6 @@
 import { Command, Keyboard, Search, Sparkles, X } from 'lucide-react'
 import { useEffect } from 'react'
+import { useDialogFocus } from './use-dialog-focus'
 
 const shortcuts = [
   { keys: ['Ctrl', 'K'], label: '搜索工作区', icon: Search },
@@ -9,6 +10,8 @@ const shortcuts = [
 ]
 
 export function HelpPanel({ onClose }: { onClose: () => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>()
+
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -20,10 +23,12 @@ export function HelpPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop help-backdrop" role="presentation" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         className="help-panel"
         role="dialog"
         aria-modal="true"
         aria-label="帮助与快捷键"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>

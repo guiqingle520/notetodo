@@ -3,6 +3,7 @@ import { CornerDownLeft, Database, FileText, Search } from 'lucide-react'
 import { iconMap } from './AppSidebar'
 import { pageBreadcrumbs, type WorkspacePage } from './domain'
 import { useWorkspace } from './store'
+import { useDialogFocus } from './use-dialog-focus'
 
 interface WorkspaceSearchPaletteProps {
   onClose: () => void
@@ -59,6 +60,7 @@ function SearchResultRow({
 }
 
 export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchPaletteProps) {
+  const dialogRef = useDialogFocus<HTMLElement>()
   const pages = useWorkspace((state) => state.pages)
   const searchResults = useWorkspace((state) => state.searchResults)
   const search = useWorkspace((state) => state.search)
@@ -121,10 +123,12 @@ export function WorkspaceSearchPalette({ onClose, onOpenPage }: WorkspaceSearchP
       onMouseDown={onClose}
     >
       <section
+        ref={dialogRef}
         className="workspace-search-dialog"
         role="dialog"
         aria-modal="true"
         aria-label="搜索工作区"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="workspace-search-input">
